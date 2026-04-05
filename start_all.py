@@ -80,17 +80,28 @@ async def run_vk(vertex_service):
 
     from vkbottle.bot import Bot as VKBot
     from vk_bot.handlers import register_handlers
-
-    bot = VKBot(token=vk_token)
-    register_handlers(bot, vertex_service)
+    import threading
 
     logger.info("VK bot starting...")
-    try:
-        await bot.run_polling()
-    except Exception:
-        logger.exception("VK bot error")
-    finally:
-        logger.info("VK bot stopped.")
+
+    def _run_vk_in_thread():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        bot = VKBot(token=vk_token)
+        register_handlers(bot, vertex_service)
+        try:
+            bot.run_forever()
+        except Exception:
+            logger.exception("VK bot error")
+        finally:
+            loop.close()
+            logger.info("VK bot stopped.")
+
+    thread = threading.Thread(target=_run_vk_in_thread, daemon=True, name="vk-bot")
+    thread.start()
+    # Keep this coroutine alive as long as the thread runs
+    while thread.is_alive():
+        await asyncio.sleep(1)
 
 
 async def dummy_web_server():
