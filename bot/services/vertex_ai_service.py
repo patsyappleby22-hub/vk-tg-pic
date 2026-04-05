@@ -30,7 +30,14 @@ from core.exceptions import (
 
 logger = logging.getLogger(__name__)
 
-COOLDOWN_SECONDS = 10
+# When a 429 is received the slot is locked out for the full quota-reset window.
+COOLDOWN_SECONDS = 60
+
+# Proactive sliding-window rate limiting per key.
+# Google Flash image model: 5 requests per minute per API key.
+# Pro model has different limits but we use the same conservative value.
+RATE_WINDOW_SECONDS = 60
+REQUESTS_PER_MINUTE = 5
 
 SA_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "service_accounts"
 
@@ -128,11 +135,14 @@ class _BaseSlot:
         self.index = index
         self.client: Any = None
         self.cooldown_until: float = 0.0
+        # Sliding-window timestamps of dispatched requests (last 60 s).
+        self._request_times: list[float] = []
 
     @property
     def label(self) -> str:
         raise NotImplementedError
 
+    # ── cooldown (post-429) ────────────────────────────────────────────────
     @property
     def is_available(self) -> bool:
         return time.monotonic() >= self.cooldown_until
@@ -140,6 +150,44 @@ class _BaseSlot:
     def mark_rate_limited(self) -> None:
         self.cooldown_until = time.monotonic() + COOLDOWN_SECONDS
         logger.warning("Account '%s' rate-limited, cooldown +%ds", self.label, COOLDOWN_SECONDS)
+
+    # ── proactive sliding-window rate limit ────────────────────────────────
+    def _trim_window(self) -> None:
+        cutoff = time.monotonic() - RATE_WINDOW_SECONDS
+        self._request_times = [t for t in self._request_times if t >= cutoff]
+
+    @property
+    def requests_in_window(self) -> int:
+        self._trim_window()
+        return len(self._request_times)
+
+    @property
+    def has_capacity(self) -> bool:
+        """True if this slot can accept one more request within the rate limit."""
+        return self.requests_in_window < REQUESTS_PER_MINUTE
+
+    @property
+    def next_capacity_at(self) -> float:
+        """Monotonic timestamp when this slot will next have capacity (0 = now)."""
+        self._trim_window()
+        if len(self._request_times) < REQUESTS_PER_MINUTE:
+            return 0.0
+        # The oldest tracked request exits the window at oldest + RATE_WINDOW_SECONDS
+        return min(self._request_times) + RATE_WINDOW_SECONDS
+
+    def record_request(self) -> None:
+        """Call immediately before dispatching an API request."""
+        self._request_times.append(time.monotonic())
+
+    # ── combined availability ──────────────────────────────────────────────
+    @property
+    def ready_at(self) -> float:
+        """Earliest monotonic time at which this slot can serve a new request."""
+        return max(self.cooldown_until, self.next_capacity_at)
+
+    @property
+    def is_ready(self) -> bool:
+        return time.monotonic() >= self.ready_at
 
     def get_client(self) -> Any:
         raise NotImplementedError
@@ -280,13 +328,23 @@ class VertexAIService:
         return len(self._slots)
 
     def _get_next_available_slot(self) -> _BaseSlot | None:
-        n = len(self._slots)
-        for i in range(n):
-            idx = (self._current_index + i) % n
-            if self._slots[idx].is_available:
-                self._current_index = (idx + 1) % n
-                return self._slots[idx]
-        return None
+        """Return the ready slot with the most remaining capacity this window.
+
+        'Ready' means: past its cooldown_until AND has_capacity (sliding window).
+        Among all ready slots we pick the one with fewest recent requests so that
+        load is distributed evenly across keys.
+        """
+        ready = [s for s in self._slots if s.is_ready]
+        if not ready:
+            return None
+        # Prefer the slot that has used the fewest quota slots this window
+        return min(ready, key=lambda s: s.requests_in_window)
+
+    def _earliest_ready_at(self) -> float:
+        """Monotonic timestamp when any slot will next be ready (0 = already ready)."""
+        if not self._slots:
+            return float("inf")
+        return min(s.ready_at for s in self._slots)
 
     async def generate_image(
         self,
@@ -296,12 +354,8 @@ class VertexAIService:
         aspect_ratio: str = "1:1",
         thinking_level: str = "low",
     ) -> bytes:
-        if self._semaphore.locked():
-            logger.info("Semaphore at capacity – request queued for '%s'", prompt[:60])
-
-        async with self._semaphore:
-            model = model_override or self._settings.vertex_ai_model
-            return await self._try_all_keys(prompt, images, model, aspect_ratio, thinking_level)
+        model = model_override or self._settings.vertex_ai_model
+        return await self._try_all_keys(prompt, images, model, aspect_ratio, thinking_level)
 
     async def _try_all_keys(
         self,
@@ -311,22 +365,38 @@ class VertexAIService:
         aspect_ratio: str,
         thinking_level: str = "low",
     ) -> bytes:
-        n = len(self._slots)
-        tried_keys: set[int] = set()
+        """Dispatch the request to the best available key, queuing if all are busy.
+
+        Strategy
+        --------
+        * Proactive: each slot tracks its own sliding-window usage (5 req / 60 s).
+          We never send a request to a slot that is already at capacity.
+        * Reactive safety net: if a 429 slips through anyway, the slot is locked
+          for the full 60-second window.
+        * Waiting: when all slots are at capacity we sleep until the soonest slot
+          becomes ready again, then retry.  Maximum total wait: 5 minutes.
+        * Ambiguous prompt: if the model returns text instead of an image we retry
+          once with an explicit image instruction before giving up.
+        """
         text_retry_done = False
         current_prompt = prompt
-        deadline = time.monotonic() + 90  # max total wait across all retries
+        deadline = time.monotonic() + 300  # 5-minute absolute deadline
 
-        while True:
+        while time.monotonic() < deadline:
             async with self._lock:
                 slot = self._get_next_available_slot()
 
-            if slot is not None and slot.index not in tried_keys:
-                tried_keys.add(slot.index)
+            if slot is not None:
+                # Reserve one quota slot in the sliding window *before* the call.
+                slot.record_request()
                 try:
                     logger.info(
-                        "Trying '%s' for model %s, prompt='%s'",
-                        slot.label, model, current_prompt[:60],
+                        "Trying '%s' [%d/%d used] for model %s, prompt='%s'",
+                        slot.label,
+                        slot.requests_in_window,
+                        REQUESTS_PER_MINUTE,
+                        model,
+                        current_prompt[:60],
                     )
                     result = await self._call_api(slot, current_prompt, images, model, aspect_ratio, thinking_level)
                     return result
@@ -340,24 +410,24 @@ class VertexAIService:
                     if _is_retryable(exc):
                         slot.mark_rate_limited()
                         logger.warning(
-                            "Slot '%s' returned 429 for '%s', rotating...",
-                            slot.label, current_prompt[:60],
+                            "Slot '%s' returned 429 — 60s cooldown applied, rotating...",
+                            slot.label,
                         )
                         continue
                     if _is_auth_error(exc):
                         slot.reset_client()
                         logger.warning(
-                            "Slot '%s' auth error for '%s', key invalid — skipping: %s",
-                            slot.label, current_prompt[:60], exc,
+                            "Slot '%s' auth error, key invalid — skipping: %s",
+                            slot.label, exc,
                         )
                         continue
                     if _is_model_error(exc):
                         logger.warning(
-                            "Slot '%s' returned 400 for '%s', model issue — skipping...",
-                            slot.label, current_prompt[:60],
+                            "Slot '%s' returned 400, model issue — skipping...",
+                            slot.label,
                         )
                         continue
-                    # Model returned text instead of image — retry once with explicit image prompt
+                    # Model returned text instead of image — retry once with explicit prompt
                     if isinstance(exc, GenerationError) and "вернула текст" in str(exc):
                         if not text_retry_done:
                             text_retry_done = True
@@ -365,27 +435,27 @@ class VertexAIService:
                                 f"Generate a high-quality image of: {prompt}. "
                                 "Important: output must be an IMAGE, not text."
                             )
-                            tried_keys.clear()
-                            logger.info("Model returned text for '%s', retrying with enhanced prompt...", prompt[:40])
+                            logger.info(
+                                "Model returned text for '%s', retrying with enhanced prompt...",
+                                prompt[:40],
+                            )
                             continue
-                        # Enhanced prompt also returned text — give user a clear message
                         raise AmbiguousPromptError(str(exc)) from exc
                     raise GenerationError(str(exc)) from exc
             else:
-                # No available slot — check if any are cooling down
+                # All slots are at capacity or in cooldown — wait precisely.
+                earliest = self._earliest_ready_at()
                 now = time.monotonic()
-                cooling = [s for s in self._slots if s.cooldown_until > now]
-                if not cooling or now >= deadline:
+                wait = max(0.1, earliest - now)
+                if now + wait > deadline:
                     break
-                wait = min(s.cooldown_until for s in cooling) - now
                 logger.info(
-                    "All %d slot(s) rate-limited; waiting %.1fs for cooldown...",
-                    len(cooling), wait,
+                    "All %d slot(s) at capacity; waiting %.1fs for next available...",
+                    len(self._slots), wait,
                 )
-                await asyncio.sleep(wait + 0.2)
-                tried_keys.clear()  # allow retrying the same slot after cooldown
+                await asyncio.sleep(wait + 0.1)
 
-        logger.error("All %d credential slots exhausted for model %s", n, model)
+        logger.error("Deadline reached — all credential slots busy for model %s", model)
         raise QuotaExceededError()
 
     async def _call_api(
