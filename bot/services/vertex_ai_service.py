@@ -163,10 +163,9 @@ class _ApiKeySlot(_BaseSlot):
         if self.client is None:
             import google.genai as genai
             self.client = genai.Client(
-                vertexai=True,
                 api_key=self._api_key,
             )
-            logger.info("Initialised genai client for '%s' (Vertex AI + API key mode)", self.label)
+            logger.info("Initialised genai client for '%s' (AI Studio API key mode)", self.label)
         return self.client
 
 
