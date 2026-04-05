@@ -234,6 +234,8 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
         except Exception:
             pass
         settings["first_name"] = first_name
+        if not settings.get("platform"):
+            settings["platform"] = "vk"
         save_user_settings(uid)
         credits = settings.get("credits", FREE_CREDITS)
         blocked = settings.get("blocked", False)

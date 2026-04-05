@@ -48,6 +48,8 @@ async def cmd_start(message: Message) -> None:
     first_name = message.from_user.first_name or ""
     settings = get_user_settings(uid)
     settings["first_name"] = first_name
+    if not settings.get("platform"):
+        settings["platform"] = "tg"
     save_user_settings(uid)
     generations = settings.get("generations_count", 0)
     credits = settings.get("credits", FREE_CREDITS)
