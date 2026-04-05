@@ -6,9 +6,9 @@
     "aspect_ratio": "16:9",
     "thinking_level": "low",
     "first_name": "Гайрат",
-    "generations_count": 12,
+    "generations_count": 13,
     "platform": "tg",
-    "credits": 59,
+    "credits": 58,
     "blocked": false
   },
   "789556086": {
@@ -18,9 +18,9 @@
     "aspect_ratio": "16:9",
     "thinking_level": "high",
     "first_name": "Гайрат",
-    "generations_count": 25,
+    "generations_count": 26,
     "platform": "vk",
-    "credits": 5,
+    "credits": 4,
     "blocked": false
   }
 }

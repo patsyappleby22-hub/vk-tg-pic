@@ -58,11 +58,15 @@ async def _vk_safe_edit(api: Any, *, retries: int = 3, **kwargs) -> None:
 class VKProgressAnimator:
     """Edits a VK message every few seconds to show elapsed time."""
 
-    def __init__(self, bot: Bot, peer_id: int, message_id: int, base_text: str) -> None:
+    def __init__(
+        self, bot: Bot, peer_id: int, message_id: int, base_text: str,
+        action_text: str = "Обработка",
+    ) -> None:
         self._bot = bot
         self._peer_id = peer_id
         self._message_id = message_id
         self._base_text = base_text
+        self._action_text = action_text
         self._task: asyncio.Task | None = None
         self._stopped = False
         self._start_time = 0.0
@@ -86,7 +90,7 @@ class VKProgressAnimator:
         while not self._stopped:
             elapsed = int(time.monotonic() - self._start_time)
             spin = SPINNER[tick % len(SPINNER)]
-            text = f"{self._base_text}\n\n{spin} Обработка — {elapsed} сек."
+            text = f"{self._base_text}\n\n{spin} {self._action_text} — {elapsed} сек."
             try:
                 await _vk_safe_edit(
                     self._bot.api,
@@ -631,20 +635,21 @@ async def _generate_and_send(
         send_mode = settings.get("send_mode", "photo")
         caption = f"✅ Изображение готово! ({elapsed} сек.)\n{prompt[:200]}"
 
-        # Show "uploading" status while image is being uploaded to VK
-        upload_label = "📤 Загружаю файл..." if send_mode == "document" else "📤 Загружаю фото..."
-        try:
-            await bot.api.messages.edit(
-                peer_id=peer_id, message_id=processing_id,
-                message=f"🎨 {action} изображение...\n🤖 {model_label}\n\n✅ Готово за {elapsed} сек. — {upload_label}",
-            )
-        except Exception:
-            pass
+        upload_action = "📤 Загрузка файла" if send_mode == "document" else "📤 Загрузка фото"
+        upload_base = f"🎨 {action} изображение...\n🤖 {model_label}\n\n✅ Готово за {elapsed} сек."
+        upload_animator = VKProgressAnimator(
+            bot, peer_id, processing_id, upload_base,
+            action_text=upload_action,
+        )
+        upload_animator.start()
 
-        if send_mode == "document":
-            attachment = await upload_document_to_vk(bot.api, peer_id, image_bytes)
-        else:
-            attachment = await upload_photo_to_vk(bot.api, peer_id, image_bytes)
+        try:
+            if send_mode == "document":
+                attachment = await upload_document_to_vk(bot.api, peer_id, image_bytes)
+            else:
+                attachment = await upload_photo_to_vk(bot.api, peer_id, image_bytes)
+        finally:
+            await upload_animator.stop()
 
         await bot.api.messages.send(
             peer_id=peer_id, random_id=0,
