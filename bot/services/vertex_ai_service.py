@@ -33,11 +33,26 @@ logger = logging.getLogger(__name__)
 # When a 429 is received the slot is locked out for the full quota-reset window.
 COOLDOWN_SECONDS = 60
 
-# Proactive sliding-window rate limiting per key.
-# Google Flash image model: 5 requests per minute per API key.
-# Pro model has different limits but we use the same conservative value.
+# Proactive sliding-window rate limiting — per key, per model (independent quotas).
+# Each model family has its own QPM bucket on the same API key.
 RATE_WINDOW_SECONDS = 60
-REQUESTS_PER_MINUTE = 5
+
+# QPM limits per model name substring (longest match wins, "default" is the fallback).
+# Adjust these to match your actual Vertex AI quota for each model.
+MODEL_QPM: dict[str, int] = {
+    "flash": 5,    # gemini-x.x-flash-image-preview
+    "pro":   3,    # gemini-x-pro-image-preview  (usually lower quota)
+    "default": 5,
+}
+
+
+def _qpm_for_model(model: str) -> int:
+    """Return the requests-per-minute limit for a given model name."""
+    model_lower = model.lower()
+    for key, qpm in MODEL_QPM.items():
+        if key != "default" and key in model_lower:
+            return qpm
+    return MODEL_QPM["default"]
 
 SA_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "service_accounts"
 
@@ -135,14 +150,15 @@ class _BaseSlot:
         self.index = index
         self.client: Any = None
         self.cooldown_until: float = 0.0
-        # Sliding-window timestamps of dispatched requests (last 60 s).
-        self._request_times: list[float] = []
+        # Per-model sliding-window: { model_name: [timestamps] }
+        # Each model has an independent quota on the same API key.
+        self._model_request_times: dict[str, list[float]] = {}
 
     @property
     def label(self) -> str:
         raise NotImplementedError
 
-    # ── cooldown (post-429) ────────────────────────────────────────────────
+    # ── cooldown (post-429, model-agnostic) ───────────────────────────────
     @property
     def is_available(self) -> bool:
         return time.monotonic() >= self.cooldown_until
@@ -151,43 +167,39 @@ class _BaseSlot:
         self.cooldown_until = time.monotonic() + COOLDOWN_SECONDS
         logger.warning("Account '%s' rate-limited, cooldown +%ds", self.label, COOLDOWN_SECONDS)
 
-    # ── proactive sliding-window rate limit ────────────────────────────────
-    def _trim_window(self) -> None:
+    # ── proactive sliding-window rate limit (per model) ───────────────────
+    def _trim_model_window(self, model: str) -> list[float]:
         cutoff = time.monotonic() - RATE_WINDOW_SECONDS
-        self._request_times = [t for t in self._request_times if t >= cutoff]
+        times = [t for t in self._model_request_times.get(model, []) if t >= cutoff]
+        self._model_request_times[model] = times
+        return times
 
-    @property
-    def requests_in_window(self) -> int:
-        self._trim_window()
-        return len(self._request_times)
+    def requests_in_window(self, model: str) -> int:
+        return len(self._trim_model_window(model))
 
-    @property
-    def has_capacity(self) -> bool:
-        """True if this slot can accept one more request within the rate limit."""
-        return self.requests_in_window < REQUESTS_PER_MINUTE
+    def has_capacity(self, model: str) -> bool:
+        """True if this slot can accept one more request for the given model."""
+        return self.requests_in_window(model) < _qpm_for_model(model)
 
-    @property
-    def next_capacity_at(self) -> float:
-        """Monotonic timestamp when this slot will next have capacity (0 = now)."""
-        self._trim_window()
-        if len(self._request_times) < REQUESTS_PER_MINUTE:
+    def next_capacity_at(self, model: str) -> float:
+        """Monotonic timestamp when this slot will next have capacity for model (0 = now)."""
+        times = self._trim_model_window(model)
+        qpm = _qpm_for_model(model)
+        if len(times) < qpm:
             return 0.0
-        # The oldest tracked request exits the window at oldest + RATE_WINDOW_SECONDS
-        return min(self._request_times) + RATE_WINDOW_SECONDS
+        return min(times) + RATE_WINDOW_SECONDS
 
-    def record_request(self) -> None:
-        """Call immediately before dispatching an API request."""
-        self._request_times.append(time.monotonic())
+    def record_request(self, model: str) -> None:
+        """Call immediately before dispatching an API request for model."""
+        self._model_request_times.setdefault(model, []).append(time.monotonic())
 
-    # ── combined availability ──────────────────────────────────────────────
-    @property
-    def ready_at(self) -> float:
-        """Earliest monotonic time at which this slot can serve a new request."""
-        return max(self.cooldown_until, self.next_capacity_at)
+    # ── combined availability (per model) ─────────────────────────────────
+    def ready_at(self, model: str) -> float:
+        """Earliest time this slot can serve a new request for model."""
+        return max(self.cooldown_until, self.next_capacity_at(model))
 
-    @property
-    def is_ready(self) -> bool:
-        return time.monotonic() >= self.ready_at
+    def is_ready(self, model: str) -> bool:
+        return time.monotonic() >= self.ready_at(model)
 
     def get_client(self) -> Any:
         raise NotImplementedError
@@ -327,24 +339,24 @@ class VertexAIService:
     def key_count(self) -> int:
         return len(self._slots)
 
-    def _get_next_available_slot(self) -> _BaseSlot | None:
-        """Return the ready slot with the most remaining capacity this window.
+    def _get_next_available_slot(self, model: str) -> _BaseSlot | None:
+        """Return the ready slot with the most remaining capacity for model.
 
-        'Ready' means: past its cooldown_until AND has_capacity (sliding window).
-        Among all ready slots we pick the one with fewest recent requests so that
-        load is distributed evenly across keys.
+        'Ready' means: past cooldown_until AND has_capacity for this specific model.
+        Flash and Pro quotas on the same key are independent — a key saturated
+        with Flash requests can still serve Pro requests and vice-versa.
         """
-        ready = [s for s in self._slots if s.is_ready]
+        ready = [s for s in self._slots if s.is_ready(model)]
         if not ready:
             return None
-        # Prefer the slot that has used the fewest quota slots this window
-        return min(ready, key=lambda s: s.requests_in_window)
+        # Prefer the slot with fewest requests in the window for this model
+        return min(ready, key=lambda s: s.requests_in_window(model))
 
-    def _earliest_ready_at(self) -> float:
-        """Monotonic timestamp when any slot will next be ready (0 = already ready)."""
+    def _earliest_ready_at(self, model: str) -> float:
+        """Monotonic timestamp when any slot will next be ready for model."""
         if not self._slots:
             return float("inf")
-        return min(s.ready_at for s in self._slots)
+        return min(s.ready_at(model) for s in self._slots)
 
     async def generate_image(
         self,
@@ -384,17 +396,17 @@ class VertexAIService:
 
         while time.monotonic() < deadline:
             async with self._lock:
-                slot = self._get_next_available_slot()
+                slot = self._get_next_available_slot(model)
 
             if slot is not None:
-                # Reserve one quota slot in the sliding window *before* the call.
-                slot.record_request()
+                # Reserve one quota slot in the per-model sliding window before the call.
+                slot.record_request(model)
                 try:
                     logger.info(
-                        "Trying '%s' [%d/%d used] for model %s, prompt='%s'",
+                        "Trying '%s' [%d/%d used for %s], prompt='%s'",
                         slot.label,
-                        slot.requests_in_window,
-                        REQUESTS_PER_MINUTE,
+                        slot.requests_in_window(model),
+                        _qpm_for_model(model),
                         model,
                         current_prompt[:60],
                     )
@@ -444,14 +456,14 @@ class VertexAIService:
                     raise GenerationError(str(exc)) from exc
             else:
                 # All slots are at capacity or in cooldown — wait precisely.
-                earliest = self._earliest_ready_at()
+                earliest = self._earliest_ready_at(model)
                 now = time.monotonic()
                 wait = max(0.1, earliest - now)
                 if now + wait > deadline:
                     break
                 logger.info(
-                    "All %d slot(s) at capacity; waiting %.1fs for next available...",
-                    len(self._slots), wait,
+                    "All %d slot(s) at capacity for %s; waiting %.1fs for next available...",
+                    len(self._slots), model, wait,
                 )
                 await asyncio.sleep(wait + 0.1)
 
