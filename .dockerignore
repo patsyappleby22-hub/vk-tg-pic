@@ -2,9 +2,15 @@ __pycache__
 *.pyc
 *.pyo
 .env
+.env.*
+
+# Sensitive data — not baked into image
 data/api_keys.json
 data/user_settings.json
 data/service_accounts/*.json
+telegram-bot/data/user_settings.json
+telegram-bot/data/api_keys.json
+
 *.bak
 .git
 .gitignore
@@ -12,4 +18,8 @@ data/service_accounts/*.json
 venv
 README.md
 start.sh
-.env.example
+attached_assets/
+.local/
+.cache/
+.replit
+replit.md

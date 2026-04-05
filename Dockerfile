@@ -9,7 +9,10 @@ COPY bot/ bot/
 COPY vk_bot/ vk_bot/
 COPY core/ core/
 COPY start_all.py .
+COPY telegram-bot/ telegram-bot/
 
-RUN mkdir -p data/service_accounts
+RUN mkdir -p data/service_accounts telegram-bot/data
+
+EXPOSE 8080
 
 CMD ["python", "start_all.py"]

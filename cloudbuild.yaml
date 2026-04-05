@@ -1,0 +1,61 @@
+steps:
+  # 1. Build Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - -t
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE_NAME:$SHORT_SHA'
+      - -t
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE_NAME:latest'
+      - .
+
+  # 2. Push image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - push
+      - '--all-tags'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE_NAME'
+
+  # 3. Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - '$_SERVICE_NAME'
+      - --image
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE_NAME:$SHORT_SHA'
+      - --region
+      - '$_REGION'
+      - --platform
+      - managed
+      - --min-instances
+      - '1'
+      - --max-instances
+      - '1'
+      - --memory
+      - '512Mi'
+      - --cpu
+      - '1'
+      - --timeout
+      - '3600'
+      - --concurrency
+      - '80'
+      - --no-cpu-throttling
+      - --set-env-vars
+      - 'LOG_LEVEL=INFO'
+      - --set-secrets
+      - 'TELEGRAM_BOT_TOKEN=TELEGRAM_BOT_TOKEN:latest,VK_BOT_TOKEN=VK_BOT_TOKEN:latest,GOOGLE_CLOUD_API_KEY=GOOGLE_CLOUD_API_KEY:latest'
+      - --allow-unauthenticated
+
+substitutions:
+  _REGION: us-central1
+  _SERVICE_NAME: ai-bot
+  _REPOSITORY: ai-bot
+
+images:
+  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE_NAME:$SHORT_SHA'
+  - '$_REGION-docker.pkg.dev/$PROJECT_ID/$_REPOSITORY/$_SERVICE_NAME:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
