@@ -646,6 +646,16 @@ async def _generate_and_send(
         send_mode = settings.get("send_mode", "photo")
         caption = f"✅ Изображение готово! ({elapsed} сек.)\n{prompt[:200]}"
 
+        # Show "uploading" status while image is being uploaded to VK
+        upload_label = "📤 Загружаю файл..." if send_mode == "document" else "📤 Загружаю фото..."
+        try:
+            await bot.api.messages.edit(
+                peer_id=peer_id, message_id=processing_id,
+                message=f"🎨 {action} изображение...\n🤖 {model_label}\n\n✅ Готово за {elapsed} сек. — {upload_label}",
+            )
+        except Exception:
+            pass
+
         if send_mode == "document":
             attachment = await upload_document_to_vk(bot.api, peer_id, image_bytes)
         else:
