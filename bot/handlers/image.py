@@ -25,6 +25,7 @@ from bot.user_settings import (
     get_user_settings, pop_last_menu,
     set_active_task, clear_active_task, increment_generations,
     AVAILABLE_MODELS, SEND_MODES, RESOLUTIONS,
+    is_blocked, has_credits,
 )
 from bot.keyboards import BTN_MENU, BTN_STOP, BTN_SETTINGS, BTN_IDEAS
 from core.exceptions import (
@@ -202,6 +203,20 @@ async def handle_photo_prompt(
 ) -> None:
     photo_messages = album if album else [message]
     uid = message.from_user.id
+
+    if is_blocked(uid):
+        await message.reply("⛔ Ваш аккаунт заблокирован. Обратитесь к администратору.")
+        return
+
+    if not has_credits(uid):
+        await message.reply(
+            "💳 <b>Кредиты закончились</b>\n\n"
+            "У вас больше нет доступных генераций.\n"
+            "Для продолжения работы приобретите пополнение кредитов.",
+            parse_mode="HTML",
+        )
+        return
+
     settings = get_user_settings(uid)
 
     caption = _collect_caption(photo_messages)
@@ -385,6 +400,20 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
         return
 
     uid = message.from_user.id
+
+    if is_blocked(uid):
+        await message.reply("⛔ Ваш аккаунт заблокирован. Обратитесь к администратору.")
+        return
+
+    if not has_credits(uid):
+        await message.reply(
+            "💳 <b>Кредиты закончились</b>\n\n"
+            "У вас больше нет доступных генераций.\n"
+            "Для продолжения работы приобретите пополнение кредитов.",
+            parse_mode="HTML",
+        )
+        return
+
     settings = get_user_settings(uid)
     user_model = settings.get("model", "gemini-3.1-flash-image-preview")
     model_label = AVAILABLE_MODELS.get(user_model, {}).get("label", user_model)

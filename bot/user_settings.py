@@ -20,7 +20,13 @@ logger = logging.getLogger(__name__)
 
 SETTINGS_FILE = Path(os.getenv("SETTINGS_FILE", "telegram-bot/data/user_settings.json"))
 
-_PERSISTENT_KEYS = {"model", "send_mode", "resolution", "aspect_ratio", "thinking_level", "first_name", "generations_count", "platform"}
+FREE_CREDITS = 30
+
+_PERSISTENT_KEYS = {
+    "model", "send_mode", "resolution", "aspect_ratio", "thinking_level",
+    "first_name", "generations_count", "platform",
+    "credits", "blocked",
+}
 
 user_settings: dict[int, dict[str, Any]] = {}
 
@@ -117,6 +123,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "platform": "",
     "last_menu_message_id": None,
     "last_menu_chat_id": None,
+    "credits": FREE_CREDITS,
+    "blocked": False,
 }
 
 
@@ -166,12 +174,36 @@ def save_user_settings(user_id: int) -> None:
 def increment_generations(user_id: int, first_name: str = "", platform: str = "") -> int:
     s = get_user_settings(user_id)
     s["generations_count"] = s.get("generations_count", 0) + 1
+    current_credits = s.get("credits", FREE_CREDITS)
+    if current_credits > 0:
+        s["credits"] = current_credits - 1
     if first_name:
         s["first_name"] = first_name
     if platform and not s.get("platform"):
         s["platform"] = platform
     _save_to_disk()
     return s["generations_count"]
+
+
+def is_blocked(user_id: int) -> bool:
+    return bool(get_user_settings(user_id).get("blocked", False))
+
+
+def has_credits(user_id: int) -> bool:
+    return get_user_settings(user_id).get("credits", FREE_CREDITS) > 0
+
+
+def add_credits(user_id: int, amount: int) -> int:
+    s = get_user_settings(user_id)
+    s["credits"] = s.get("credits", 0) + amount
+    _save_to_disk()
+    return s["credits"]
+
+
+def set_blocked(user_id: int, blocked: bool) -> None:
+    s = get_user_settings(user_id)
+    s["blocked"] = blocked
+    _save_to_disk()
 
 
 def set_last_menu(user_id: int, chat_id: int, message_id: int) -> None:

@@ -15,6 +15,7 @@ from bot.services.vertex_ai_service import VertexAIService
 from bot.user_settings import (
     get_user_settings, save_user_settings, increment_generations,
     AVAILABLE_MODELS, SEND_MODES, RESOLUTIONS, THINKING_LEVELS,
+    is_blocked, has_credits,
 )
 from bot.keyboards import ASPECT_RATIOS
 from core.exceptions import BotError, QuotaExceededError, SafetyFilterError
@@ -550,6 +551,24 @@ async def _generate_and_send(
     uid: int, peer_id: int, prompt: str,
     images: list[bytes] | None = None,
 ):
+    if is_blocked(uid):
+        await bot.api.messages.send(
+            peer_id=peer_id, random_id=0,
+            message="⛔ Ваш аккаунт заблокирован. Обратитесь к администратору.",
+        )
+        return
+
+    if not has_credits(uid):
+        await bot.api.messages.send(
+            peer_id=peer_id, random_id=0,
+            message=(
+                "💳 Кредиты закончились\n\n"
+                "У вас больше нет доступных генераций.\n"
+                "Для продолжения работы приобретите пополнение кредитов."
+            ),
+        )
+        return
+
     settings = get_user_settings(uid)
     user_model = settings.get("model", "gemini-3.1-flash-image-preview")
     model_label = AVAILABLE_MODELS.get(user_model, {}).get("label", user_model)

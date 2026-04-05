@@ -15,7 +15,10 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message, InlineKeyboardButton, InlineKeyboardMarkup
 
-from bot.user_settings import user_settings, AVAILABLE_MODELS
+from bot.user_settings import (
+    user_settings, AVAILABLE_MODELS,
+    add_credits, set_blocked, get_user_settings, FREE_CREDITS,
+)
 from bot import api_keys_store
 
 logger = logging.getLogger(__name__)
@@ -87,17 +90,24 @@ def _users_text(page: int = 0, per_page: int = 10) -> tuple[str, InlineKeyboardM
     chunk = all_users[start:start + per_page]
 
     lines = [f"👥 <b>Пользователи</b> ({total} чел. · {total_gens} генераций)\n"]
+    user_buttons: list[list[InlineKeyboardButton]] = []
+
     for uid, s in chunk:
         name = s.get("first_name", "") or "—"
         platform = s.get("platform", "")
         platform_label = _PLATFORM_ICON.get(platform, "❓")
         gens = s.get("generations_count", 0)
-        model = s.get("model", "")
-        model_label = AVAILABLE_MODELS.get(model, {}).get("label", model)
+        credits = s.get("credits", FREE_CREDITS)
+        blocked = s.get("blocked", False)
+        status_icon = "🚫" if blocked else "✅"
         lines.append(
             f"{platform_label} · <b>{name}</b> · <code>{uid}</code>\n"
-            f"  🎨 {gens} ген. · 🤖 {model_label}\n"
+            f"  🎨 {gens} ген. · 💳 {credits} кр. · {status_icon}\n"
         )
+        btn_label = f"{'🚫 ' if blocked else ''}{name} ({credits} кр.)"
+        user_buttons.append([
+            InlineKeyboardButton(text=btn_label, callback_data=f"adm_user_{uid}")
+        ])
 
     lines.append(f"\nСтраница {page + 1}/{total_pages}")
 
@@ -107,12 +117,47 @@ def _users_text(page: int = 0, per_page: int = 10) -> tuple[str, InlineKeyboardM
     if page < total_pages - 1:
         nav_buttons.append(InlineKeyboardButton(text="▶️", callback_data=f"adm_users_p_{page + 1}"))
 
-    rows: list[list[InlineKeyboardButton]] = []
+    rows: list[list[InlineKeyboardButton]] = user_buttons[:]
     if nav_buttons:
         rows.append(nav_buttons)
     rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="adm_back")])
 
     return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _user_card_text(uid: int) -> str:
+    s = get_user_settings(uid)
+    name = s.get("first_name", "") or "—"
+    platform = s.get("platform", "")
+    platform_label = _PLATFORM_ICON.get(platform, "❓")
+    gens = s.get("generations_count", 0)
+    credits = s.get("credits", FREE_CREDITS)
+    blocked = s.get("blocked", False)
+    model = s.get("model", "")
+    model_label = AVAILABLE_MODELS.get(model, {}).get("label", model)
+    status = "🚫 Заблокирован" if blocked else "✅ Активен"
+
+    return (
+        f"👤 <b>Карточка пользователя</b>\n\n"
+        f"Имя: <b>{name}</b>\n"
+        f"ID: <code>{uid}</code>\n"
+        f"Платформа: {platform_label}\n"
+        f"Модель: {model_label}\n"
+        f"Генераций: <b>{gens}</b>\n"
+        f"Кредиты: <b>{credits}</b>\n"
+        f"Статус: {status}"
+    )
+
+
+def _get_user_card_keyboard(uid: int, page: int = 0) -> InlineKeyboardMarkup:
+    s = get_user_settings(uid)
+    blocked = s.get("blocked", False)
+    block_text = "✅ Разблокировать" if blocked else "🚫 Заблокировать"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="➕ +30 кредитов", callback_data=f"adm_addcr_{uid}")],
+        [InlineKeyboardButton(text=block_text, callback_data=f"adm_blk_{uid}")],
+        [InlineKeyboardButton(text="◀️ К списку", callback_data=f"adm_users_p_{page}")],
+    ])
 
 
 def _stats_text() -> str:
@@ -356,6 +401,71 @@ async def admin_stats(callback: CallbackQuery) -> None:
     except TelegramBadRequest:
         pass
     await callback.answer()
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("adm_user_"))
+async def admin_user_card(callback: CallbackQuery) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа")
+        return
+    try:
+        uid = int(callback.data.replace("adm_user_", ""))
+    except ValueError:
+        await callback.answer("Ошибка")
+        return
+    try:
+        await callback.message.edit_text(
+            _user_card_text(uid),
+            reply_markup=_get_user_card_keyboard(uid),
+        )
+    except TelegramBadRequest:
+        pass
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("adm_addcr_"))
+async def admin_add_credits(callback: CallbackQuery) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа")
+        return
+    try:
+        uid = int(callback.data.replace("adm_addcr_", ""))
+    except ValueError:
+        await callback.answer("Ошибка")
+        return
+    new_balance = add_credits(uid, 30)
+    try:
+        await callback.message.edit_text(
+            _user_card_text(uid),
+            reply_markup=_get_user_card_keyboard(uid),
+        )
+    except TelegramBadRequest:
+        pass
+    await callback.answer(f"✅ +30 кредитов. Теперь: {new_balance}")
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("adm_blk_"))
+async def admin_toggle_block(callback: CallbackQuery) -> None:
+    if not _is_admin(callback.from_user.id):
+        await callback.answer("⛔ Нет доступа")
+        return
+    try:
+        uid = int(callback.data.replace("adm_blk_", ""))
+    except ValueError:
+        await callback.answer("Ошибка")
+        return
+    s = get_user_settings(uid)
+    currently_blocked = s.get("blocked", False)
+    set_blocked(uid, not currently_blocked)
+    action = "разблокирован" if currently_blocked else "заблокирован"
+    try:
+        await callback.message.edit_text(
+            _user_card_text(uid),
+            reply_markup=_get_user_card_keyboard(uid),
+        )
+    except TelegramBadRequest:
+        pass
+    await callback.answer(f"{'✅' if currently_blocked else '🚫'} Пользователь {action}")
 
 
 @router.callback_query(lambda c: c.data == "adm_logout")
