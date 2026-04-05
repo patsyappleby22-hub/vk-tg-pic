@@ -1,0 +1,20 @@
+{
+  "6014789391": {
+    "model": "gemini-3.1-flash-image-preview",
+    "send_mode": "photo",
+    "resolution": "original",
+    "aspect_ratio": "16:9",
+    "thinking_level": "low",
+    "first_name": "Гайрат",
+    "generations_count": 1
+  },
+  "789556086": {
+    "model": "gemini-3.1-flash-image-preview",
+    "send_mode": "photo",
+    "resolution": "2k",
+    "aspect_ratio": "16:9",
+    "thinking_level": "low",
+    "first_name": "Гайрат",
+    "generations_count": 4
+  }
+}

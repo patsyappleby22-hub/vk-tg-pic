@@ -1,0 +1,10 @@
+aiogram>=3.15,<4
+vkbottle>=4.8,<5
+google-genai>=1.9
+pydantic-settings>=2.7
+pydantic>=2.10
+tenacity>=9.0
+python-dotenv>=1.0
+aiofiles>=24.1
+aiohttp>=3.9
+Pillow>=11.0

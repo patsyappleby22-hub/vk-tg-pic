@@ -1,0 +1,15 @@
+__pycache__
+*.pyc
+*.pyo
+.env
+data/api_keys.json
+data/user_settings.json
+data/service_accounts/*.json
+*.bak
+.git
+.gitignore
+.venv
+venv
+README.md
+start.sh
+.env.example
