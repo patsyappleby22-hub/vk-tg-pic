@@ -11,7 +11,7 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-MAX_VK_SIDE = 2560
+MAX_VK_SIDE = 1600
 MAX_RETRIES = 3
 
 
@@ -31,7 +31,7 @@ def _prepare_image_for_vk(image_bytes: bytes) -> tuple[bytes, str, str]:
         img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
 
     buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=90)
+    img.save(buf, format="JPEG", quality=85)
     jpg_bytes = buf.getvalue()
     logger.info("Prepared image for VK: %dx%d -> %d bytes JPEG", w, h, len(jpg_bytes))
     return jpg_bytes, "image.jpg", "image/jpeg"
@@ -50,7 +50,7 @@ async def upload_photo_to_vk(api: Any, peer_id: int, image_bytes: bytes) -> str:
             form = aiohttp.FormData()
             form.add_field(
                 "photo",
-                jpg_bytes,
+                io.BytesIO(jpg_bytes),
                 filename=filename,
                 content_type=content_type,
             )
@@ -81,49 +81,7 @@ async def upload_photo_to_vk(api: Any, peer_id: int, image_bytes: bytes) -> str:
             last_err = exc
             logger.warning("VK photo upload attempt %d failed: %s", attempt + 1, exc)
             if attempt < MAX_RETRIES - 1:
-                await asyncio.sleep(2)
-
-    raise last_err
-
-
-async def upload_document_to_vk(api: Any, peer_id: int, image_bytes: bytes) -> str:
-    jpg_bytes, filename, content_type = _prepare_image_for_vk(image_bytes)
-
-    last_err = None
-    for attempt in range(MAX_RETRIES):
-        try:
-            upload_server = await api.docs.get_messages_upload_server(type="doc", peer_id=peer_id)
-            upload_url = upload_server.upload_url
-            logger.info("VK doc upload URL obtained (attempt %d)...", attempt + 1)
-
-            form = aiohttp.FormData()
-            form.add_field(
-                "file",
-                jpg_bytes,
-                filename=filename,
-                content_type=content_type,
-            )
-
-            async with aiohttp.ClientSession() as session:
-                async with session.post(upload_url, data=form) as resp:
-                    raw_text = await resp.text()
-                    result = json.loads(raw_text)
-
-            file_field = result.get("file", "")
-            if not file_field:
-                raise ValueError(f"VK doc upload returned empty file field: {result}")
-
-            saved = await api.docs.save(file=result["file"], title=filename)
-            doc = saved.doc
-            attachment = f"doc{doc.owner_id}_{doc.id}"
-            logger.info("VK doc saved: %s", attachment)
-            return attachment
-
-        except Exception as exc:
-            last_err = exc
-            logger.warning("VK doc upload attempt %d failed: %s", attempt + 1, exc)
-            if attempt < MAX_RETRIES - 1:
-                await asyncio.sleep(2)
+                await asyncio.sleep(0.5)
 
     raise last_err
 
