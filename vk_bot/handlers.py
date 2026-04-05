@@ -26,7 +26,7 @@ from vk_bot.keyboards import (
     get_creative_prompt_keyboard,
     get_creative_auto_keyboard,
 )
-from vk_bot.photo_upload import upload_photo_to_vk, download_vk_photo
+from vk_bot.photo_upload import upload_photo_to_vk, upload_document_to_vk, download_vk_photo
 
 logger = logging.getLogger(__name__)
 
@@ -590,25 +590,20 @@ async def _generate_and_send(
         active_tasks.pop(uid, None)
         elapsed = int(time.monotonic() - start_time)
 
-        attachment = await upload_photo_to_vk(bot.api, peer_id, image_bytes)
-
         send_mode = settings.get("send_mode", "photo")
         caption = f"✅ Изображение готово! ({elapsed} сек.)\n{prompt[:200]}"
 
         if send_mode == "document":
-            await bot.api.messages.send(
-                peer_id=peer_id, random_id=0,
-                message=caption,
-                attachment=attachment,
-                keyboard=get_persistent_keyboard(),
-            )
+            attachment = await upload_document_to_vk(bot.api, peer_id, image_bytes)
         else:
-            await bot.api.messages.send(
-                peer_id=peer_id, random_id=0,
-                message=caption,
-                attachment=attachment,
-                keyboard=get_persistent_keyboard(),
-            )
+            attachment = await upload_photo_to_vk(bot.api, peer_id, image_bytes)
+
+        await bot.api.messages.send(
+            peer_id=peer_id, random_id=0,
+            message=caption,
+            attachment=attachment,
+            keyboard=get_persistent_keyboard(),
+        )
 
         try:
             first_name = settings.get("first_name", "")
