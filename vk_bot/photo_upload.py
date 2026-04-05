@@ -12,7 +12,8 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 MAX_VK_SIDE = 2560
-MAX_RETRIES = 3
+MAX_RETRIES = 5
+_504_RETRY_DELAY = 10  # VK server-side gateway timeout — wait longer before retry
 
 
 def _detect_format(image_bytes: bytes) -> tuple[str, str]:
@@ -138,9 +139,13 @@ async def upload_document_to_vk(api: Any, peer_id: int, image_bytes: bytes, file
         except Exception as exc:
             last_err = exc
             is_stale_url = "405" in str(exc) or "stale upload URL" in str(exc)
-            logger.warning("VK doc upload attempt %d failed: %s", attempt + 1, exc)
+            is_gateway_timeout = "504" in str(exc)
+            logger.warning("VK doc upload attempt %d/%d failed: %s", attempt + 1, MAX_RETRIES, exc)
             if attempt < MAX_RETRIES - 1:
-                if not is_stale_url:
+                if is_gateway_timeout:
+                    logger.info("VK 504 — waiting %ds before retry (server-side timeout)...", _504_RETRY_DELAY)
+                    await asyncio.sleep(_504_RETRY_DELAY)
+                elif not is_stale_url:
                     await asyncio.sleep(2)
 
     raise last_err

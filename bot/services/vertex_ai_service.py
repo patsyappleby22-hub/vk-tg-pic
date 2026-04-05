@@ -22,6 +22,7 @@ from typing import Any
 
 from bot.config import Settings
 from core.exceptions import (
+    AmbiguousPromptError,
     GenerationError,
     QuotaExceededError,
     SafetyFilterError,
@@ -310,56 +311,79 @@ class VertexAIService:
         aspect_ratio: str,
         thinking_level: str = "low",
     ) -> bytes:
-        tried_keys: set[int] = set()
         n = len(self._slots)
+        tried_keys: set[int] = set()
+        text_retry_done = False
+        current_prompt = prompt
+        deadline = time.monotonic() + 90  # max total wait across all retries
 
-        while len(tried_keys) < n:
+        while True:
             async with self._lock:
                 slot = self._get_next_available_slot()
 
-            if slot is None:
-                break
-
-            if slot.index in tried_keys:
-                break
-
-            tried_keys.add(slot.index)
-
-            try:
+            if slot is not None and slot.index not in tried_keys:
+                tried_keys.add(slot.index)
+                try:
+                    logger.info(
+                        "Trying '%s' for model %s, prompt='%s'",
+                        slot.label, model, current_prompt[:60],
+                    )
+                    result = await self._call_api(slot, current_prompt, images, model, aspect_ratio, thinking_level)
+                    return result
+                except Exception as exc:
+                    logger.error(
+                        "Slot '%s' error for '%s': %s",
+                        slot.label, current_prompt[:60], repr(exc),
+                    )
+                    if _is_safety_error(exc):
+                        raise SafetyFilterError(str(exc)) from exc
+                    if _is_retryable(exc):
+                        slot.mark_rate_limited()
+                        logger.warning(
+                            "Slot '%s' returned 429 for '%s', rotating...",
+                            slot.label, current_prompt[:60],
+                        )
+                        continue
+                    if _is_auth_error(exc):
+                        slot.reset_client()
+                        logger.warning(
+                            "Slot '%s' auth error for '%s', key invalid — skipping: %s",
+                            slot.label, current_prompt[:60], exc,
+                        )
+                        continue
+                    if _is_model_error(exc):
+                        logger.warning(
+                            "Slot '%s' returned 400 for '%s', model issue — skipping...",
+                            slot.label, current_prompt[:60],
+                        )
+                        continue
+                    # Model returned text instead of image — retry once with explicit image prompt
+                    if isinstance(exc, GenerationError) and "вернула текст" in str(exc):
+                        if not text_retry_done:
+                            text_retry_done = True
+                            current_prompt = (
+                                f"Generate a high-quality image of: {prompt}. "
+                                "Important: output must be an IMAGE, not text."
+                            )
+                            tried_keys.clear()
+                            logger.info("Model returned text for '%s', retrying with enhanced prompt...", prompt[:40])
+                            continue
+                        # Enhanced prompt also returned text — give user a clear message
+                        raise AmbiguousPromptError(str(exc)) from exc
+                    raise GenerationError(str(exc)) from exc
+            else:
+                # No available slot — check if any are cooling down
+                now = time.monotonic()
+                cooling = [s for s in self._slots if s.cooldown_until > now]
+                if not cooling or now >= deadline:
+                    break
+                wait = min(s.cooldown_until for s in cooling) - now
                 logger.info(
-                    "Trying '%s' for model %s, prompt='%s'",
-                    slot.label, model, prompt[:60],
+                    "All %d slot(s) rate-limited; waiting %.1fs for cooldown...",
+                    len(cooling), wait,
                 )
-                result = await self._call_api(slot, prompt, images, model, aspect_ratio, thinking_level)
-                return result
-            except Exception as exc:
-                logger.error(
-                    "Slot '%s' error for '%s': %s",
-                    slot.label, prompt[:60], repr(exc),
-                )
-                if _is_safety_error(exc):
-                    raise SafetyFilterError(str(exc)) from exc
-                if _is_retryable(exc):
-                    slot.mark_rate_limited()
-                    logger.warning(
-                        "Slot '%s' returned 429 for '%s', rotating...",
-                        slot.label, prompt[:60],
-                    )
-                    continue
-                if _is_auth_error(exc):
-                    slot.reset_client()
-                    logger.warning(
-                        "Slot '%s' auth error for '%s', key invalid — skipping: %s",
-                        slot.label, prompt[:60], exc,
-                    )
-                    continue
-                if _is_model_error(exc):
-                    logger.warning(
-                        "Slot '%s' returned 400 for '%s', model issue — skipping...",
-                        slot.label, prompt[:60],
-                    )
-                    continue
-                raise GenerationError(str(exc)) from exc
+                await asyncio.sleep(wait + 0.2)
+                tried_keys.clear()  # allow retrying the same slot after cooldown
 
         logger.error("All %d credential slots exhausted for model %s", n, model)
         raise QuotaExceededError()

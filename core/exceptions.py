@@ -65,5 +65,21 @@ class GenerationError(VertexAIError):
         )
 
 
+class AmbiguousPromptError(GenerationError):
+    """Raised when the model returned text instead of an image (prompt too ambiguous)."""
+
+    def __init__(self, detail: str = "") -> None:
+        msg = f"Image generation failed: {detail}" if detail else "Image generation failed."
+        BotError.__init__(
+            self,
+            message=msg,
+            user_message=(
+                "⚠️ <b>Модель не смогла понять запрос</b> — вернула текст вместо картинки.\n\n"
+                "Попробуйте описать подробнее, например:\n"
+                "<i>«Портрет Петра Великого в царских одеждах»</i>"
+            ),
+        )
+
+
 class ConfigurationError(BotError):
     """Raised when the bot configuration is invalid or incomplete."""
