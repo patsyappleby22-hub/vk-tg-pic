@@ -31,13 +31,12 @@ router = Router(name="start")
 
 def _build_menu_text(first_name: str, generations: int, credits: int, blocked: bool) -> str:
     greeting = f"👋 <b>Привет, {first_name}!</b>\n\n" if first_name else "👋 <b>Главное меню</b>\n\n"
-    used = max(0, FREE_CREDITS - credits)
     if blocked:
         credit_line = "🚫 <b>Доступ закрыт.</b> Обратитесь к администратору.\n\n"
     else:
         credit_line = (
             f"💳 Бесплатных кредитов выдано: <b>{FREE_CREDITS}</b>\n"
-            f"🎨 Использовано: <b>{used}</b>\n"
+            f"🎨 Использовано: <b>{generations}</b>\n"
             f"🔋 Осталось: <b>{credits}</b>\n\n"
         )
     return f"{greeting}{credit_line}Отправьте текст или фото с описанием:"

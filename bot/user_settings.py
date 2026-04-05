@@ -148,15 +148,24 @@ def load_settings() -> None:
     try:
         raw = json.loads(SETTINGS_FILE.read_text())
         count = 0
+        migrated = 0
         for uid_str, saved in raw.items():
             uid = int(uid_str)
             merged = {**DEFAULT_SETTINGS}
             for k in _PERSISTENT_KEYS:
                 if k in saved:
                     merged[k] = saved[k]
+            # Migrate existing users: if credits was never saved, init from generations_count
+            if "credits" not in saved:
+                gens = merged.get("generations_count", 0)
+                merged["credits"] = max(0, FREE_CREDITS - gens)
+                migrated += 1
             user_settings[uid] = merged
             count += 1
         logger.info("Loaded settings for %d users from %s", count, SETTINGS_FILE)
+        if migrated:
+            logger.info("Migrated credits for %d existing users", migrated)
+            _save_to_disk()
     except Exception:
         logger.exception("Failed to load user settings from %s", SETTINGS_FILE)
 
