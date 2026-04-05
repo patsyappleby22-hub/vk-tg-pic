@@ -96,12 +96,28 @@ async def choose_aspect_ratio(callback: CallbackQuery) -> None:
     await _safe_edit(
         callback,
         "📐 <b>Выберите соотношение сторон:</b>",
-        reply_markup=get_aspect_ratio_keyboard(uid),
+        reply_markup=get_aspect_ratio_keyboard(uid, 0),
     )
     await callback.answer()
 
 
-@router.callback_query(lambda c: c.data and c.data.startswith("aspect_"))
+@router.callback_query(lambda c: c.data and c.data.startswith("aspect_page_"))
+async def aspect_ratio_page(callback: CallbackQuery) -> None:
+    uid = callback.from_user.id
+    try:
+        page = int(callback.data.replace("aspect_page_", "", 1))
+    except ValueError:
+        await callback.answer()
+        return
+    await _safe_edit(
+        callback,
+        "📐 <b>Выберите соотношение сторон:</b>",
+        reply_markup=get_aspect_ratio_keyboard(uid, page),
+    )
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("aspect_") and not c.data.startswith("aspect_page_"))
 async def set_aspect_ratio(callback: CallbackQuery) -> None:
     uid = callback.from_user.id
     ratio_key = callback.data.replace("aspect_", "")

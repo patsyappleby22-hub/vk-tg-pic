@@ -32,12 +32,8 @@ ASPECT_RATIOS: dict[str, str] = {
 def get_persistent_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
-            [
-                KeyboardButton(text=BTN_MENU),
-                KeyboardButton(text=BTN_IDEAS),
-                KeyboardButton(text=BTN_SETTINGS),
-                KeyboardButton(text=BTN_STOP),
-            ],
+            [KeyboardButton(text=BTN_MENU), KeyboardButton(text=BTN_IDEAS)],
+            [KeyboardButton(text=BTN_SETTINGS), KeyboardButton(text=BTN_STOP)],
         ],
         resize_keyboard=True,
         is_persistent=True,
@@ -70,13 +66,19 @@ def get_model_keyboard(user_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def get_aspect_ratio_keyboard(user_id: int) -> InlineKeyboardMarkup:
+def get_aspect_ratio_keyboard(user_id: int, page: int = 0) -> InlineKeyboardMarkup:
     settings = get_user_settings(user_id)
     current = settings.get("aspect_ratio", "1:1")
 
+    items = list(ASPECT_RATIOS.items())
+    page_size = 8
+    total_pages = (len(items) + page_size - 1) // page_size
+    page = max(0, min(page, total_pages - 1))
+    page_items = items[page * page_size:(page + 1) * page_size]
+
     rows: list[list[InlineKeyboardButton]] = []
     row: list[InlineKeyboardButton] = []
-    for key, label in ASPECT_RATIOS.items():
+    for key, label in page_items:
         text = f"✅ {label}" if key == current else label
         row.append(InlineKeyboardButton(text=text, callback_data=f"aspect_{key}"))
         if len(row) == 2:
@@ -84,6 +86,15 @@ def get_aspect_ratio_keyboard(user_id: int) -> InlineKeyboardMarkup:
             row = []
     if row:
         rows.append(row)
+
+    if total_pages > 1:
+        nav: list[InlineKeyboardButton] = []
+        if page > 0:
+            nav.append(InlineKeyboardButton(text="⬅️", callback_data=f"aspect_page_{page - 1}"))
+        if page < total_pages - 1:
+            nav.append(InlineKeyboardButton(text="➡️", callback_data=f"aspect_page_{page + 1}"))
+        if nav:
+            rows.append(nav)
 
     rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_settings")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
