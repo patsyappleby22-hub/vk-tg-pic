@@ -15,7 +15,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-_STORE_PATH = Path(__file__).resolve().parent.parent / "data" / "api_keys.json"
+_STORE_PATH = Path(os.environ.get("API_KEYS_FILE", str(Path(__file__).resolve().parent.parent / "data" / "api_keys.json")))
 
 
 def _load() -> list[str]:
