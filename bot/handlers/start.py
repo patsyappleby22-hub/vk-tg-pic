@@ -22,20 +22,25 @@ from bot.user_settings import (
     set_last_menu,
     save_user_settings,
     cancel_active_task,
+    FREE_CREDITS,
 )
 from bot.handlers.creative import _sessions as creative_sessions, _final_prompts as creative_prompts
 
 router = Router(name="start")
 
 
-def _build_menu_text(first_name: str, generations: int) -> str:
+def _build_menu_text(first_name: str, generations: int, credits: int, blocked: bool) -> str:
     greeting = f"👋 <b>Привет, {first_name}!</b>\n\n" if first_name else "👋 <b>Главное меню</b>\n\n"
-    stats = f"🖼 Сгенерировано изображений: <b>{generations}</b>\n\n" if generations > 0 else ""
-    return (
-        f"{greeting}"
-        f"{stats}"
-        "Отправьте текст или фото с описанием:"
-    )
+    used = max(0, FREE_CREDITS - credits)
+    if blocked:
+        credit_line = "🚫 <b>Доступ закрыт.</b> Обратитесь к администратору.\n\n"
+    else:
+        credit_line = (
+            f"💳 Бесплатных кредитов выдано: <b>{FREE_CREDITS}</b>\n"
+            f"🎨 Использовано: <b>{used}</b>\n"
+            f"🔋 Осталось: <b>{credits}</b>\n\n"
+        )
+    return f"{greeting}{credit_line}Отправьте текст или фото с описанием:"
 
 
 @router.message(CommandStart())
@@ -46,13 +51,15 @@ async def cmd_start(message: Message) -> None:
     settings["first_name"] = first_name
     save_user_settings(uid)
     generations = settings.get("generations_count", 0)
+    credits = settings.get("credits", FREE_CREDITS)
+    blocked = settings.get("blocked", False)
 
     await message.answer(
         "⌨️ Клавиатура активирована",
         reply_markup=get_persistent_keyboard(),
     )
     await message.answer(
-        _build_menu_text(first_name, generations),
+        _build_menu_text(first_name, generations, credits, blocked),
         parse_mode="HTML",
     )
 
@@ -64,10 +71,12 @@ async def cmd_menu(message: Message) -> None:
     first_name = message.from_user.first_name or ""
     settings = get_user_settings(uid)
     settings["first_name"] = first_name
+    credits = settings.get("credits", FREE_CREDITS)
+    blocked = settings.get("blocked", False)
     generations = settings.get("generations_count", 0)
 
     await message.answer(
-        _build_menu_text(first_name, generations),
+        _build_menu_text(first_name, generations, credits, blocked),
         parse_mode="HTML",
     )
 

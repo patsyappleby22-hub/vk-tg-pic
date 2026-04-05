@@ -15,7 +15,7 @@ from bot.services.vertex_ai_service import VertexAIService
 from bot.user_settings import (
     get_user_settings, save_user_settings, increment_generations,
     AVAILABLE_MODELS, SEND_MODES, RESOLUTIONS, THINKING_LEVELS,
-    is_blocked, has_credits,
+    is_blocked, has_credits, FREE_CREDITS,
 )
 from bot.keyboards import ASPECT_RATIOS
 from core.exceptions import BotError, QuotaExceededError, SafetyFilterError
@@ -203,6 +203,20 @@ def _build_contents(history: list[dict[str, Any]]) -> list[Any]:
     return contents
 
 
+def _build_vk_menu_text(first_name: str, credits: int, blocked: bool) -> str:
+    greeting = f"👋 Привет, {first_name}!\n\n" if first_name else "👋 Главное меню\n\n"
+    used = max(0, FREE_CREDITS - credits)
+    if blocked:
+        credit_line = "🚫 Доступ закрыт. Обратитесь к администратору.\n\n"
+    else:
+        credit_line = (
+            f"💳 Бесплатных кредитов выдано: {FREE_CREDITS}\n"
+            f"🎨 Использовано: {used}\n"
+            f"🔋 Осталось: {credits}\n\n"
+        )
+    return f"{greeting}{credit_line}Отправьте текст или фото с описанием:"
+
+
 def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
 
     @bot.on.message(text=["/start", "/начать", "начать", "Начать"])
@@ -218,24 +232,26 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
             pass
         settings["first_name"] = first_name
         save_user_settings(uid)
-        generations = settings.get("generations_count", 0)
+        credits = settings.get("credits", FREE_CREDITS)
+        blocked = settings.get("blocked", False)
 
-        greeting = f"👋 Привет, {first_name}!\n\n" if first_name else "👋 Главное меню\n\n"
-        stats = f"🖼 Сгенерировано изображений: {generations}\n\n" if generations > 0 else ""
-        text = f"{greeting}{stats}Отправьте текст или фото с описанием:"
-
-        await message.answer(text, keyboard=get_persistent_keyboard())
+        await message.answer(
+            _build_vk_menu_text(first_name, credits, blocked),
+            keyboard=get_persistent_keyboard(),
+        )
 
     @bot.on.message(text=list(MENU_TEXTS))
     async def cmd_menu(message: Message):
         uid = message.from_id
         settings = get_user_settings(uid)
         first_name = settings.get("first_name", "")
-        generations = settings.get("generations_count", 0)
+        credits = settings.get("credits", FREE_CREDITS)
+        blocked = settings.get("blocked", False)
 
-        greeting = f"👋 Привет, {first_name}!\n\n" if first_name else "👋 Главное меню\n\n"
-        stats = f"🖼 Сгенерировано изображений: {generations}\n\n" if generations > 0 else ""
-        await message.answer(f"{greeting}{stats}Отправьте текст или фото с описанием:", keyboard=get_persistent_keyboard())
+        await message.answer(
+            _build_vk_menu_text(first_name, credits, blocked),
+            keyboard=get_persistent_keyboard(),
+        )
 
     @bot.on.message(text=list(SETTINGS_TEXTS))
     async def cmd_settings(message: Message):

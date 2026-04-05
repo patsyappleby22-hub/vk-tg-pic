@@ -7,7 +7,9 @@
     "thinking_level": "low",
     "first_name": "Гайрат",
     "generations_count": 11,
-    "platform": "tg"
+    "platform": "tg",
+    "credits": 60,
+    "blocked": false
   },
   "789556086": {
     "model": "gemini-3.1-flash-image-preview",
@@ -17,6 +19,8 @@
     "thinking_level": "high",
     "first_name": "Гайрат",
     "generations_count": 25,
-    "platform": "vk"
+    "platform": "vk",
+    "credits": 30,
+    "blocked": false
   }
 }
