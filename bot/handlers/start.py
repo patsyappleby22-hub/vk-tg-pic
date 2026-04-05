@@ -77,7 +77,7 @@ async def cmd_menu(message: Message) -> None:
 async def cmd_settings(message: Message) -> None:
     uid = message.from_user.id
     sent = await message.answer(
-        "⚙️ <b>Настройки</b>\n<i>━━━━━━━━━━━━━━━━━━━━━━━━</i>\nВыберите что изменить:",
+        "⚙️ <b>Настройки</b>\n<code>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</code>\nВыберите что изменить:",
         parse_mode="HTML",
         reply_markup=get_settings_summary_keyboard(uid),
     )

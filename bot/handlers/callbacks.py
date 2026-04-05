@@ -48,7 +48,7 @@ async def _safe_edit(callback: CallbackQuery, text: str, reply_markup=None) -> N
     )
 
 
-_SETTINGS_TEXT = "⚙️ <b>Настройки</b>\n<i>━━━━━━━━━━━━━━━━━━━━━━━━</i>\nВыберите что изменить:"
+_SETTINGS_TEXT = "⚙️ <b>Настройки</b>\n<code>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</code>\nВыберите что изменить:"
 
 
 @router.callback_query(lambda c: c.data == "back_to_settings")
