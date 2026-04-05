@@ -50,7 +50,7 @@ async def upload_photo_to_vk(api: Any, peer_id: int, image_bytes: bytes) -> str:
             form = aiohttp.FormData()
             form.add_field(
                 "photo",
-                io.BytesIO(jpg_bytes),
+                jpg_bytes,
                 filename=filename,
                 content_type=content_type,
             )
