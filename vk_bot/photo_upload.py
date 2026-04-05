@@ -137,8 +137,16 @@ async def upload_document_to_vk(api: Any, peer_id: int, image_bytes: bytes, file
             timeout = aiohttp.ClientTimeout(total=60)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.post(upload_url, data=form) as resp:
+                    status = resp.status
                     raw_text = await resp.text()
-                    logger.info("VK doc upload response (attempt %d): status=%d, body=%s", attempt + 1, resp.status, raw_text[:300])
+                    logger.info("VK doc upload response (attempt %d): status=%d, body=%s", attempt + 1, status, raw_text[:300])
+
+                    if status == 405:
+                        # VK returned a stale/invalid upload URL — retry immediately with a fresh one
+                        raise ValueError(f"VK returned 405 (stale upload URL), retrying...")
+                    if status != 200:
+                        raise ValueError(f"VK upload returned HTTP {status}")
+
                     result = json.loads(raw_text)
 
             file_field = result.get("file", "")
@@ -153,9 +161,12 @@ async def upload_document_to_vk(api: Any, peer_id: int, image_bytes: bytes, file
 
         except Exception as exc:
             last_err = exc
+            is_stale_url = "405" in str(exc) or "stale upload URL" in str(exc)
             logger.warning("VK doc upload attempt %d failed: %s", attempt + 1, exc)
             if attempt < MAX_RETRIES - 1:
-                await asyncio.sleep(2)
+                # No sleep for stale URL (405) — just get a new URL immediately
+                if not is_stale_url:
+                    await asyncio.sleep(2)
 
     raise last_err
 
