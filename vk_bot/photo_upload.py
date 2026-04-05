@@ -11,12 +11,34 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
+MAX_VK_SIDE = 2560
 MAX_RETRIES = 3
 
+
+def _prepare_image_for_vk(image_bytes: bytes) -> tuple[bytes, str, str]:
+    img = Image.open(io.BytesIO(image_bytes))
+
+    if img.mode == "RGBA":
+        background = Image.new("RGB", img.size, (255, 255, 255))
+        background.paste(img, mask=img.split()[3])
+        img = background
+    elif img.mode != "RGB":
+        img = img.convert("RGB")
+
+    w, h = img.size
+    if max(w, h) > MAX_VK_SIDE:
+        scale = MAX_VK_SIDE / max(w, h)
+        img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=90)
+    jpg_bytes = buf.getvalue()
+    logger.info("Prepared image for VK: %dx%d -> %d bytes JPEG", w, h, len(jpg_bytes))
+    return jpg_bytes, "image.jpg", "image/jpeg"
+
+
 async def upload_photo_to_vk(api: Any, peer_id: int, image_bytes: bytes) -> str:
-    # Отправляем оригинальные байты от нейросети напрямую, без урезаний и "пережевывания" через Pillow
-    filename = "image.jpg"
-    content_type = "image/jpeg"
+    jpg_bytes, filename, content_type = _prepare_image_for_vk(image_bytes)
 
     last_err = None
     for attempt in range(MAX_RETRIES):
@@ -28,7 +50,7 @@ async def upload_photo_to_vk(api: Any, peer_id: int, image_bytes: bytes) -> str:
             form = aiohttp.FormData()
             form.add_field(
                 "photo",
-                io.BytesIO(image_bytes),
+                io.BytesIO(jpg_bytes),
                 filename=filename,
                 content_type=content_type,
             )
@@ -58,8 +80,8 @@ async def upload_photo_to_vk(api: Any, peer_id: int, image_bytes: bytes) -> str:
         except Exception as exc:
             last_err = exc
             logger.warning("VK photo upload attempt %d failed: %s", attempt + 1, exc)
-            if attempt < 2:
-                await asyncio.sleep(0.5)
+            if attempt < MAX_RETRIES - 1:
+                await asyncio.sleep(2)
 
     raise last_err
 
