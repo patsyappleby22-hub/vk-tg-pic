@@ -104,17 +104,17 @@ async def run_vk(vertex_service):
         await asyncio.sleep(1)
 
 
-async def dummy_web_server():
+async def web_server():
     from aiohttp import web
-    app = web.Application()
-    app.router.add_get("/", lambda request: web.Response(text="Bot is running!"))
+    from bot.web_server import create_web_app
+
+    app = create_web_app()
     runner = web.AppRunner(app)
     await runner.setup()
     port = int(os.environ.get("PORT", 5000))
     site = web.TCPSite(runner, '0.0.0.0', port)
-    logger.info(f"Starting dummy web server on port {port} to satisfy Cloud Run")
+    logger.info("Web server starting on port %d (landing + payment webhooks)", port)
     await site.start()
-    # Keep running
     while True:
         await asyncio.sleep(3600)
 
@@ -139,8 +139,7 @@ async def main():
     if vk_token:
         tasks.append(asyncio.create_task(run_vk(vertex_service)))
 
-    # Always start the dummy web server for Cloud Run
-    tasks.append(asyncio.create_task(dummy_web_server()))
+    tasks.append(asyncio.create_task(web_server()))
 
     if not tasks:
         logger.error("No bot tokens set — set TELEGRAM_BOT_TOKEN and/or VK_BOT_TOKEN")
