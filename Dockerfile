@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY bot/ bot/
 COPY vk_bot/ vk_bot/
 COPY core/ core/
+COPY web/ web/
 COPY start_all.py .
 COPY telegram-bot/ telegram-bot/
 
