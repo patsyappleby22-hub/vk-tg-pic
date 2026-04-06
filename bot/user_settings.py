@@ -238,12 +238,16 @@ def save_user_settings(user_id: int) -> None:
     _save_to_disk()
 
 
-def increment_generations(user_id: int, first_name: str = "", platform: str = "") -> int:
+def increment_generations(
+    user_id: int,
+    first_name: str = "",
+    platform: str = "",
+    credits_cost: int = 1,
+) -> int:
     s = get_user_settings(user_id)
     s["generations_count"] = s.get("generations_count", 0) + 1
     current_credits = s.get("credits", FREE_CREDITS)
-    if current_credits > 0:
-        s["credits"] = current_credits - 1
+    s["credits"] = max(0, current_credits - credits_cost)
     if first_name:
         s["first_name"] = first_name
     if platform and not s.get("platform"):
@@ -256,8 +260,8 @@ def is_blocked(user_id: int) -> bool:
     return bool(get_user_settings(user_id).get("blocked", False))
 
 
-def has_credits(user_id: int) -> bool:
-    return get_user_settings(user_id).get("credits", FREE_CREDITS) > 0
+def has_credits(user_id: int, required: int = 1) -> bool:
+    return get_user_settings(user_id).get("credits", FREE_CREDITS) >= required
 
 
 def add_credits(user_id: int, amount: int) -> int:

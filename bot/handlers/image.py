@@ -208,16 +208,21 @@ async def handle_photo_prompt(
         await message.reply("⛔ Ваш аккаунт заблокирован. Обратитесь к администратору.")
         return
 
-    if not has_credits(uid):
-        await message.reply(
+    settings = get_user_settings(uid)
+    credits_cost = 2 if settings.get("resolution") == "4k" else 1
+
+    if not has_credits(uid, credits_cost):
+        msg = (
             "💳 <b>Кредиты закончились</b>\n\n"
             "У вас больше нет доступных генераций.\n"
-            "Для продолжения работы приобретите пополнение кредитов.",
-            parse_mode="HTML",
+            "Для продолжения работы приобретите пополнение кредитов."
+            if credits_cost == 1 else
+            "💳 <b>Недостаточно кредитов</b>\n\n"
+            "Генерация в разрешении <b>4K стоит 2 кредита</b>.\n"
+            "Понизьте разрешение в настройках или пополните баланс."
         )
+        await message.reply(msg, parse_mode="HTML")
         return
-
-    settings = get_user_settings(uid)
 
     caption = _collect_caption(photo_messages)
     if not caption:
@@ -305,7 +310,7 @@ async def handle_photo_prompt(
                 parse_mode="HTML",
             )
 
-        increment_generations(uid, message.from_user.first_name or "", platform="tg")
+        increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost)
 
         try:
             await bot.delete_message(chat_id=message.chat.id, message_id=processing_msg.message_id)
@@ -405,16 +410,22 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
         await message.reply("⛔ Ваш аккаунт заблокирован. Обратитесь к администратору.")
         return
 
-    if not has_credits(uid):
-        await message.reply(
+    settings = get_user_settings(uid)
+    credits_cost = 2 if settings.get("resolution") == "4k" else 1
+
+    if not has_credits(uid, credits_cost):
+        msg = (
             "💳 <b>Кредиты закончились</b>\n\n"
             "У вас больше нет доступных генераций.\n"
-            "Для продолжения работы приобретите пополнение кредитов.",
-            parse_mode="HTML",
+            "Для продолжения работы приобретите пополнение кредитов."
+            if credits_cost == 1 else
+            "💳 <b>Недостаточно кредитов</b>\n\n"
+            "Генерация в разрешении <b>4K стоит 2 кредита</b>.\n"
+            "Понизьте разрешение в настройках или пополните баланс."
         )
+        await message.reply(msg, parse_mode="HTML")
         return
 
-    settings = get_user_settings(uid)
     user_model = settings.get("model", "gemini-3.1-flash-image-preview")
     model_label = AVAILABLE_MODELS.get(user_model, {}).get("label", user_model)
 
@@ -490,7 +501,7 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
                 parse_mode="HTML",
             )
 
-        increment_generations(uid, message.from_user.first_name or "", platform="tg")
+        increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost)
 
         try:
             await bot.delete_message(chat_id=message.chat.id, message_id=processing_msg.message_id)

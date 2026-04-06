@@ -581,18 +581,22 @@ async def _generate_and_send(
         )
         return
 
-    if not has_credits(uid):
-        await bot.api.messages.send(
-            peer_id=peer_id, random_id=0,
-            message=(
-                "💳 Кредиты закончились\n\n"
-                "У вас больше нет доступных генераций.\n"
-                "Для продолжения работы приобретите пополнение кредитов."
-            ),
+    settings = get_user_settings(uid)
+    credits_cost = 2 if settings.get("resolution") == "4k" else 1
+
+    if not has_credits(uid, credits_cost):
+        msg = (
+            "💳 Кредиты закончились\n\n"
+            "У вас больше нет доступных генераций.\n"
+            "Для продолжения работы приобретите пополнение кредитов."
+            if credits_cost == 1 else
+            "💳 Недостаточно кредитов\n\n"
+            "Генерация в разрешении 4K стоит 2 кредита.\n"
+            "Понизьте разрешение в настройках или пополните баланс."
         )
+        await bot.api.messages.send(peer_id=peer_id, random_id=0, message=msg)
         return
 
-    settings = get_user_settings(uid)
     user_model = settings.get("model", "gemini-3.1-flash-image-preview")
     model_label = AVAILABLE_MODELS.get(user_model, {}).get("label", user_model)
     aspect_ratio = settings.get("aspect_ratio", "1:1")
@@ -662,7 +666,7 @@ async def _generate_and_send(
 
         try:
             first_name = settings.get("first_name", "")
-            increment_generations(uid, first_name, platform="vk")
+            increment_generations(uid, first_name, platform="vk", credits_cost=credits_cost)
         except Exception:
             pass
 
