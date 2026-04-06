@@ -550,7 +550,7 @@ class VertexAIService:
 
         while len(tried_keys) < n:
             async with self._lock:
-                slot = self._get_next_available_slot()
+                slot = self._get_next_available_slot(self.CHAT_MODEL)
 
             if slot is None:
                 break
