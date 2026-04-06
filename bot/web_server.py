@@ -205,9 +205,14 @@ async def handle_chargeback(request: web.Request) -> web.Response:
     return web.Response(text="OK", status=200)
 
 
+async def handle_verification(request: web.Request) -> web.Response:
+    return web.Response(text="shop-verification-WG76VJD7xl", content_type="text/plain")
+
+
 def create_web_app() -> web.Application:
     app = web.Application()
     app.router.add_get("/", handle_index)
+    app.router.add_get("/shop-verification-WG76VJD7xl.txt", handle_verification)
     app.router.add_get("/payment/success", handle_success)
     app.router.add_get("/payment/fail", handle_fail)
     app.router.add_post("/webhook/pally", handle_webhook)
