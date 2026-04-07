@@ -14,6 +14,7 @@ BTN_MENU = "📋 Меню"
 BTN_STOP = "⛔ Стоп"
 BTN_SETTINGS = "⚙️ Настройки"
 BTN_IDEAS = "💡 Идеи"
+BTN_BALANCE = "💰 Баланс"
 
 ASPECT_RATIOS: dict[str, str] = {
     "1:1": "1:1 (Квадрат)",
@@ -33,7 +34,8 @@ def get_persistent_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=BTN_MENU), KeyboardButton(text=BTN_IDEAS)],
-            [KeyboardButton(text=BTN_SETTINGS), KeyboardButton(text=BTN_STOP)],
+            [KeyboardButton(text=BTN_SETTINGS), KeyboardButton(text=BTN_BALANCE)],
+            [KeyboardButton(text=BTN_STOP)],
         ],
         resize_keyboard=True,
         is_persistent=True,
@@ -205,3 +207,11 @@ def get_settings_summary_keyboard(user_id: int) -> InlineKeyboardMarkup:
     ])
 
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_balance_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💎 30 кредитов — 99₽", callback_data="buy_pack_30")],
+        [InlineKeyboardButton(text="💎 100 кредитов — 299₽", callback_data="buy_pack_100")],
+        [InlineKeyboardButton(text="💎 200 кредитов — 549₽", callback_data="buy_pack_200")],
+    ])

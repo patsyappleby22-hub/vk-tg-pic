@@ -26,6 +26,7 @@ from vk_bot.keyboards import (
     get_switch_model_keyboard,
     get_creative_prompt_keyboard,
     get_creative_auto_keyboard,
+    get_balance_keyboard,
 )
 from vk_bot.photo_upload import upload_photo_to_vk, upload_document_to_vk, download_vk_photo
 
@@ -108,7 +109,8 @@ MENU_TEXTS = {"📋 меню", "📋 Меню", "меню", "menu"}
 SETTINGS_TEXTS = {"⚙️ настройки", "⚙️ Настройки", "настройки", "settings"}
 STOP_TEXTS = {"⛔ стоп", "⛔ Стоп", "стоп", "stop", "отмена", "cancel"}
 IDEAS_TEXTS = {"💡 идеи", "💡 Идеи", "идеи"}
-RESERVED_TEXTS = MENU_TEXTS | SETTINGS_TEXTS | STOP_TEXTS | IDEAS_TEXTS
+BALANCE_TEXTS = {"💰 баланс", "💰 Баланс", "баланс", "balance"}
+RESERVED_TEXTS = MENU_TEXTS | SETTINGS_TEXTS | STOP_TEXTS | IDEAS_TEXTS | BALANCE_TEXTS
 
 _creative_sessions: dict[int, list[dict[str, Any]]] = {}
 _creative_prompts: dict[int, str] = {}
@@ -212,10 +214,20 @@ def _build_vk_menu_text(first_name: str, generations: int, credits: int, blocked
     if blocked:
         credit_line = "🚫 Доступ закрыт. Обратитесь к администратору.\n\n"
     else:
+        purchased = max(0, credits - FREE_CREDITS) if credits > FREE_CREDITS else 0
+        free_left = min(credits, FREE_CREDITS)
         credit_line = (
-            f"💳 Бесплатных кредитов: {FREE_CREDITS}\n"
-            f"🎨 Использовано: {generations}\n"
-            f"🔋 Осталось: {credits}\n\n"
+            "┌─────────────────────\n"
+            f"│ 🔋 Баланс: {credits} кредитов\n"
+        )
+        if purchased > 0:
+            credit_line += f"│ 💎 Купленные: {purchased}\n"
+            credit_line += f"│ 🎁 Бесплатные: {free_left}\n"
+        else:
+            credit_line += f"│ 🎁 Бесплатные: {free_left} из {FREE_CREDITS}\n"
+        credit_line += (
+            f"│ 🎨 Сгенерировано: {generations}\n"
+            "└─────────────────────\n\n"
         )
     return f"{greeting}{credit_line}Отправьте текст или фото с описанием:"
 
@@ -287,6 +299,28 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
             await message.answer(text)
         else:
             await message.answer("ℹ️ Нет активной генерации для отмены.")
+
+    @bot.on.message(text=list(BALANCE_TEXTS))
+    async def cmd_balance(message: Message):
+        uid = message.from_id
+        settings = get_user_settings(uid)
+        credits = settings.get("credits", FREE_CREDITS)
+        generations = settings.get("generations_count", 0)
+
+        purchased = max(0, credits - FREE_CREDITS) if credits > FREE_CREDITS else 0
+        free_left = min(credits, FREE_CREDITS)
+
+        text = "💰 Ваш баланс\n\n"
+        text += f"🔋 Всего кредитов: {credits}\n"
+        if purchased > 0:
+            text += f"💎 Купленные: {purchased}\n"
+            text += f"🎁 Бесплатные: {free_left}\n"
+        else:
+            text += f"🎁 Бесплатные: {free_left} из {FREE_CREDITS}\n"
+        text += f"🎨 Сгенерировано: {generations}\n\n"
+        text += "Выберите пакет для пополнения:"
+
+        await message.answer(text, keyboard=get_balance_keyboard())
 
     @bot.on.message(text=list(IDEAS_TEXTS))
     async def cmd_ideas(message: Message):
@@ -415,6 +449,23 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
                 save_user_settings(uid)
                 info = AVAILABLE_MODELS[model_id]
                 await edit_msg(f"✅ Модель переключена на {info['label']}\n\nОтправьте запрос ещё раз.")
+
+        elif cmd == "buy":
+            from bot.services.freekassa_service import create_payment_url, CREDIT_PACKAGES as FK_PACKAGES
+            pack_key = data.get("pack", "")
+            pack = FK_PACKAGES.get(pack_key)
+            if not pack:
+                await edit_msg("Неизвестный пакет.")
+                return
+            result = create_payment_url(uid, pack_key)
+            if result["ok"]:
+                await edit_msg(
+                    f"💳 Оплата: {pack['label']}\n\n"
+                    f"Перейдите по ссылке для оплаты:\n{result['pay_url']}\n\n"
+                    "Кредиты будут начислены автоматически после оплаты."
+                )
+            else:
+                await edit_msg(f"Ошибка: {result.get('error', 'неизвестная')}")
 
         elif cmd == "creative_generate":
             prompt = _creative_prompts.pop(uid, None)

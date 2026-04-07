@@ -24,7 +24,8 @@ PALLY_TOKEN = os.getenv("PALLY_TOKEN", "")
 
 CREDIT_PACKAGES = {
     "pack_30": {"credits": 30, "amount": 99.00, "label": "30 кредитов"},
-    "pack_99": {"credits": 99, "amount": 299.00, "label": "99 кредитов"},
+    "pack_100": {"credits": 100, "amount": 299.00, "label": "100 кредитов"},
+    "pack_200": {"credits": 200, "amount": 549.00, "label": "200 кредитов"},
 }
 
 
@@ -158,27 +159,6 @@ async def handle_webhook(request: web.Request) -> web.Response:
     return web.Response(text="OK", status=200)
 
 
-def _credit_from_order_id(order_id: str) -> None:
-    parts = order_id.split("_")
-    if len(parts) >= 3:
-        try:
-            user_id = int(parts[0])
-            pack_key = "_".join(parts[1:3])
-            pack = CREDIT_PACKAGES.get(pack_key)
-            if pack:
-                new_balance = add_credits(user_id, pack["credits"])
-                logger.info(
-                    "Credits added (fallback): user=%s, pack=%s, credits=+%d, balance=%d",
-                    user_id, pack_key, pack["credits"], new_balance,
-                )
-            else:
-                logger.warning("Unknown pack in order_id: %s", order_id)
-        except (ValueError, IndexError):
-            logger.error("Cannot parse order_id: %s", order_id)
-    else:
-        logger.warning("Unexpected order_id format: %s", order_id)
-
-
 async def handle_refund(request: web.Request) -> web.Response:
     try:
         data = await request.json()
@@ -209,6 +189,85 @@ async def handle_verification(request: web.Request) -> web.Response:
     return web.Response(text="shop-verification-WG76VJD7xl", content_type="text/plain")
 
 
+async def handle_freekassa_notification(request: web.Request) -> web.Response:
+    from bot.services.freekassa_service import verify_notification_sign, CREDIT_PACKAGES as FK_PACKAGES
+
+    try:
+        data = dict(await request.post())
+    except Exception:
+        logger.error("FreeKassa webhook: cannot parse body")
+        return web.Response(text="BAD REQUEST", status=400)
+
+    logger.info("FreeKassa webhook received: %s", json.dumps(data, ensure_ascii=False))
+
+    if not verify_notification_sign(data):
+        logger.warning("FreeKassa webhook: invalid signature")
+        return web.Response(text="INVALID SIGN", status=403)
+
+    order_id = data.get("MERCHANT_ORDER_ID", "")
+    payment_id = data.get("intid", "")
+    received_amount = data.get("AMOUNT", "")
+
+    if not order_id:
+        return web.Response(text="NO ORDER", status=400)
+
+    if _db.is_available():
+        stored = _db.get_payment(order_id)
+        if stored:
+            if stored["status"] == "success":
+                logger.info("FreeKassa: order %s already completed — skipping", order_id)
+                return web.Response(text="YES", status=200)
+            if received_amount:
+                try:
+                    if abs(float(received_amount) - stored["amount"]) > 0.01:
+                        logger.warning("FreeKassa amount mismatch: expected=%.2f got=%s", stored["amount"], received_amount)
+                        return web.Response(text="AMOUNT MISMATCH", status=400)
+                except (ValueError, TypeError):
+                    pass
+            if not _db.complete_payment(order_id, str(payment_id)):
+                logger.info("FreeKassa: order %s already completed (race) — skipping", order_id)
+                return web.Response(text="YES", status=200)
+            pack = FK_PACKAGES.get(stored["pack_key"]) or CREDIT_PACKAGES.get(stored["pack_key"])
+            if pack:
+                user_id = stored["user_id"]
+                new_balance = add_credits(user_id, pack["credits"])
+                logger.info(
+                    "FreeKassa credits added: user=%s, pack=%s, credits=+%d, balance=%d",
+                    user_id, stored["pack_key"], pack["credits"], new_balance,
+                )
+            return web.Response(text="YES", status=200)
+
+    if not _db.mark_order_processed_memory(f"fk_{order_id}"):
+        logger.info("FreeKassa duplicate webhook for %s (in-memory) — skipping", order_id)
+        return web.Response(text="YES", status=200)
+    _credit_from_order_id(order_id, FK_PACKAGES)
+    return web.Response(text="YES", status=200)
+
+
+def _credit_from_order_id(order_id: str, packages: dict | None = None) -> None:
+    if packages is None:
+        packages = CREDIT_PACKAGES
+    all_packages = {**CREDIT_PACKAGES, **packages}
+    parts = order_id.split("_")
+    if len(parts) >= 3:
+        try:
+            user_id = int(parts[0])
+            pack_key = "_".join(parts[1:-1])
+            pack = all_packages.get(pack_key)
+            if pack:
+                new_balance = add_credits(user_id, pack["credits"])
+                logger.info(
+                    "Credits added (fallback): user=%s, pack=%s, credits=+%d, balance=%d",
+                    user_id, pack_key, pack["credits"], new_balance,
+                )
+            else:
+                logger.warning("Unknown pack in order_id: %s", order_id)
+        except (ValueError, IndexError):
+            logger.error("Cannot parse order_id: %s", order_id)
+    else:
+        logger.warning("Unexpected order_id format: %s", order_id)
+
+
 def create_web_app() -> web.Application:
     app = web.Application()
     app.router.add_get("/", handle_index)
@@ -218,4 +277,5 @@ def create_web_app() -> web.Application:
     app.router.add_post("/webhook/pally", handle_webhook)
     app.router.add_post("/webhook/pally/refund", handle_refund)
     app.router.add_post("/webhook/pally/chargeback", handle_chargeback)
+    app.router.add_post("/api/freekassa/notification", handle_freekassa_notification)
     return app

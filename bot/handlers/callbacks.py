@@ -21,11 +21,13 @@ from bot.keyboards import (
     get_resolution_keyboard,
     get_thinking_level_keyboard,
     get_settings_summary_keyboard,
+    get_balance_keyboard,
 )
 from bot.user_settings import (
     user_settings, get_user_settings, set_last_menu, save_user_settings,
     AVAILABLE_MODELS, SEND_MODES, RESOLUTIONS, THINKING_LEVELS,
 )
+from bot.services.freekassa_service import create_payment_url, CREDIT_PACKAGES
 
 logger = logging.getLogger(__name__)
 router = Router(name="callbacks")
@@ -229,6 +231,32 @@ async def set_resolution(callback: CallbackQuery) -> None:
     await callback.answer(f"Качество: {info['label']}")
 
     await _safe_edit(callback, _SETTINGS_TEXT, reply_markup=get_settings_summary_keyboard(uid))
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("buy_"))
+async def buy_credits(callback: CallbackQuery) -> None:
+    pack_key = callback.data.replace("buy_", "", 1)
+    pack = CREDIT_PACKAGES.get(pack_key)
+    if not pack:
+        await callback.answer("Неизвестный пакет")
+        return
+
+    result = create_payment_url(callback.from_user.id, pack_key)
+    if result["ok"]:
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💳 Перейти к оплате", url=result["pay_url"])],
+        ])
+        await _safe_edit(
+            callback,
+            f"💳 <b>Оплата: {pack['label']}</b>\n\n"
+            "Нажмите кнопку ниже для перехода к оплате.\n"
+            "Кредиты будут начислены автоматически после оплаты.",
+            reply_markup=kb,
+        )
+    else:
+        await callback.answer(f"Ошибка: {result.get('error', 'неизвестная')}", show_alert=True)
+    await callback.answer()
 
 
 @router.callback_query(lambda c: c.data and c.data.startswith("switch_model_"))

@@ -14,6 +14,8 @@ def get_persistent_keyboard() -> str:
     kb.add(Text("💡 Идеи"), color=KeyboardButtonColor.POSITIVE)
     kb.row()
     kb.add(Text("⚙️ Настройки"), color=KeyboardButtonColor.SECONDARY)
+    kb.add(Text("💰 Баланс"), color=KeyboardButtonColor.POSITIVE)
+    kb.row()
     kb.add(Text("⛔ Стоп"), color=KeyboardButtonColor.NEGATIVE)
     return kb.get_json()
 
@@ -161,6 +163,16 @@ def get_creative_auto_keyboard() -> str:
     kb.add(Callback("🪄 Дополни сам и генерируй", payload={"cmd": "creative_auto"}))
     kb.row()
     kb.add(Callback("❌ Отмена", payload={"cmd": "creative_cancel"}))
+    return kb.get_json()
+
+
+def get_balance_keyboard() -> str:
+    kb = Keyboard(inline=True)
+    kb.add(Callback("💎 30 кредитов — 99₽", payload={"cmd": "buy", "pack": "pack_30"}))
+    kb.row()
+    kb.add(Callback("💎 100 кредитов — 299₽", payload={"cmd": "buy", "pack": "pack_100"}))
+    kb.row()
+    kb.add(Callback("💎 200 кредитов — 549₽", payload={"cmd": "buy", "pack": "pack_200"}))
     return kb.get_json()
 
 

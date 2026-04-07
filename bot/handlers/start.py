@@ -16,6 +16,7 @@ from bot.keyboards import (
     BTN_SETTINGS,
     get_persistent_keyboard,
     get_settings_summary_keyboard,
+    get_balance_keyboard,
 )
 from bot.user_settings import (
     get_user_settings,
@@ -28,16 +29,28 @@ from bot.handlers.creative import _sessions as creative_sessions, _final_prompts
 
 router = Router(name="start")
 
+BTN_BALANCE = "💰 Баланс"
+
 
 def _build_menu_text(first_name: str, generations: int, credits: int, blocked: bool) -> str:
     greeting = f"👋 <b>Привет, {first_name}!</b>\n\n" if first_name else "👋 <b>Главное меню</b>\n\n"
     if blocked:
         credit_line = "🚫 <b>Доступ закрыт.</b> Обратитесь к администратору.\n\n"
     else:
+        purchased = max(0, credits - FREE_CREDITS) if credits > FREE_CREDITS else 0
+        free_left = min(credits, FREE_CREDITS)
         credit_line = (
-            f"💳 Бесплатных кредитов: <b>{FREE_CREDITS}</b>\n"
-            f"🎨 Использовано: <b>{generations}</b>\n"
-            f"🔋 Осталось: <b>{credits}</b>\n\n"
+            f"┌─────────────────────\n"
+            f"│ 🔋 <b>Баланс: {credits} кредитов</b>\n"
+        )
+        if purchased > 0:
+            credit_line += f"│ 💎 Купленные: <b>{purchased}</b>\n"
+            credit_line += f"│ 🎁 Бесплатные: <b>{free_left}</b>\n"
+        else:
+            credit_line += f"│ 🎁 Бесплатные: <b>{free_left} из {FREE_CREDITS}</b>\n"
+        credit_line += (
+            f"│ 🎨 Сгенерировано: <b>{generations}</b>\n"
+            f"└─────────────────────\n\n"
         )
     return f"{greeting}{credit_line}Отправьте текст или фото с описанием:"
 
@@ -92,6 +105,33 @@ async def cmd_settings(message: Message) -> None:
         reply_markup=get_settings_summary_keyboard(uid),
     )
     set_last_menu(uid, sent.chat.id, sent.message_id)
+
+
+@router.message(lambda m: m.text == BTN_BALANCE)
+async def cmd_balance(message: Message) -> None:
+    uid = message.from_user.id
+    settings = get_user_settings(uid)
+    credits = settings.get("credits", FREE_CREDITS)
+    generations = settings.get("generations_count", 0)
+
+    purchased = max(0, credits - FREE_CREDITS) if credits > FREE_CREDITS else 0
+    free_left = min(credits, FREE_CREDITS)
+
+    text = (
+        "💰 <b>Ваш баланс</b>\n\n"
+        f"🔋 <b>Всего кредитов: {credits}</b>\n"
+    )
+    if purchased > 0:
+        text += f"💎 Купленные: {purchased}\n"
+        text += f"🎁 Бесплатные: {free_left}\n"
+    else:
+        text += f"🎁 Бесплатные: {free_left} из {FREE_CREDITS}\n"
+    text += (
+        f"🎨 Сгенерировано: {generations}\n\n"
+        "Выберите пакет для пополнения:"
+    )
+
+    await message.answer(text, parse_mode="HTML", reply_markup=get_balance_keyboard())
 
 
 @router.message(Command("cancel"))
