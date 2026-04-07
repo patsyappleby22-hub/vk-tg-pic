@@ -45,9 +45,9 @@ def create_payment_url(user_id: int, pack_key: str) -> dict:
     _db.save_payment(order_id, user_id, pack_key, pack["amount"])
 
     pay_url = (
-        f"https://pay.freekassa.com/"
+        f"https://pay.fk.money/"
         f"?m={FREEKASSA_SHOP_ID}"
-        f"&oc={amount}"
+        f"&oa={amount}"
         f"&o={order_id}"
         f"&s={sign}"
         f"&currency={currency}"
