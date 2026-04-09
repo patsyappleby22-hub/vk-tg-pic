@@ -150,6 +150,10 @@ async def main():
 
     vertex_service = VertexAIService(settings)
 
+    # Give the admin panel access to live slot statuses
+    from bot.web_admin import set_vertex_service
+    set_vertex_service(vertex_service)
+
     tasks = []
 
     tg_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
