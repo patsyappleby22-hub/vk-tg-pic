@@ -132,6 +132,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 
 
 def _save_to_disk() -> None:
+    """Save all users — used only at startup migration. Prefer _save_user() for single updates."""
     snapshot: dict[int, dict[str, Any]] = {
         uid: {k: v for k, v in s.items() if k in _PERSISTENT_KEYS}
         for uid, s in user_settings.items()
@@ -149,6 +150,19 @@ def _save_to_disk() -> None:
                     len(snapshot), SETTINGS_FILE, SETTINGS_FILE.stat().st_size)
     except Exception:
         logger.exception("Failed to save user settings to %s", SETTINGS_FILE)
+
+
+def _save_user(user_id: int) -> None:
+    """Save a single user — thread-safe, much faster than _save_to_disk()."""
+    s = user_settings.get(user_id)
+    if s is None:
+        return
+    data = {k: v for k, v in s.items() if k in _PERSISTENT_KEYS}
+    if _db.is_available():
+        _db.save_one_user(user_id, data)
+        return
+    # Fallback: full file save for non-DB mode
+    _save_to_disk()
 
 
 def _check_storage() -> None:
@@ -236,7 +250,7 @@ def get_user_settings(user_id: int) -> dict[str, Any]:
 
 
 def save_user_settings(user_id: int) -> None:
-    _save_to_disk()
+    _save_user(user_id)
 
 
 def increment_generations(
@@ -253,7 +267,7 @@ def increment_generations(
         s["first_name"] = first_name
     if platform and not s.get("platform"):
         s["platform"] = platform
-    _save_to_disk()
+    _save_user(user_id)
     return s["generations_count"]
 
 
@@ -268,27 +282,27 @@ def has_credits(user_id: int, required: int = 1) -> bool:
 def add_credits(user_id: int, amount: int) -> int:
     s = get_user_settings(user_id)
     s["credits"] = s.get("credits", 0) + amount
-    _save_to_disk()
+    _save_user(user_id)
     return s["credits"]
 
 
 def set_credits(user_id: int, amount: int) -> int:
     s = get_user_settings(user_id)
     s["credits"] = max(0, int(amount))
-    _save_to_disk()
+    _save_user(user_id)
     return s["credits"]
 
 
 def reset_generations(user_id: int) -> None:
     s = get_user_settings(user_id)
     s["generations_count"] = 0
-    _save_to_disk()
+    _save_user(user_id)
 
 
 def delete_user(user_id: int) -> bool:
     if user_id in user_settings:
         del user_settings[user_id]
-        _save_to_disk()
+        _save_to_disk()  # full save after delete to remove the row
         return True
     return False
 
@@ -296,7 +310,7 @@ def delete_user(user_id: int) -> bool:
 def set_blocked(user_id: int, blocked: bool) -> None:
     s = get_user_settings(user_id)
     s["blocked"] = blocked
-    _save_to_disk()
+    _save_user(user_id)
 
 
 def set_last_menu(user_id: int, chat_id: int, message_id: int) -> None:
