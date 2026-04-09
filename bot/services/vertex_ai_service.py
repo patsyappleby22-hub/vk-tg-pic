@@ -542,7 +542,7 @@ class VertexAIService:
 
         raise GenerationError("The model did not return an image part.")
 
-    CHAT_MODEL = "gemini-3.1-flash-lite-preview"
+    CHAT_MODEL = "gemini-3.1-pro-preview"
 
     async def chat_text(self, contents: list[Any]) -> str:
         n = len(self._slots)
@@ -587,10 +587,8 @@ class VertexAIService:
         config = genai_types.GenerateContentConfig(
             temperature=1,
             top_p=0.95,
-            seed=0,
             max_output_tokens=65535,
             safety_settings=_get_safety_settings(),
-            thinking_config=genai_types.ThinkingConfig(thinking_level="LOW"),
         )
 
         text_parts: list[str] = []

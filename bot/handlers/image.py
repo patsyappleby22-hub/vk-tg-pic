@@ -27,7 +27,7 @@ from bot.user_settings import (
     AVAILABLE_MODELS, SEND_MODES, RESOLUTIONS,
     is_blocked, has_credits,
 )
-from bot.keyboards import BTN_MENU, BTN_STOP, BTN_SETTINGS, BTN_IDEAS
+from bot.keyboards import BTN_MENU, BTN_STOP, BTN_SETTINGS, BTN_CHAT
 from core.exceptions import (
     BotError,
     QuotaExceededError,
@@ -385,7 +385,7 @@ async def handle_document_photo(
     await handle_photo_prompt(message, vertex_service, album)
 
 
-RESERVED_TEXTS = {BTN_MENU, BTN_STOP, BTN_SETTINGS, BTN_IDEAS}
+RESERVED_TEXTS = {BTN_MENU, BTN_STOP, BTN_SETTINGS, BTN_CHAT}
 
 
 def _in_creative_session(m: Message) -> bool:

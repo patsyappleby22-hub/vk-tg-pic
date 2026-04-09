@@ -25,7 +25,7 @@ from bot.user_settings import (
     cancel_active_task,
     FREE_CREDITS,
 )
-from bot.handlers.creative import _sessions as creative_sessions, _final_prompts as creative_prompts
+from bot.handlers.creative import _sessions as chat_sessions
 
 router = Router(name="start")
 
@@ -157,14 +157,13 @@ async def cmd_info(message: Message) -> None:
 async def cmd_stop(message: Message) -> None:
     uid = message.from_user.id
     cancelled = cancel_active_task(uid)
-    was_creative = uid in creative_sessions
-    creative_sessions.pop(uid, None)
-    creative_prompts.pop(uid, None)
+    was_chat = uid in chat_sessions
+    chat_sessions.pop(uid, None)
 
-    if cancelled or was_creative:
+    if cancelled or was_chat:
         text = "⛔ <b>Отменено.</b>\n\nОтправьте новый промпт или откройте меню."
-        if was_creative:
-            text = "⛔ <b>Режим «Идеи» завершён.</b>\n\nОтправьте промпт или начните заново."
+        if was_chat:
+            text = "⛔ <b>Чат завершён.</b>\n\nОтправьте промпт для генерации или начните чат заново."
         await message.answer(text, parse_mode="HTML")
     else:
         await message.answer(

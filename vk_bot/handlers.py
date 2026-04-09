@@ -24,8 +24,7 @@ from vk_bot.keyboards import (
     get_persistent_keyboard,
     get_settings_keyboard,
     get_switch_model_keyboard,
-    get_creative_prompt_keyboard,
-    get_creative_auto_keyboard,
+    get_chat_cancel_keyboard,
     get_balance_keyboard,
 )
 from vk_bot.photo_upload import upload_photo_to_vk, upload_document_to_vk, download_vk_photo
@@ -108,13 +107,11 @@ class VKProgressAnimator:
 MENU_TEXTS = {"📋 меню", "📋 Меню", "меню", "menu"}
 SETTINGS_TEXTS = {"⚙️ настройки", "⚙️ Настройки", "настройки", "settings"}
 STOP_TEXTS = {"⛔ стоп", "⛔ Стоп", "стоп", "stop", "отмена", "cancel"}
-IDEAS_TEXTS = {"💡 идеи", "💡 Идеи", "идеи"}
+CHAT_TEXTS = {"💬 чат", "💬 Чат", "чат"}
 BALANCE_TEXTS = {"💰 баланс", "💰 Баланс", "баланс", "balance"}
-RESERVED_TEXTS = MENU_TEXTS | SETTINGS_TEXTS | STOP_TEXTS | IDEAS_TEXTS | BALANCE_TEXTS
+RESERVED_TEXTS = MENU_TEXTS | SETTINGS_TEXTS | STOP_TEXTS | CHAT_TEXTS | BALANCE_TEXTS
 
-_creative_sessions: dict[int, list[dict[str, Any]]] = {}
-_creative_prompts: dict[int, str] = {}
-_creative_msg_counts: dict[int, int] = {}
+_chat_sessions: dict[int, list[dict[str, Any]]] = {}
 
 active_tasks: dict[int, asyncio.Task] = {}
 
@@ -154,58 +151,57 @@ def _upscale_image(image_bytes: bytes, max_side: int) -> bytes:
     return buf.getvalue()
 
 
-SYSTEM_PROMPT = (
-    "Ты — креативный ассистент по созданию изображений. Твоя задача — помочь "
-    "пользователю придумать идеальный промпт для генерации изображения с помощью ИИ.\n\n"
-    "Правила:\n"
-    "1. Общайся на русском языке, дружелюбно и вдохновляюще.\n"
-    "2. Задавай вопросы по одному, чтобы уточнить идею.\n"
-    "3. Когда у тебя достаточно информации, предложи итоговый промпт.\n"
-    "4. Итоговый промпт оформи СТРОГО в таком формате:\n"
-    "---PROMPT---\n"
-    "тут детальный промпт на английском языке\n"
-    "---END---\n"
-    "5. После промпта объясни что он содержит и спроси подтверждение.\n"
-    "6. Отвечай кратко — не более 3-4 предложений за раз."
+_CHAT_SYSTEM_CONTEXT = (
+    "Ты — умный многофункциональный ИИ-ассистент. "
+    "Отвечай на русском языке, если пользователь пишет по-русски, "
+    "иначе используй язык пользователя. "
+    "Ты понимаешь текст, изображения, аудио и документы. "
+    "Отвечай развёрнуто и полезно."
 )
 
-PROMPT_MARKER_START = "---PROMPT---"
-PROMPT_MARKER_END = "---END---"
+_SUPPORTED_IMAGE_MIMES = {"image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"}
+_SUPPORTED_AUDIO_MIMES = {
+    "audio/x-aac", "audio/flac", "audio/mp3", "audio/m4a", "audio/mpeg",
+    "audio/mpga", "audio/mp4", "audio/ogg", "audio/pcm", "audio/wav", "audio/webm",
+}
+_SUPPORTED_DOC_MIMES = {"application/pdf", "text/plain"}
+_ALL_SUPPORTED_MIMES = _SUPPORTED_IMAGE_MIMES | _SUPPORTED_AUDIO_MIMES | _SUPPORTED_DOC_MIMES
+
+_MIME_ALIASES: dict[str, str] = {
+    "audio/x-opus+ogg": "audio/ogg",
+    "audio/opus": "audio/ogg",
+    "image/jpg": "image/jpeg",
+}
 
 
-def _extract_prompt(text: str) -> str | None:
-    if PROMPT_MARKER_START not in text:
+def _normalize_mime_vk(mime: str | None) -> str | None:
+    if not mime:
         return None
-    start = text.index(PROMPT_MARKER_START) + len(PROMPT_MARKER_START)
-    end = text.index(PROMPT_MARKER_END) if PROMPT_MARKER_END in text else len(text)
-    prompt = text[start:end].strip()
-    return prompt if prompt else None
+    mime = _MIME_ALIASES.get(mime, mime)
+    return mime if mime in _ALL_SUPPORTED_MIMES else None
 
 
-def _clean_for_display(text: str) -> str:
-    result = text
-    if PROMPT_MARKER_START in result:
-        start = result.index(PROMPT_MARKER_START)
-        end_marker = PROMPT_MARKER_END
-        if end_marker in result:
-            end = result.index(end_marker) + len(end_marker)
-        else:
-            end = len(result)
-        prompt_block = result[start:end]
-        result = result.replace(prompt_block, "").strip()
-    return result
+async def _download_url(url: str) -> bytes:
+    import aiohttp
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as resp:
+            return await resp.read()
 
 
-def _build_contents(history: list[dict[str, Any]]) -> list[Any]:
+def _build_chat_api_contents(history: list[dict[str, Any]]) -> list[Any]:
     from google.genai import types as genai_types
     contents = []
     for msg in history:
-        contents.append(
-            genai_types.Content(
-                role=msg["role"],
-                parts=[genai_types.Part.from_text(text=msg["text"])],
-            )
-        )
+        api_parts = []
+        for part in msg["parts"]:
+            if part["type"] == "text":
+                api_parts.append(genai_types.Part.from_text(text=part["text"]))
+            elif part["type"] == "media":
+                api_parts.append(
+                    genai_types.Part.from_bytes(data=part["data"], mime_type=part["mime_type"])
+                )
+        if api_parts:
+            contents.append(genai_types.Content(role=msg["role"], parts=api_parts))
     return contents
 
 
@@ -288,14 +284,13 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
         if task and not task.done():
             task.cancel()
             cancelled = True
-        was_creative = uid in _creative_sessions
-        _creative_sessions.pop(uid, None)
-        _creative_prompts.pop(uid, None)
+        was_chat = uid in _chat_sessions
+        _chat_sessions.pop(uid, None)
 
-        if cancelled or was_creative:
+        if cancelled or was_chat:
             text = "⛔ Отменено.\n\nОтправьте новый промпт или откройте меню."
-            if was_creative:
-                text = "⛔ Режим «Идеи» завершён.\n\nОтправьте промпт или начните заново."
+            if was_chat:
+                text = "⛔ Чат завершён.\n\nОтправьте промпт для генерации или начните чат заново."
             await message.answer(text)
         else:
             await message.answer("ℹ️ Нет активной генерации для отмены.")
@@ -335,19 +330,18 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
         )
         await message.answer(text)
 
-    @bot.on.message(text=list(IDEAS_TEXTS))
-    async def cmd_ideas(message: Message):
+    @bot.on.message(text=list(CHAT_TEXTS))
+    async def cmd_chat(message: Message):
         uid = message.from_id
-        _creative_sessions[uid] = [
-            {"role": "user", "text": SYSTEM_PROMPT + "\n\nПривет! Помоги мне придумать изображение."},
+        _chat_sessions[uid] = [
+            {"role": "user", "parts": [{"type": "text", "text": _CHAT_SYSTEM_CONTEXT}]},
+            {"role": "model", "parts": [{"type": "text", "text": "Привет! Готов общаться. Отправьте текст, изображение, аудио или документ."}]},
         ]
-        _creative_prompts.pop(uid, None)
-        _creative_msg_counts[uid] = 0
         await message.answer(
-            "💡 Режим «Идеи»\n\n"
-            "Я помогу придумать идеальное изображение! "
-            "Расскажите, что вы хотите создать — я буду задавать вопросы.\n\n"
-            "Для выхода нажмите ⛔ Стоп"
+            "💬 Режим «Чат» — gemini-3.1-pro-preview\n\n"
+            "Принимаю: текст, фото, голосовые, аудио, документы (PDF/текст).\n\n"
+            "Для выхода нажмите ⛔ Стоп",
+            keyboard=get_chat_cancel_keyboard(),
         )
 
     @bot.on.raw_event(GroupEventType.MESSAGE_EVENT, dataclass=dict)
@@ -480,58 +474,9 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
             else:
                 await edit_msg(f"Ошибка: {result.get('error', 'неизвестная')}")
 
-        elif cmd == "creative_generate":
-            prompt = _creative_prompts.pop(uid, None)
-            if not prompt:
-                await edit_msg("Промпт не найден, начните заново.")
-                return
-            _creative_sessions.pop(uid, None)
-            _creative_msg_counts.pop(uid, None)
-            await _generate_and_send(bot, vertex_service, uid, peer_id, prompt)
-
-        elif cmd == "creative_edit":
-            _creative_prompts.pop(uid, None)
-            if uid in _creative_sessions and _creative_sessions[uid]:
-                _creative_sessions[uid].append({
-                    "role": "user",
-                    "text": "Давай изменим промпт. Что ты предлагаешь улучшить?",
-                })
-            await edit_msg("✏️ Хорошо! Расскажите, что хотите изменить.")
-
-        elif cmd == "creative_cancel":
-            _creative_sessions.pop(uid, None)
-            _creative_prompts.pop(uid, None)
-            await edit_msg("❌ Режим «Идеи» завершён.\n\nМожете отправить промпт напрямую.", get_persistent_keyboard())
-
-        elif cmd == "creative_auto":
-            if uid not in _creative_sessions:
-                await edit_msg("Сессия не найдена, начните заново.")
-                return
-            history = _creative_sessions[uid]
-            history.append({
-                "role": "user",
-                "text": "Достаточно вопросов! Додумай остальные детали сам и сразу "
-                        "выдай итоговый промпт в формате ---PROMPT--- ... ---END---",
-            })
-            await edit_msg("🪄 Дополняю и создаю промпт...")
-            try:
-                contents = _build_contents(history)
-                response = await vertex_service.chat_text(contents)
-                if not response:
-                    await edit_msg("Не удалось получить ответ, попробуйте ещё раз.")
-                    return
-                history.append({"role": "model", "text": response})
-                extracted = _extract_prompt(response)
-                if extracted:
-                    _creative_prompts[uid] = extracted
-                    display_text = _clean_for_display(response)
-                    prompt_preview = f"\n\nПромпт:\n{extracted[:500]}"
-                    await edit_msg(f"{display_text}{prompt_preview}", get_creative_prompt_keyboard())
-                else:
-                    await edit_msg(response)
-            except Exception as exc:
-                logger.exception("Creative auto error: %s", exc)
-                await edit_msg("Произошла ошибка, попробуйте ещё раз.")
+        elif cmd == "chat_cancel":
+            _chat_sessions.pop(uid, None)
+            await edit_msg("❌ Чат завершён.\n\nМожете отправить промпт для генерации изображения.", get_persistent_keyboard())
 
     @bot.on.message()
     async def handle_text(message: Message):
@@ -545,8 +490,8 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
         if text.startswith("/"):
             return
 
-        if uid in _creative_sessions:
-            await _handle_creative_chat(bot, vertex_service, uid, peer_id, text)
+        if uid in _chat_sessions:
+            await _handle_vk_chat_message(bot, vertex_service, uid, peer_id, message)
             return
 
         if message.attachments:
@@ -572,13 +517,70 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
         await _generate_and_send(bot, vertex_service, uid, peer_id, text)
 
 
-async def _handle_creative_chat(
+async def _handle_vk_chat_message(
     bot: Bot, vertex_service: VertexAIService,
-    uid: int, peer_id: int, text: str,
+    uid: int, peer_id: int, message: Any,
 ):
-    history = _creative_sessions[uid]
-    history.append({"role": "user", "text": text})
-    _creative_msg_counts[uid] = _creative_msg_counts.get(uid, 0) + 1
+    history = _chat_sessions[uid]
+    text = (message.text or "").strip()
+
+    parts: list[dict] = []
+    if text:
+        parts.append({"type": "text", "text": text})
+
+    if message.attachments:
+        for att in message.attachments:
+            if att.photo:
+                try:
+                    photo_bytes = await download_vk_photo(bot.api, att.photo.sizes)
+                    parts.append({"type": "media", "data": photo_bytes, "mime_type": "image/jpeg"})
+                except Exception as e:
+                    logger.warning("VK photo download failed in chat: %s", e)
+                    parts.append({"type": "text", "text": "[изображение — не удалось загрузить]"})
+            elif getattr(att, "audio_message", None):
+                am = att.audio_message
+                url = getattr(am, "link_ogg", None) or getattr(am, "link_mp3", None)
+                if url:
+                    try:
+                        audio_bytes = await _download_url(url)
+                        mime = "audio/ogg" if "ogg" in url else "audio/mpeg"
+                        parts.append({"type": "media", "data": audio_bytes, "mime_type": mime})
+                    except Exception as e:
+                        logger.warning("VK audio message download failed: %s", e)
+                        parts.append({"type": "text", "text": "[голосовое сообщение — не удалось загрузить]"})
+                else:
+                    parts.append({"type": "text", "text": "[голосовое сообщение]"})
+            elif getattr(att, "doc", None):
+                doc = att.doc
+                url = getattr(doc, "url", None)
+                raw_mime = getattr(doc, "mime_type", None) or ""
+                ext = getattr(doc, "ext", "") or ""
+                if not raw_mime and ext == "pdf":
+                    raw_mime = "application/pdf"
+                elif not raw_mime and ext in ("txt", "text"):
+                    raw_mime = "text/plain"
+                mime = _normalize_mime_vk(raw_mime)
+                fname = getattr(doc, "title", "") or f"document.{ext}"
+                if mime and url:
+                    try:
+                        doc_bytes = await _download_url(url)
+                        parts.append({"type": "media", "data": doc_bytes, "mime_type": mime})
+                        if not text:
+                            parts.insert(0, {"type": "text", "text": f"[документ: {fname}]"})
+                    except Exception as e:
+                        logger.warning("VK doc download failed: %s", e)
+                        parts.append({"type": "text", "text": f"[документ {fname} — не удалось загрузить]"})
+                else:
+                    parts.append({"type": "text", "text": f"[прикреплён файл: {fname} — формат не поддерживается]"})
+
+    if not parts:
+        await bot.api.messages.send(
+            peer_id=peer_id, random_id=0,
+            message="Не удалось разобрать сообщение. Попробуйте ещё раз.",
+        )
+        return
+
+    history.append({"role": "user", "parts": parts})
 
     thinking_id = await bot.api.messages.send(
         peer_id=peer_id, random_id=0,
@@ -586,44 +588,42 @@ async def _handle_creative_chat(
     )
 
     try:
-        contents = _build_contents(history)
+        contents = _build_chat_api_contents(history)
         response = await vertex_service.chat_text(contents)
 
         if not response:
+            history.pop()
             await bot.api.messages.edit(
                 peer_id=peer_id, message_id=thinking_id,
                 message="Не удалось получить ответ, попробуйте ещё раз.",
             )
             return
 
-        history.append({"role": "model", "text": response})
-        extracted = _extract_prompt(response)
+        history.append({"role": "model", "parts": [{"type": "text", "text": response}]})
 
-        if extracted:
-            _creative_prompts[uid] = extracted
-            display_text = _clean_for_display(response)
-            prompt_preview = f"\n\nПромпт:\n{extracted[:500]}"
-            await bot.api.messages.edit(
-                peer_id=peer_id, message_id=thinking_id,
-                message=f"{display_text}{prompt_preview}",
-                keyboard=get_creative_prompt_keyboard(),
-            )
-        else:
-            keyboard = None
-            if _creative_msg_counts.get(uid, 0) >= 2:
-                keyboard = get_creative_auto_keyboard()
-            await bot.api.messages.edit(
-                peer_id=peer_id, message_id=thinking_id,
-                message=response,
-                keyboard=keyboard,
-            )
+        if len(history) > 42:
+            _chat_sessions[uid] = history[:2] + history[-40:]
+
+        reply = response[:4096]
+        await bot.api.messages.edit(
+            peer_id=peer_id, message_id=thinking_id,
+            message=reply,
+            keyboard=get_chat_cancel_keyboard(),
+        )
+        if len(response) > 4096:
+            for i in range(4096, len(response), 4096):
+                await bot.api.messages.send(
+                    peer_id=peer_id, random_id=0,
+                    message=response[i:i + 4096],
+                )
+
     except Exception as exc:
-        logger.exception("Creative chat error: %s", exc)
+        logger.exception("VK chat error: %s", exc)
         err_text = str(exc).lower()
         if "429" in err_text or "quota" in err_text:
-            msg = "⏳ API ключи перегружены. Подождите пару минут."
+            msg = "⏳ API перегружен. Подождите пару минут."
         else:
-            msg = "Произошла ошибка, попробуйте ещё раз."
+            msg = "Произошла ошибка. Попробуйте ещё раз."
         try:
             await bot.api.messages.edit(
                 peer_id=peer_id, message_id=thinking_id,

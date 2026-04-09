@@ -11,7 +11,7 @@ from bot.keyboards import ASPECT_RATIOS
 def get_persistent_keyboard() -> str:
     kb = Keyboard(one_time=False, inline=False)
     kb.add(Text("📋 Меню"), color=KeyboardButtonColor.PRIMARY)
-    kb.add(Text("💡 Идеи"), color=KeyboardButtonColor.POSITIVE)
+    kb.add(Text("💬 Чат"), color=KeyboardButtonColor.POSITIVE)
     kb.row()
     kb.add(Text("⚙️ Настройки"), color=KeyboardButtonColor.SECONDARY)
     kb.add(Text("💰 Баланс"), color=KeyboardButtonColor.POSITIVE)
@@ -148,21 +148,9 @@ def get_send_mode_keyboard(user_id: int) -> str:
     return kb.get_json()
 
 
-def get_creative_prompt_keyboard() -> str:
+def get_chat_cancel_keyboard() -> str:
     kb = Keyboard(inline=True)
-    kb.add(Callback("🎨 Генерируй!", payload={"cmd": "creative_generate"}))
-    kb.row()
-    kb.add(Callback("✏️ Изменить", payload={"cmd": "creative_edit"}))
-    kb.row()
-    kb.add(Callback("❌ Отмена", payload={"cmd": "creative_cancel"}))
-    return kb.get_json()
-
-
-def get_creative_auto_keyboard() -> str:
-    kb = Keyboard(inline=True)
-    kb.add(Callback("🪄 Дополни сам и генерируй", payload={"cmd": "creative_auto"}))
-    kb.row()
-    kb.add(Callback("❌ Отмена", payload={"cmd": "creative_cancel"}))
+    kb.add(Callback("❌ Завершить чат", payload={"cmd": "chat_cancel"}))
     return kb.get_json()
 
 

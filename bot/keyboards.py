@@ -13,7 +13,7 @@ from bot.user_settings import get_user_settings, AVAILABLE_MODELS, SEND_MODES, R
 BTN_MENU = "📋 Меню"
 BTN_STOP = "⛔ Стоп"
 BTN_SETTINGS = "⚙️ Настройки"
-BTN_IDEAS = "💡 Идеи"
+BTN_CHAT = "💬 Чат"
 BTN_BALANCE = "💰 Баланс"
 
 ASPECT_RATIOS: dict[str, str] = {
@@ -33,7 +33,7 @@ ASPECT_RATIOS: dict[str, str] = {
 def get_persistent_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text=BTN_MENU), KeyboardButton(text=BTN_IDEAS)],
+            [KeyboardButton(text=BTN_MENU), KeyboardButton(text=BTN_CHAT)],
             [KeyboardButton(text=BTN_SETTINGS), KeyboardButton(text=BTN_BALANCE)],
             [KeyboardButton(text=BTN_STOP)],
         ],
