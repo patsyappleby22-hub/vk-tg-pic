@@ -55,18 +55,33 @@ from bot.services.vertex_ai_service import VertexAIService
 from bot.user_settings import load_settings
 
 
+class _MskFormatter(logging.Formatter):
+    """Logging formatter that shows Moscow time (UTC+3)."""
+    import datetime as _dt
+    _MSK = _dt.timezone(_dt.timedelta(hours=3))
+
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+        import datetime as _dt
+        dt = _dt.datetime.fromtimestamp(record.created, tz=self._MSK)
+        return dt.strftime(datefmt or "%Y-%m-%d %H:%M:%S")
+
+
 def _configure_logging() -> None:
     """Set up a sensible default logging configuration."""
+    if logging.getLogger().handlers:
+        return  # already configured by start_all.py
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-    logging.basicConfig(
-        level=getattr(logging, log_level, logging.INFO),
-        format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
+    _handler = logging.StreamHandler(sys.stdout)
+    _handler.setFormatter(_MskFormatter(
+        fmt="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
-        stream=sys.stdout,
-    )
-    # Quieten noisy third-party loggers
+    ))
+    _root = logging.getLogger()
+    _root.setLevel(getattr(logging, log_level, logging.INFO))
+    _root.addHandler(_handler)
     logging.getLogger("aiogram").setLevel(logging.WARNING)
     logging.getLogger("aiohttp").setLevel(logging.WARNING)
+    logging.getLogger("google_genai").setLevel(logging.WARNING)
 
 
 async def main() -> None:
