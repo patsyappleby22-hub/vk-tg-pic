@@ -510,6 +510,28 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
         await _generate_and_send(bot, vertex_service, uid, peer_id, text)
 
 
+_THINKING_FRAMES = ["💭 Думаю.", "💭 Думаю..", "💭 Думаю..."]
+
+
+async def _animate_thinking_vk(
+    bot: Bot, peer_id: int, message_id: int, stop: asyncio.Event
+) -> None:
+    i = 0
+    while not stop.is_set():
+        await asyncio.sleep(0.8)
+        if stop.is_set():
+            break
+        try:
+            await bot.api.messages.edit(
+                peer_id=peer_id,
+                message_id=message_id,
+                message=_THINKING_FRAMES[i % 3],
+            )
+        except Exception:
+            break
+        i += 1
+
+
 async def _handle_vk_chat_message(
     bot: Bot, vertex_service: VertexAIService,
     uid: int, peer_id: int, message: Any,
@@ -577,12 +599,19 @@ async def _handle_vk_chat_message(
 
     thinking_id = await bot.api.messages.send(
         peer_id=peer_id, random_id=0,
-        message="💭 Думаю...",
+        message="💭 Думаю.",
+    )
+    stop_event = asyncio.Event()
+    anim_task = asyncio.create_task(
+        _animate_thinking_vk(bot, peer_id, thinking_id, stop_event)
     )
 
     try:
         contents = _build_chat_api_contents(history)
         response = await vertex_service.chat_text(contents)
+
+        stop_event.set()
+        anim_task.cancel()
 
         if not response:
             history.pop()
@@ -611,6 +640,8 @@ async def _handle_vk_chat_message(
                 )
 
     except Exception as exc:
+        stop_event.set()
+        anim_task.cancel()
         logger.exception("VK chat error: %s", exc)
         err_text = str(exc).lower()
         if "429" in err_text or "quota" in err_text:

@@ -7,6 +7,7 @@ Accepts text, images, voice, audio, video, video notes, documents (PDF/text), st
 
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
 from typing import Any
@@ -170,6 +171,22 @@ def _build_api_contents(history: list[dict[str, Any]]) -> list[Any]:
     return contents
 
 
+_THINKING_FRAMES = ["💭 Думаю.", "💭 Думаю..", "💭 Думаю..."]
+
+
+async def _animate_thinking(msg: Any, stop: asyncio.Event) -> None:
+    i = 0
+    while not stop.is_set():
+        await asyncio.sleep(0.8)
+        if stop.is_set():
+            break
+        try:
+            await msg.edit_text(_THINKING_FRAMES[i % 3])
+        except Exception:
+            break
+        i += 1
+
+
 @router.message(lambda m: m.text == BTN_CHAT)
 async def start_chat(message: Message) -> None:
     uid = message.from_user.id
@@ -194,12 +211,16 @@ async def chat_message(message: Message, vertex_service: VertexAIService) -> Non
     if uid not in _sessions:
         return
 
-    thinking_msg = await message.answer("💭 <b>Думаю...</b>", parse_mode="HTML")
+    thinking_msg = await message.answer("💭 Думаю.")
+    stop_event = asyncio.Event()
+    anim_task = asyncio.create_task(_animate_thinking(thinking_msg, stop_event))
 
     try:
         parts = await _extract_parts(message)
 
         if not parts:
+            stop_event.set()
+            anim_task.cancel()
             await thinking_msg.edit_text("Не удалось разобрать содержимое. Попробуйте ещё раз.")
             return
 
@@ -207,6 +228,9 @@ async def chat_message(message: Message, vertex_service: VertexAIService) -> Non
 
         contents = _build_api_contents(_sessions[uid])
         response = await vertex_service.chat_text(contents)
+
+        stop_event.set()
+        anim_task.cancel()
 
         if not response:
             _sessions[uid].pop()
@@ -239,6 +263,8 @@ async def chat_message(message: Message, vertex_service: VertexAIService) -> Non
                     await message.answer(chunk, parse_mode=None)
 
     except Exception as exc:
+        stop_event.set()
+        anim_task.cancel()
         logger.exception("Chat error: %s", exc)
         err_text = str(exc).lower()
         if "429" in err_text or "quota" in err_text or "resource exhausted" in err_text:
