@@ -175,7 +175,9 @@ async def start_chat(message: Message) -> None:
     uid = message.from_user.id
     _sessions[uid] = []
     await message.answer(
-        "💬 <b>Чат</b> — принимаю любые данные. Для выхода — ⛔ Стоп",
+        "💬 <b>Чат с ИИ</b>\n\n"
+        "Отправьте текст, фото, голосовое, видео или документ — отвечу на всё.\n\n"
+        "<i>Для выхода — ⛔ Стоп</i>",
         parse_mode="HTML",
     )
 
