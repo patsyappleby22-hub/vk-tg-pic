@@ -44,6 +44,29 @@ from bot.user_settings import (
 
 logger = logging.getLogger(__name__)
 
+_MSK_OFFSET_HOURS = 3  # UTC+3
+
+
+def _msk(dt_str: str) -> str:
+    """Convert a UTC ISO datetime string to Moscow time (UTC+3), formatted as 'DD.MM.YYYY HH:MM'."""
+    if not dt_str:
+        return "—"
+    try:
+        from datetime import datetime, timedelta, timezone
+        # PostgreSQL isoformat may include microseconds or +00:00
+        clean = dt_str.replace("Z", "+00:00")
+        if "+" not in clean and clean.count("-") <= 2:
+            # naive — assume UTC
+            dt = datetime.fromisoformat(clean)
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = datetime.fromisoformat(clean)
+        msk = dt + timedelta(hours=_MSK_OFFSET_HOURS)
+        return msk.strftime("%d.%m.%Y %H:%M")
+    except Exception:
+        return dt_str[:16].replace("T", " ")
+
+
 _ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "mrxgyt02")
 _SESSION_SECRET = hashlib.sha256((_ADMIN_PASSWORD + "_picgenai_admin_v1").encode()).hexdigest()
 _COOKIE_NAME = "admin_tok"
@@ -495,7 +518,7 @@ async def handle_dashboard(request: web.Request) -> web.Response:
             '<span class="badge badge-green">✓ успешно</span>' if p["status"] == "success"
             else '<span class="badge badge-yellow">⏳ ожидание</span>'
         )
-        dt = p["created_at"][:16].replace("T", " ") if p["created_at"] else "—"
+        dt = _msk(p["created_at"])
         payments_rows += f"""<tr>
           <td><a href="/admin/users/{uid}">{name}</a></td>
           <td>{p['pack_key']}</td>
@@ -736,7 +759,7 @@ def _render_image_gallery(image_logs: list[dict], page: int = 1) -> str:
     for img in page_items:
         fuid = img["file_unique_id"]
         prompt_esc = img["prompt"].replace("<", "&lt;").replace('"', "&quot;")
-        dt = img["created_at"][:16].replace("T", " ") if img["created_at"] else "—"
+        dt = _msk(img["created_at"])
         plat = "📱" if img["platform"] == "tg" else "💙"
         fp = img["prompt"].replace("'", "\\'").replace("\\n", " ")
         rows += f"""<tr>
@@ -784,6 +807,13 @@ def _render_image_gallery(image_logs: list[dict], page: int = 1) -> str:
 var _imgAllData = {json.dumps(image_logs)};
 var _imgPageSize = {_IMG_PAGE_SIZE};
 
+function toMsk(s) {{
+  if(!s) return '—';
+  var d = new Date(s.endsWith('Z') ? s : s+'Z');
+  d.setHours(d.getHours()+3);
+  var pad = function(n){{ return n.toString().padStart(2,'0'); }};
+  return pad(d.getDate())+'.'+pad(d.getMonth()+1)+'.'+d.getFullYear()+' '+pad(d.getHours())+':'+pad(d.getMinutes());
+}}
 function openLightbox(src, prompt, dt) {{
   document.getElementById('lightbox-img').src = src;
   document.getElementById('lightbox-cap').textContent = prompt + (dt ? ' · ' + dt : '');
@@ -801,7 +831,7 @@ function loadImgPage(page) {{
   var items = _imgAllData.slice(start, end);
   var rows = items.map(function(img) {{
     var fuid = img.file_unique_id;
-    var dt = img.created_at ? img.created_at.slice(0,16).replace('T',' ') : '—';
+    var dt = toMsk(img.created_at);
     var plat = img.platform === 'tg' ? '📱' : '💙';
     var prompt = img.prompt.replace(/</g,'&lt;').replace(/"/g,'&quot;');
     var fp = img.prompt.replace(/'/g,"\\'").replace(/\\n/g,' ');
@@ -891,7 +921,7 @@ async def handle_user_detail(request: web.Request) -> web.Response:
             '<span class="badge badge-green">✓ успешно</span>' if p["status"] == "success"
             else '<span class="badge badge-yellow">⏳ ожидание</span>'
         )
-        dt = p["created_at"][:16].replace("T", " ") if p["created_at"] else "—"
+        dt = _msk(p["created_at"])
         pay_rows += f"""<tr>
           <td style="font-family:monospace;font-size:.82em;color:var(--muted)">{p['order_id'][:16]}…</td>
           <td>{p['pack_key']}</td>
@@ -1066,7 +1096,7 @@ async def handle_payments(request: web.Request) -> web.Response:
             '<span class="badge badge-green">✓ успешно</span>' if p["status"] == "success"
             else '<span class="badge badge-yellow">⏳ ожидание</span>'
         )
-        dt = p["created_at"][:16].replace("T", " ") if p["created_at"] else "—"
+        dt = _msk(p["created_at"])
         rows += f"""<tr>
           <td style="font-family:monospace;font-size:.82em;color:var(--muted)">{p['order_id'][:18]}…</td>
           <td><a href="/admin/users/{uid}">{name}</a></td>
