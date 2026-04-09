@@ -202,6 +202,18 @@ class _BaseSlot:
         """Call immediately before dispatching an API request for model."""
         self._model_request_times.setdefault(model, []).append(time.monotonic())
 
+    def requests_in_window_family(self, family: str) -> int:
+        """Sum requests in window for all models whose name contains `family`."""
+        now = time.monotonic()
+        cutoff = now - RATE_WINDOW_SECONDS
+        total = 0
+        for key in list(self._model_request_times.keys()):
+            if family in key.lower():
+                times = [t for t in self._model_request_times[key] if t >= cutoff]
+                self._model_request_times[key] = times
+                total += len(times)
+        return total
+
     # ── combined availability (per model) ─────────────────────────────────
     def ready_at(self, model: str) -> float:
         """Earliest time this slot can serve a new request for model."""
@@ -379,8 +391,8 @@ class VertexAIService:
                 "last_model": slot.last_model,
                 "total_ok": slot.total_ok,
                 "total_err": slot.total_err,
-                "req_flash": slot.requests_in_window("flash-image"),
-                "req_pro": slot.requests_in_window("pro-image"),
+                "req_flash": slot.requests_in_window_family("flash-image"),
+                "req_pro": slot.requests_in_window_family("pro-image"),
                 "qpm_flash": _qpm_for_model("flash-image"),
                 "qpm_pro": _qpm_for_model("pro-image"),
             })
