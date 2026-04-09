@@ -272,6 +272,27 @@ def add_credits(user_id: int, amount: int) -> int:
     return s["credits"]
 
 
+def set_credits(user_id: int, amount: int) -> int:
+    s = get_user_settings(user_id)
+    s["credits"] = max(0, int(amount))
+    _save_to_disk()
+    return s["credits"]
+
+
+def reset_generations(user_id: int) -> None:
+    s = get_user_settings(user_id)
+    s["generations_count"] = 0
+    _save_to_disk()
+
+
+def delete_user(user_id: int) -> bool:
+    if user_id in user_settings:
+        del user_settings[user_id]
+        _save_to_disk()
+        return True
+    return False
+
+
 def set_blocked(user_id: int, blocked: bool) -> None:
     s = get_user_settings(user_id)
     s["blocked"] = blocked

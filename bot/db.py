@@ -209,6 +209,85 @@ def mark_order_processed_memory(order_id: str) -> bool:
     return True
 
 
+def get_all_payments(limit: int = 1000) -> list[dict]:
+    """Return recent payments, newest first."""
+    if not _DATABASE_URL:
+        return []
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT order_id, payment_id, user_id, pack_key, amount, status, created_at, completed_at
+                FROM bot_payments
+                ORDER BY created_at DESC
+                LIMIT %s
+            """, (limit,))
+            rows = cur.fetchall()
+        return [
+            {
+                "order_id": r[0], "payment_id": r[1], "user_id": r[2],
+                "pack_key": r[3], "amount": r[4], "status": r[5],
+                "created_at": r[6].isoformat() if r[6] else "",
+                "completed_at": r[7].isoformat() if r[7] else "",
+            }
+            for r in rows
+        ]
+    except Exception:
+        logger.exception("db: failed to get all payments")
+        return []
+
+
+def get_user_payments(user_id: int) -> list[dict]:
+    """Return payments for a specific user, newest first."""
+    if not _DATABASE_URL:
+        return []
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT order_id, payment_id, pack_key, amount, status, created_at, completed_at
+                FROM bot_payments WHERE user_id = %s ORDER BY created_at DESC
+            """, (user_id,))
+            rows = cur.fetchall()
+        return [
+            {
+                "order_id": r[0], "payment_id": r[1], "pack_key": r[2],
+                "amount": r[3], "status": r[4],
+                "created_at": r[5].isoformat() if r[5] else "",
+                "completed_at": r[6].isoformat() if r[6] else "",
+            }
+            for r in rows
+        ]
+    except Exception:
+        logger.exception("db: failed to get user payments for %s", user_id)
+        return []
+
+
+def get_payment_stats() -> dict:
+    """Aggregate payment statistics."""
+    if not _DATABASE_URL:
+        return {"success_count": 0, "total_revenue": 0.0, "total_count": 0}
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    COUNT(*) FILTER (WHERE status='success') AS success_count,
+                    COALESCE(SUM(amount) FILTER (WHERE status='success'), 0) AS total_revenue,
+                    COUNT(*) AS total_count
+                FROM bot_payments
+            """)
+            row = cur.fetchone()
+        return {
+            "success_count": row[0] or 0,
+            "total_revenue": float(row[1] or 0),
+            "total_count": row[2] or 0,
+        }
+    except Exception:
+        logger.exception("db: failed to get payment stats")
+        return {"success_count": 0, "total_revenue": 0.0, "total_count": 0}
+
+
 def api_keys_table_has_rows() -> bool:
     """Check if any API keys exist in DB (used for migration guard)."""
     if not _DATABASE_URL:

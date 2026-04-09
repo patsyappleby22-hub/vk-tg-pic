@@ -384,4 +384,6 @@ def create_web_app() -> web.Application:
     app.router.add_post("/webhook/pally/refund", handle_refund)
     app.router.add_post("/webhook/pally/chargeback", handle_chargeback)
     app.router.add_post("/api/freekassa/notification", handle_freekassa_notification)
+    from bot.web_admin import register_admin_routes
+    register_admin_routes(app)
     return app
