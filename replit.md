@@ -53,7 +53,7 @@ An asynchronous multi-platform bot (Telegram + VK) for AI image generation using
 - `POST /api/freekassa/notification` — FreeKassa payment webhook (MD5 signature-verified)
 
 ## Credits System
-- 20 free credits on registration (FREE_CREDITS = 20)
+- 5 free credits on registration (FREE_CREDITS = 5)
 - 1 credit per generation, 2 credits for 4K
 - Packages: 30 credits (99₽), 100 credits (299₽), 200 credits (549₽)
 
