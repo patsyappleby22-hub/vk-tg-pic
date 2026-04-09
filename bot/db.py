@@ -64,6 +64,23 @@ def init_tables() -> None:
                     completed_at TIMESTAMP
                 )
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS bot_image_logs (
+                    id              SERIAL PRIMARY KEY,
+                    user_id         BIGINT NOT NULL,
+                    user_name       TEXT NOT NULL DEFAULT '',
+                    platform        TEXT NOT NULL DEFAULT 'tg',
+                    prompt          TEXT NOT NULL DEFAULT '',
+                    model           TEXT NOT NULL DEFAULT '',
+                    file_id         TEXT NOT NULL DEFAULT '',
+                    file_unique_id  TEXT NOT NULL DEFAULT '',
+                    created_at      TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_image_logs_user_id
+                ON bot_image_logs (user_id, created_at DESC)
+            """)
         logger.info("db: tables ready (PostgreSQL)")
     except Exception:
         logger.exception("db: failed to init tables")
@@ -286,6 +303,135 @@ def get_payment_stats() -> dict:
     except Exception:
         logger.exception("db: failed to get payment stats")
         return {"success_count": 0, "total_revenue": 0.0, "total_count": 0}
+
+
+# ── Image logs ─────────────────────────────────────────────────────────────────
+
+def save_image_log(
+    user_id: int,
+    user_name: str,
+    platform: str,
+    prompt: str,
+    model: str,
+    file_id: str,
+    file_unique_id: str,
+) -> None:
+    if not _DATABASE_URL:
+        return
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO bot_image_logs
+                    (user_id, user_name, platform, prompt, model, file_id, file_unique_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (user_id, user_name, platform, prompt[:500], model, file_id, file_unique_id))
+    except Exception:
+        logger.exception("db: failed to save image log for user %s", user_id)
+
+
+def get_user_image_logs(user_id: int, limit: int = 50) -> list[dict]:
+    """Return recent image generations for a user, newest first."""
+    if not _DATABASE_URL:
+        return []
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, platform, prompt, model, file_id, file_unique_id, created_at
+                FROM bot_image_logs
+                WHERE user_id = %s
+                ORDER BY created_at DESC
+                LIMIT %s
+            """, (user_id, limit))
+            rows = cur.fetchall()
+        return [
+            {
+                "id": r[0],
+                "platform": r[1],
+                "prompt": r[2],
+                "model": r[3],
+                "file_id": r[4],
+                "file_unique_id": r[5],
+                "created_at": r[6].isoformat() if r[6] else "",
+            }
+            for r in rows
+        ]
+    except Exception:
+        logger.exception("db: failed to get image logs for user %s", user_id)
+        return []
+
+
+def get_all_image_logs(limit: int = 200) -> list[dict]:
+    """Return recent image generations across all users, newest first."""
+    if not _DATABASE_URL:
+        return []
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, user_id, user_name, platform, prompt, model, file_id, file_unique_id, created_at
+                FROM bot_image_logs
+                ORDER BY created_at DESC
+                LIMIT %s
+            """, (limit,))
+            rows = cur.fetchall()
+        return [
+            {
+                "id": r[0],
+                "user_id": r[1],
+                "user_name": r[2],
+                "platform": r[3],
+                "prompt": r[4],
+                "model": r[5],
+                "file_id": r[6],
+                "file_unique_id": r[7],
+                "created_at": r[8].isoformat() if r[8] else "",
+            }
+            for r in rows
+        ]
+    except Exception:
+        logger.exception("db: failed to get all image logs")
+        return []
+
+
+def get_image_log_by_unique_id(file_unique_id: str) -> dict | None:
+    """Return a single image log row by file_unique_id."""
+    if not _DATABASE_URL:
+        return None
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT file_id, file_unique_id, user_id, user_name, prompt, model, platform
+                FROM bot_image_logs
+                WHERE file_unique_id = %s
+                LIMIT 1
+            """, (file_unique_id,))
+            row = cur.fetchone()
+        if row:
+            return {
+                "file_id": row[0], "file_unique_id": row[1],
+                "user_id": row[2], "user_name": row[3],
+                "prompt": row[4], "model": row[5], "platform": row[6],
+            }
+    except Exception:
+        logger.exception("db: failed to get image log for unique_id %s", file_unique_id)
+    return None
+
+
+def get_image_log_stats() -> dict:
+    """Total generation count from image_logs table."""
+    if not _DATABASE_URL:
+        return {"total": 0}
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM bot_image_logs")
+            row = cur.fetchone()
+        return {"total": row[0] or 0}
+    except Exception:
+        return {"total": 0}
 
 
 def api_keys_table_has_rows() -> bool:

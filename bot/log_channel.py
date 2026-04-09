@@ -48,14 +48,27 @@ async def log_generation(
         return
     try:
         from aiogram.types import BufferedInputFile
+        from bot import db
         logger.debug("log_channel: отправляю фото в канал %s", LOG_CHANNEL_ID)
-        await _tg_bot.send_photo(
+        msg = await _tg_bot.send_photo(
             chat_id=LOG_CHANNEL_ID,
             photo=BufferedInputFile(file=image_bytes, filename="gen.jpg"),
             caption=_caption(prompt, user_id, user_name, platform, model),
             parse_mode="HTML",
         )
         logger.info("log_channel: фото успешно отправлено в канал %s", LOG_CHANNEL_ID)
+        # Save to DB for admin panel
+        if msg.photo:
+            largest = msg.photo[-1]
+            db.save_image_log(
+                user_id=user_id,
+                user_name=user_name,
+                platform=platform,
+                prompt=prompt,
+                model=model,
+                file_id=largest.file_id,
+                file_unique_id=largest.file_unique_id,
+            )
     except Exception as exc:
         logger.warning("log_channel (tg path) failed [channel=%s]: %s", LOG_CHANNEL_ID, exc)
 
@@ -84,8 +97,26 @@ async def log_generation_vk(
         async with aiohttp.ClientSession() as session:
             async with session.post(url, data=data,
                                     timeout=aiohttp.ClientTimeout(total=20)) as resp:
-                if resp.status != 200:
-                    body = await resp.text()
-                    logger.debug("log_channel (vk path) HTTP %s: %s", resp.status, body[:120])
+                body = await resp.json(content_type=None)
+                if resp.status != 200 or not body.get("ok"):
+                    logger.warning("log_channel (vk path) HTTP %s: %s", resp.status, str(body)[:120])
+                else:
+                    # Save file_id to DB
+                    try:
+                        from bot import db
+                        photos = body.get("result", {}).get("photo", [])
+                        if photos:
+                            largest = max(photos, key=lambda p: p.get("file_size", 0))
+                            db.save_image_log(
+                                user_id=user_id,
+                                user_name=user_name,
+                                platform="vk",
+                                prompt=prompt,
+                                model=model,
+                                file_id=largest["file_id"],
+                                file_unique_id=largest["file_unique_id"],
+                            )
+                    except Exception as db_exc:
+                        logger.debug("log_channel (vk path) db save failed: %s", db_exc)
     except Exception as exc:
-        logger.debug("log_channel (vk path) failed: %s", exc)
+        logger.warning("log_channel (vk path) failed: %s", exc)

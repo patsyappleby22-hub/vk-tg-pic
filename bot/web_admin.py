@@ -28,6 +28,7 @@ import random
 import secrets
 import time
 
+import aiohttp as _aiohttp
 from aiohttp import web
 
 import bot.db as _db
@@ -205,6 +206,32 @@ def _layout(title: str, content: str, active: str = "") -> str:
   .detail-card-label{{color:var(--muted);font-size:.8em;margin-bottom:4px}}
   .detail-card-value{{font-size:1.05em;font-weight:600;word-break:break-all}}
   .actions-row{{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px}}
+
+  /* ── Image gallery ── */
+  .img-gallery{{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+    gap:10px;margin-bottom:24px}}
+  .img-card{{position:relative;background:var(--surface);border:1px solid var(--border);
+    border-radius:10px;overflow:hidden;aspect-ratio:1;cursor:pointer;
+    transition:transform .15s,border-color .15s}}
+  .img-card:hover{{transform:scale(1.03);border-color:var(--accent)}}
+  .img-card img{{width:100%;height:100%;object-fit:cover;display:block}}
+  .img-card-meta{{position:absolute;bottom:0;left:0;right:0;
+    background:linear-gradient(transparent,rgba(0,0,0,.85));
+    padding:20px 8px 6px;font-size:.72em;color:#ddd;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+  .img-card-date{{color:#8888a8;font-size:.68em;margin-top:2px}}
+  .img-empty{{color:var(--muted);text-align:center;padding:24px;
+    border:1px dashed var(--border);border-radius:10px;margin-bottom:24px}}
+
+  /* Lightbox */
+  .lightbox{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);
+    z-index:200;align-items:center;justify-content:center;padding:16px;flex-direction:column}}
+  .lightbox.open{{display:flex}}
+  .lightbox img{{max-width:90vw;max-height:80vh;border-radius:8px;object-fit:contain}}
+  .lightbox-caption{{color:#ccc;font-size:.9em;margin-top:12px;max-width:600px;
+    text-align:center;line-height:1.4}}
+  .lightbox-close{{position:absolute;top:16px;right:20px;font-size:2em;
+    color:#fff;cursor:pointer;line-height:1}}
 
   /* ── Modal ── */
   .modal-overlay{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);
@@ -702,6 +729,42 @@ async def handle_users(request: web.Request) -> web.Response:
     return web.Response(text=_layout(f"Пользователи ({total})", content, "users"), content_type="text/html")
 
 
+def _render_image_gallery(image_logs: list[dict]) -> str:
+    """Build the image gallery HTML for a user's generated images."""
+    if not image_logs:
+        return '<div class="img-empty">Генераций пока нет</div>'
+    cards = ""
+    for img in image_logs:
+        fuid = img["file_unique_id"]
+        prompt_esc = img["prompt"].replace('"', "&quot;").replace("<", "&lt;")
+        dt = img["created_at"][:16].replace("T", " ") if img["created_at"] else ""
+        plat = "📱" if img["platform"] == "tg" else "💙"
+        full_prompt = img["prompt"].replace("'", "\\'")
+        cards += f"""<div class="img-card" onclick="openLightbox('/admin/tg-photo/{fuid}','{full_prompt[:150]}','{dt}')">
+  <img src="/admin/tg-photo/{fuid}" loading="lazy" alt="{prompt_esc[:60]}"
+       onerror="this.parentElement.style.opacity='.4'">
+  <div class="img-card-meta">{plat} {prompt_esc[:55]}</div>
+</div>"""
+    return f"""<div class="img-gallery">{cards}</div>
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <span class="lightbox-close" onclick="closeLightbox()">×</span>
+  <img id="lightbox-img" src="" alt="">
+  <div class="lightbox-caption" id="lightbox-cap"></div>
+</div>
+<script>
+function openLightbox(src, prompt, dt) {{
+  document.getElementById('lightbox-img').src = src;
+  document.getElementById('lightbox-cap').textContent = prompt + (dt ? ' · ' + dt : '');
+  document.getElementById('lightbox').classList.add('open');
+}}
+function closeLightbox() {{
+  document.getElementById('lightbox').classList.remove('open');
+  document.getElementById('lightbox-img').src = '';
+}}
+document.addEventListener('keydown', e => {{ if(e.key==='Escape') closeLightbox(); }});
+</script>"""
+
+
 # ─── User detail ─────────────────────────────────────────────────────────────
 
 @_require_auth
@@ -717,6 +780,7 @@ async def handle_user_detail(request: web.Request) -> web.Response:
 
     u = get_user_settings(uid)
     payments = _db.get_user_payments(uid)
+    image_logs = _db.get_user_image_logs(uid, limit=60)
 
     name = u.get("first_name") or f"Пользователь {uid}"
     platform = u.get("platform", "—")
@@ -818,6 +882,9 @@ async def handle_user_detail(request: web.Request) -> web.Response:
   <button class="btn btn-muted" onclick="doAction('reset_gens')">🔄 Сбросить генерации</button>
   <button class="btn btn-danger" onclick="confirmDelete()">🗑 Удалить пользователя</button>
 </div>
+
+<div class="section-heading">Генерации ({len(image_logs)})</div>
+{_render_image_gallery(image_logs)}
 
 <div class="section-heading">История платежей ({len(payments)})</div>
 <div class="table-wrap">
@@ -1079,6 +1146,45 @@ async def api_delete(request: web.Request) -> web.Response:
         )
 
 
+_TG_TOKEN_FOR_PROXY = os.getenv("TELEGRAM_BOT_TOKEN", "")
+
+
+@_require_auth
+async def handle_tg_photo(request: web.Request) -> web.Response:
+    """Proxy a Telegram photo by file_unique_id so it shows in the browser."""
+    file_unique_id = request.match_info.get("file_unique_id", "")
+    if not file_unique_id or not _TG_TOKEN_FOR_PROXY:
+        raise web.HTTPNotFound()
+    row = _db.get_image_log_by_unique_id(file_unique_id)
+    if not row:
+        raise web.HTTPNotFound()
+    file_id = row["file_id"]
+    try:
+        async with _aiohttp.ClientSession() as session:
+            # Step 1: get file path
+            gf_url = f"https://api.telegram.org/bot{_TG_TOKEN_FOR_PROXY}/getFile"
+            async with session.get(gf_url, params={"file_id": file_id},
+                                   timeout=_aiohttp.ClientTimeout(total=10)) as resp:
+                gf = await resp.json()
+            if not gf.get("ok"):
+                raise web.HTTPNotFound()
+            file_path = gf["result"]["file_path"]
+            # Step 2: download the file
+            dl_url = f"https://api.telegram.org/file/bot{_TG_TOKEN_FOR_PROXY}/{file_path}"
+            async with session.get(dl_url, timeout=_aiohttp.ClientTimeout(total=30)) as dl:
+                img_bytes = await dl.read()
+        return web.Response(
+            body=img_bytes,
+            content_type="image/jpeg",
+            headers={"Cache-Control": "max-age=86400"},
+        )
+    except web.HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("handle_tg_photo failed for %s: %s", file_unique_id, exc)
+        raise web.HTTPBadGateway()
+
+
 @_api_require_auth
 async def api_test_log_channel(request: web.Request) -> web.Response:
     """Send a test image to the log channel to verify configuration."""
@@ -1147,4 +1253,5 @@ def register_admin_routes(app: web.Application) -> None:
     app.router.add_post("/admin/api/users/{uid}/reset_gens", api_reset_gens)
     app.router.add_post("/admin/api/users/{uid}/delete",     api_delete)
     app.router.add_post("/admin/api/test-log-channel",       api_test_log_channel)
+    app.router.add_get("/admin/tg-photo/{file_unique_id}",   handle_tg_photo)
     logger.info("Admin panel routes registered at /admin")
