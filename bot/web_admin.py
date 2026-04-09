@@ -1525,14 +1525,19 @@ async function poll() {{
           : '<span style="color:var(--muted)">не использовался</span>';
       }}
 
-      // Load cell — QPM usage bars
+      // Load cell — QPM usage as colored text
       const rf=s.req_flash, qf=s.qpm_flash, rp=s.req_pro, qp=s.qpm_pro;
-      const pctF = Math.round(rf/qf*100), pctP = Math.round(rp/qp*100);
-      const barF = `<div style="display:inline-block;width:36px;height:6px;border-radius:3px;background:rgba(255,255,255,.1);vertical-align:middle">
-        <div style="width:${{Math.min(pctF,100)}}%;height:100%;border-radius:3px;background:${{pctF>80?'var(--yellow)':'var(--accent2)'}}"></div></div>`;
-      const barP = `<div style="display:inline-block;width:36px;height:6px;border-radius:3px;background:rgba(255,255,255,.1);vertical-align:middle">
-        <div style="width:${{Math.min(pctP,100)}}%;height:100%;border-radius:3px;background:${{pctP>80?'var(--yellow)':'var(--green)'}}"></div></div>`;
-      load.innerHTML = `Flash: ${{rf}}/${{qf}} ${{barF}} &nbsp; Pro: ${{rp}}/${{qp}} ${{barP}}`;
+      function qpmColor(used, max) {{
+        if (used === 0) return 'var(--muted)';
+        const pct = used / max;
+        if (pct >= 1)   return 'var(--red)';
+        if (pct >= 0.8) return 'var(--yellow)';
+        return 'var(--green)';
+      }}
+      load.innerHTML =
+        `<span style="color:${{qpmColor(rf,qf)}}">Flash&nbsp;${{rf}}/${{qf}}</span>`
+        + `<span style="color:var(--border)"> &nbsp;|&nbsp; </span>`
+        + `<span style="color:${{qpmColor(rp,qp)}}">Pro&nbsp;${{rp}}/${{qp}}</span>`;
 
       // Total stats
       const ok_ = s.total_ok, err_ = s.total_err;
