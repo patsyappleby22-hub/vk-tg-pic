@@ -131,6 +131,36 @@ def load_all_users() -> dict[int, dict[str, Any]]:
         return {}
 
 
+def load_one_user(user_id: int) -> dict[str, Any] | None:
+    """Return settings dict for one user from DB, or None if not found."""
+    if not _DATABASE_URL:
+        return None
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT data FROM bot_user_settings WHERE user_id = %s", (user_id,))
+            row = cur.fetchone()
+        if row:
+            return json.loads(row[0])
+        return None
+    except Exception:
+        logger.exception("db: failed to load user %s", user_id)
+        return None
+
+
+def delete_one_user(user_id: int) -> None:
+    """Delete a single user row from DB."""
+    if not _DATABASE_URL:
+        return
+    with _write_lock:
+        try:
+            conn = _get_conn()
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM bot_user_settings WHERE user_id = %s", (user_id,))
+        except Exception:
+            logger.exception("db: failed to delete user %s", user_id)
+
+
 def save_all_users(snapshot: dict[int, dict[str, Any]]) -> None:
     """Upsert all users in one transaction."""
     if not _DATABASE_URL:
