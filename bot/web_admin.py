@@ -207,19 +207,7 @@ def _layout(title: str, content: str, active: str = "") -> str:
   .detail-card-value{{font-size:1.05em;font-weight:600;word-break:break-all}}
   .actions-row{{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px}}
 
-  /* ── Image gallery ── */
-  .img-gallery{{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
-    gap:10px;margin-bottom:24px}}
-  .img-card{{position:relative;background:var(--surface);border:1px solid var(--border);
-    border-radius:10px;overflow:hidden;aspect-ratio:1;cursor:pointer;
-    transition:transform .15s,border-color .15s}}
-  .img-card:hover{{transform:scale(1.03);border-color:var(--accent)}}
-  .img-card img{{width:100%;height:100%;object-fit:cover;display:block}}
-  .img-card-meta{{position:absolute;bottom:0;left:0;right:0;
-    background:linear-gradient(transparent,rgba(0,0,0,.85));
-    padding:20px 8px 6px;font-size:.72em;color:#ddd;
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
-  .img-card-date{{color:#8888a8;font-size:.68em;margin-top:2px}}
+  /* ── Image list ── */
   .img-empty{{color:var(--muted);text-align:center;padding:24px;
     border:1px dashed var(--border);border-radius:10px;margin-bottom:24px}}
 
@@ -729,29 +717,73 @@ async def handle_users(request: web.Request) -> web.Response:
     return web.Response(text=_layout(f"Пользователи ({total})", content, "users"), content_type="text/html")
 
 
-def _render_image_gallery(image_logs: list[dict]) -> str:
-    """Build the image gallery HTML for a user's generated images."""
+_IMG_PAGE_SIZE = 10
+
+
+def _render_image_gallery(image_logs: list[dict], page: int = 1) -> str:
+    """Build the image list (compact table) for a user's generated images."""
     if not image_logs:
         return '<div class="img-empty">Генераций пока нет</div>'
-    cards = ""
-    for img in image_logs:
+
+    total = len(image_logs)
+    start = (page - 1) * _IMG_PAGE_SIZE
+    end = start + _IMG_PAGE_SIZE
+    page_items = image_logs[start:end]
+    has_next = end < total
+    has_prev = page > 1
+
+    rows = ""
+    for img in page_items:
         fuid = img["file_unique_id"]
-        prompt_esc = img["prompt"].replace('"', "&quot;").replace("<", "&lt;")
-        dt = img["created_at"][:16].replace("T", " ") if img["created_at"] else ""
+        prompt_esc = img["prompt"].replace("<", "&lt;").replace('"', "&quot;")
+        dt = img["created_at"][:16].replace("T", " ") if img["created_at"] else "—"
         plat = "📱" if img["platform"] == "tg" else "💙"
-        full_prompt = img["prompt"].replace("'", "\\'")
-        cards += f"""<div class="img-card" onclick="openLightbox('/admin/tg-photo/{fuid}','{full_prompt[:150]}','{dt}')">
-  <img src="/admin/tg-photo/{fuid}" loading="lazy" alt="{prompt_esc[:60]}"
-       onerror="this.parentElement.style.opacity='.4'">
-  <div class="img-card-meta">{plat} {prompt_esc[:55]}</div>
-</div>"""
-    return f"""<div class="img-gallery">{cards}</div>
+        fp = img["prompt"].replace("'", "\\'").replace("\\n", " ")
+        rows += f"""<tr>
+  <td style="width:56px;padding:6px 8px">
+    <img src="/admin/tg-photo/{fuid}" loading="lazy"
+         style="width:48px;height:48px;object-fit:cover;border-radius:6px;cursor:pointer;display:block"
+         onclick="openLightbox('/admin/tg-photo/{fuid}','{fp[:160]}','{dt}')"
+         onerror="this.style.opacity='.3'">
+  </td>
+  <td style="font-size:.85em;max-width:320px;word-break:break-word;padding:6px 4px">
+    {plat} {prompt_esc[:120]}
+  </td>
+  <td style="white-space:nowrap;color:var(--muted);font-size:.78em;padding:6px 8px">{dt}</td>
+  <td style="white-space:nowrap;font-size:.78em;color:#8888a8;padding:6px 8px">{img['model'].split('-')[0] if img.get('model') else '—'}</td>
+</tr>"""
+
+    pagination = ""
+    if has_prev or has_next:
+        pagination = '<div style="display:flex;gap:8px;margin-top:10px">'
+        if has_prev:
+            pagination += f'<button class="btn btn-muted btn-sm" onclick="loadImgPage({page-1})">← Назад</button>'
+        pagination += f'<span style="align-self:center;color:var(--muted);font-size:.85em">{start+1}–{min(end,total)} из {total}</span>'
+        if has_next:
+            pagination += f'<button class="btn btn-muted btn-sm" onclick="loadImgPage({page+1})">Далее →</button>'
+        pagination += '</div>'
+
+    return f"""<div class="table-wrap" id="img-table-wrap">
+<table>
+  <thead><tr>
+    <th style="width:56px">Фото</th>
+    <th>Промпт</th>
+    <th>Дата</th>
+    <th>Модель</th>
+  </tr></thead>
+  <tbody>{rows}</tbody>
+</table>
+</div>
+<div id="img-pagination">{pagination}</div>
 <div class="lightbox" id="lightbox" onclick="closeLightbox()">
   <span class="lightbox-close" onclick="closeLightbox()">×</span>
   <img id="lightbox-img" src="" alt="">
   <div class="lightbox-caption" id="lightbox-cap"></div>
 </div>
 <script>
+var _imgAllData = {json.dumps(image_logs)};
+var _imgPageSize = {_IMG_PAGE_SIZE};
+
 function openLightbox(src, prompt, dt) {{
   document.getElementById('lightbox-img').src = src;
   document.getElementById('lightbox-cap').textContent = prompt + (dt ? ' · ' + dt : '');
@@ -761,7 +793,46 @@ function closeLightbox() {{
   document.getElementById('lightbox').classList.remove('open');
   document.getElementById('lightbox-img').src = '';
 }}
-document.addEventListener('keydown', e => {{ if(e.key==='Escape') closeLightbox(); }});
+document.addEventListener('keydown', function(e) {{ if(e.key==='Escape') closeLightbox(); }});
+
+function loadImgPage(page) {{
+  var start = (page-1)*_imgPageSize;
+  var end = start+_imgPageSize;
+  var items = _imgAllData.slice(start, end);
+  var rows = items.map(function(img) {{
+    var fuid = img.file_unique_id;
+    var dt = img.created_at ? img.created_at.slice(0,16).replace('T',' ') : '—';
+    var plat = img.platform === 'tg' ? '📱' : '💙';
+    var prompt = img.prompt.replace(/</g,'&lt;').replace(/"/g,'&quot;');
+    var fp = img.prompt.replace(/'/g,"\\'").replace(/\\n/g,' ');
+    var mdl = img.model ? img.model.split('-')[0] : '—';
+    return '<tr>'
+      + '<td style="width:56px;padding:6px 8px"><img src="/admin/tg-photo/'+fuid+'" loading="lazy"'
+      + ' style="width:48px;height:48px;object-fit:cover;border-radius:6px;cursor:pointer;display:block"'
+      + ' onclick="openLightbox(\\'/admin/tg-photo/'+fuid+'\\',\\''+fp.slice(0,160)+'\\',\\''+dt+'\\')"`'
+      + ' onerror="this.style.opacity=\\'.3\\'"></td>'
+      + '<td style="font-size:.85em;max-width:320px;word-break:break-word;padding:6px 4px">'+plat+' '+prompt.slice(0,120)+'</td>'
+      + '<td style="white-space:nowrap;color:var(--muted);font-size:.78em;padding:6px 8px">'+dt+'</td>'
+      + '<td style="white-space:nowrap;font-size:.78em;color:#8888a8;padding:6px 8px">'+mdl+'</td>'
+      + '</tr>';
+  }}).join('');
+
+  document.querySelector('#img-table-wrap tbody').innerHTML = rows;
+
+  var total = _imgAllData.length;
+  var hasPrev = page > 1;
+  var hasNext = end < total;
+  var pg = document.getElementById('img-pagination');
+  var html = '';
+  if(hasPrev || hasNext) {{
+    html = '<div style="display:flex;gap:8px;margin-top:10px">';
+    if(hasPrev) html += '<button class="btn btn-muted btn-sm" onclick="loadImgPage('+(page-1)+')">← Назад</button>';
+    html += '<span style="align-self:center;color:var(--muted);font-size:.85em">'+(start+1)+'–'+Math.min(end,total)+' из '+total+'</span>';
+    if(hasNext) html += '<button class="btn btn-muted btn-sm" onclick="loadImgPage('+(page+1)+')">Далее →</button>';
+    html += '</div>';
+  }}
+  if(pg) pg.innerHTML = html;
+}}
 </script>"""
 
 
