@@ -27,11 +27,13 @@ import os
 import random
 import secrets
 import time
+from typing import Any
 
 import aiohttp as _aiohttp
 from aiohttp import web
 
 import bot.db as _db
+import bot.api_keys_store as _key_store
 from bot.user_settings import (
     user_settings as _users,
     add_credits,
@@ -43,6 +45,15 @@ from bot.user_settings import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Vertex AI service reference — set by start_all.py after boot
+_vertex_service: "Any | None" = None
+
+
+def set_vertex_service(svc: "Any") -> None:
+    """Called from start_all.py so the admin panel can query slot statuses."""
+    global _vertex_service
+    _vertex_service = svc
 
 _MSK_OFFSET_HOURS = 3  # UTC+3
 
@@ -103,9 +114,10 @@ def _require_auth(fn):
 
 def _layout(title: str, content: str, active: str = "") -> str:
     nav_items = [
-        ("dashboard", "/admin/dashboard", "📊", "Дашборд"),
-        ("users",     "/admin/users",     "👥", "Пользователи"),
-        ("payments",  "/admin/payments",  "💳", "Платежи"),
+        ("dashboard", "/admin/dashboard",  "📊", "Дашборд"),
+        ("users",     "/admin/users",      "👥", "Пользователи"),
+        ("payments",  "/admin/payments",   "💳", "Платежи"),
+        ("apikeys",   "/admin/api-keys",   "🔑", "API ключи"),
     ]
     sidebar_nav = ""
     bottom_nav = ""
@@ -1354,6 +1366,180 @@ async def api_test_log_channel(request: web.Request) -> web.Response:
         )
 
 
+# ─── API Keys management ──────────────────────────────────────────────────────
+
+@_require_auth
+async def handle_api_keys(request: web.Request) -> web.Response:
+    msg = request.rel_url.query.get("msg", "")
+
+    # Stored keys (from DB)
+    stored_keys = _key_store.get_all_keys()
+
+    # Live slot statuses (from running service)
+    slot_map: dict[str, dict] = {}
+    if _vertex_service is not None:
+        for s in _vertex_service.get_slots_status():
+            slot_map[s["label"]] = s
+
+    # Build key rows
+    key_rows = ""
+    for i, key in enumerate(stored_keys):
+        label = f"api_key_{i + 1}"
+        slot = slot_map.get(label)
+        masked = _key_store.mask_key(key)
+
+        if slot is None:
+            # Service not loaded this key yet (added after boot)
+            status_badge = '<span class="badge badge-yellow">⏳ Не загружен</span>'
+            detail = '<span style="color:var(--muted);font-size:.8em">Требуется перезапуск</span>'
+        elif slot["status"] == "auth_error":
+            status_badge = '<span class="badge badge-red">🔴 Ошибка авторизации</span>'
+            msg_short = slot["auth_error_msg"][:80] if slot["auth_error_msg"] else ""
+            detail = f'<span style="color:var(--red);font-size:.78em" title="{msg_short}">Биллинг / ключ отозван</span>'
+        elif slot["status"] == "cooldown":
+            rem = slot["cooldown_remaining"]
+            status_badge = f'<span class="badge badge-yellow">⏳ Кулдаун {rem}с</span>'
+            detail = f'<span style="color:var(--yellow);font-size:.8em">429 — лимит запросов</span>'
+        else:
+            status_badge = '<span class="badge badge-green">🟢 Активен</span>'
+            rf = slot["req_flash"]; qf = slot["qpm_flash"]
+            rp = slot["req_pro"];   qp = slot["qpm_pro"]
+            detail = (
+                f'<span style="color:var(--muted);font-size:.8em">'
+                f'Flash: {rf}/{qf} QPM &nbsp;·&nbsp; Pro: {rp}/{qp} QPM'
+                f'</span>'
+            )
+
+        key_rows += f"""<tr>
+  <td style="font-weight:600;color:var(--muted)">{i+1}</td>
+  <td><code style="font-size:.9em;color:var(--accent)">{masked}</code></td>
+  <td>{status_badge}</td>
+  <td>{detail}</td>
+  <td>
+    <button class="btn btn-sm" style="background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.2)"
+      onclick="deleteKey({i})">🗑 Удалить</button>
+  </td>
+</tr>
+"""
+
+    if not key_rows:
+        key_rows = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:28px">Ключей нет — добавьте первый ниже</td></tr>'
+
+    # Summary stats
+    total = len(stored_keys)
+    ok_count = sum(1 for s in slot_map.values() if s["status"] == "ok")
+    err_count = sum(1 for s in slot_map.values() if s["status"] == "auth_error")
+    cool_count = sum(1 for s in slot_map.values() if s["status"] == "cooldown")
+    unloaded = total - len(slot_map)
+
+    msg_html = ""
+    if msg == "added":
+        msg_html = '<div class="alert alert-success">✅ Ключ добавлен. Перезапустите сервис чтобы он вступил в силу.</div>'
+    elif msg == "exists":
+        msg_html = '<div class="alert alert-error">⚠️ Такой ключ уже есть.</div>'
+    elif msg == "deleted":
+        msg_html = '<div class="alert alert-success">🗑 Ключ удалён. Перезапустите сервис для применения.</div>'
+    elif msg == "empty":
+        msg_html = '<div class="alert alert-error">⚠️ Введите непустой ключ.</div>'
+
+    content = f"""
+<h1 class="page-title">🔑 API ключи</h1>
+{msg_html}
+
+<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));margin-bottom:24px">
+  <div class="card"><div class="card-label">Всего ключей</div><div class="card-value purple">{total}</div></div>
+  <div class="card"><div class="card-label">Активных</div><div class="card-value green">{ok_count}</div></div>
+  <div class="card"><div class="card-label">Ошибка авт.</div><div class="card-value red">{err_count}</div></div>
+  <div class="card"><div class="card-label">Кулдаун</div><div class="card-value yellow">{cool_count}</div></div>
+  <div class="card"><div class="card-label">Не загружены</div><div class="card-value" style="color:var(--muted)">{unloaded}</div></div>
+</div>
+
+<div class="table-wrap" style="margin-bottom:24px">
+<table>
+  <thead><tr>
+    <th>#</th><th>Ключ (маска)</th><th>Статус</th><th>Нагрузка (60с окно)</th><th>Действие</th>
+  </tr></thead>
+  <tbody>{key_rows}</tbody>
+</table>
+</div>
+
+<div class="card" style="max-width:520px">
+  <h3 style="margin-bottom:14px;font-size:1em;color:var(--text)">➕ Добавить Google API ключ</h3>
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <input type="text" id="new-key-input" placeholder="AIza..." autocomplete="off"
+      style="flex:1;min-width:200px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);
+             border-radius:8px;color:var(--text);font-size:.9em;outline:none">
+    <button class="btn btn-primary" onclick="addKey()" style="white-space:nowrap">Добавить ключ</button>
+  </div>
+  <p style="color:var(--muted);font-size:.78em;margin-top:10px">
+    Ключ хранится в БД. После добавления/удаления нужен <b>перезапуск сервиса</b>, чтобы изменения вступили в силу.
+    После перезапуска статусы обновятся автоматически.
+  </p>
+  <p style="color:var(--red);font-size:.78em;margin-top:6px">
+    🔴 <b>Ошибка авторизации</b> — ключ заблокирован, биллинг отключён или нет доступа к Vertex AI.<br>
+    ⏳ <b>Кулдаун</b> — ключ получил 429 (лимит), временно приостановлен на 60с.<br>
+    ⏳ <b>Не загружен</b> — ключ добавлен после старта, требуется перезапуск.
+  </p>
+</div>
+
+<script>
+async function addKey() {{
+  const val = document.getElementById('new-key-input').value.trim();
+  if (!val) return;
+  const r = await fetch('/admin/api/keys/add', {{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{key:val}})}});
+  const d = await r.json();
+  if (d.ok) location.href = '/admin/api-keys?msg=added';
+  else if (d.error === 'exists') location.href = '/admin/api-keys?msg=exists';
+  else alert('Ошибка: ' + (d.error || 'неизвестная'));
+}}
+
+async function deleteKey(idx) {{
+  if (!confirm('Удалить ключ #' + (idx+1) + '? После этого нужен перезапуск.')) return;
+  const r = await fetch('/admin/api/keys/delete', {{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{index:idx}})}});
+  const d = await r.json();
+  if (d.ok) location.href = '/admin/api-keys?msg=deleted';
+  else alert('Ошибка: ' + (d.error || 'неизвестная'));
+}}
+
+// Auto-refresh page every 15s to update cooldown timers
+setTimeout(() => location.reload(), 15000);
+</script>
+"""
+    return web.Response(text=_layout("API ключи", content, "apikeys"), content_type="text/html")
+
+
+@_api_require_auth
+async def api_keys_add(request: web.Request) -> web.Response:
+    try:
+        data = await request.json()
+        key = data.get("key", "").strip()
+        if not key:
+            return web.Response(text=json.dumps({"ok": False, "error": "empty"}), content_type="application/json", status=400)
+        added = _key_store.add_key(key)
+        if not added:
+            return web.Response(text=json.dumps({"ok": False, "error": "exists"}), content_type="application/json", status=400)
+        logger.info("admin: API key added (masked=%s)", _key_store.mask_key(key))
+        return web.Response(text=json.dumps({"ok": True}), content_type="application/json")
+    except Exception as e:
+        logger.exception("api_keys_add error")
+        return web.Response(text=json.dumps({"ok": False, "error": str(e)}), content_type="application/json", status=500)
+
+
+@_api_require_auth
+async def api_keys_delete(request: web.Request) -> web.Response:
+    try:
+        data = await request.json()
+        index = int(data.get("index", -1))
+        removed = _key_store.remove_key(index)
+        if removed is None:
+            return web.Response(text=json.dumps({"ok": False, "error": "not_found"}), content_type="application/json", status=404)
+        logger.info("admin: API key removed (masked=%s)", _key_store.mask_key(removed))
+        return web.Response(text=json.dumps({"ok": True}), content_type="application/json")
+    except Exception as e:
+        logger.exception("api_keys_delete error")
+        return web.Response(text=json.dumps({"ok": False, "error": str(e)}), content_type="application/json", status=500)
+
+
 # ─── Register routes ─────────────────────────────────────────────────────────
 
 def register_admin_routes(app: web.Application) -> None:
@@ -1365,10 +1551,13 @@ def register_admin_routes(app: web.Application) -> None:
     app.router.add_get("/admin/users",                    handle_users)
     app.router.add_get("/admin/users/{uid}",              handle_user_detail)
     app.router.add_get("/admin/payments",                 handle_payments)
+    app.router.add_get("/admin/api-keys",                 handle_api_keys)
     app.router.add_post("/admin/api/users/{uid}/credits",    api_credits)
     app.router.add_post("/admin/api/users/{uid}/block",      api_block)
     app.router.add_post("/admin/api/users/{uid}/reset_gens", api_reset_gens)
     app.router.add_post("/admin/api/users/{uid}/delete",     api_delete)
     app.router.add_post("/admin/api/test-log-channel",       api_test_log_channel)
+    app.router.add_post("/admin/api/keys/add",               api_keys_add)
+    app.router.add_post("/admin/api/keys/delete",            api_keys_delete)
     app.router.add_get("/admin/tg-photo/{file_unique_id}",   handle_tg_photo)
     logger.info("Admin panel routes registered at /admin")
