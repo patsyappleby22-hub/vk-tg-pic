@@ -370,8 +370,23 @@ async def handle_lava_webhook(request: web.Request) -> web.Response:
     return web.Response(text="OK", status=200)
 
 
+@web.middleware
+async def _error_middleware(request: web.Request, handler) -> web.Response:
+    """Global safety net: catch any unhandled exception so the server never crashes."""
+    try:
+        return await handler(request)
+    except web.HTTPException:
+        raise  # let aiohttp handle normal HTTP errors (404, 302, etc.)
+    except Exception as exc:
+        logger.exception("Unhandled error in %s %s: %s", request.method, request.path, exc)
+        return web.Response(
+            text="500 Internal Server Error — see server logs",
+            status=500,
+        )
+
+
 def create_web_app() -> web.Application:
-    app = web.Application()
+    app = web.Application(middlewares=[_error_middleware])
     app.router.add_get("/", handle_index)
     app.router.add_get("/shop-verification-WG76VJD7xl.txt", handle_verification)
     app.router.add_get("/payment/success", handle_success)
