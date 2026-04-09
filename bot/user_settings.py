@@ -300,11 +300,11 @@ def reset_generations(user_id: int) -> None:
 
 
 def delete_user(user_id: int) -> bool:
-    if user_id in user_settings:
-        del user_settings[user_id]
-        _save_to_disk()  # full save after delete to remove the row
-        return True
-    return False
+    existed = user_id in user_settings
+    user_settings.pop(user_id, None)
+    # Remove from DB directly — faster and correct with multiple replicas
+    _db.delete_one_user(user_id)
+    return existed
 
 
 def set_blocked(user_id: int, blocked: bool) -> None:
