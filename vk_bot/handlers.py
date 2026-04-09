@@ -510,8 +510,51 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
         await _generate_and_send(bot, vertex_service, uid, peer_id, text)
 
 
+def _clean_latex(text: str) -> str:
+    """Convert LaTeX math notation to readable Unicode."""
+    for _ in range(4):
+        text = re.sub(r'\\frac\{([^{}]+)\}\{([^{}]+)\}', r'(\1/\2)', text)
+    text = re.sub(r'\\sqrt\{([^{}]+)\}', r'√\1', text)
+    text = re.sub(r'\\sqrt', '√', text)
+    for cmd in (r'\\text', r'\\mathrm', r'\\mathbf', r'\\mathit', r'\\mathbb'):
+        text = re.sub(cmd + r'\{([^}]*)\}', r'\1', text)
+    _sup = {'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹',
+            '+':'⁺','-':'⁻','n':'ⁿ','i':'ⁱ','T':'ᵀ','a':'ᵃ','b':'ᵇ'}
+    text = re.sub(r'\^\{([^{}]+)\}', lambda m: ''.join(_sup.get(c, c) for c in m.group(1)), text)
+    text = re.sub(r'\^([0-9nix])', lambda m: _sup.get(m.group(1), m.group(1)), text)
+    _sub = {'0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉',
+            '+':'₊','-':'₋','n':'ₙ','i':'ᵢ','k':'ₖ'}
+    text = re.sub(r'_\{([^{}]+)\}', lambda m: ''.join(_sub.get(c, c) for c in m.group(1)), text)
+    text = re.sub(r'_([0-9nk])', lambda m: _sub.get(m.group(1), m.group(1)), text)
+    _syms = [
+        (r'\\approx', '≈'), (r'\\cdot', '·'), (r'\\times', '×'), (r'\\div', '÷'),
+        (r'\\pm', '±'), (r'\\mp', '∓'), (r'\\leq', '≤'), (r'\\geq', '≥'),
+        (r'\\neq', '≠'), (r'\\ne', '≠'), (r'\\infty', '∞'),
+        (r'\\implies', '⟹'), (r'\\Rightarrow', '⟹'), (r'\\rightarrow', '→'),
+        (r'\\leftarrow', '←'), (r'\\pi', 'π'), (r'\\alpha', 'α'), (r'\\beta', 'β'),
+        (r'\\gamma', 'γ'), (r'\\delta', 'δ'), (r'\\Delta', 'Δ'), (r'\\theta', 'θ'),
+        (r'\\lambda', 'λ'), (r'\\mu', 'μ'), (r'\\sigma', 'σ'), (r'\\Sigma', 'Σ'),
+        (r'\\phi', 'φ'), (r'\\omega', 'ω'), (r'\\Omega', 'Ω'), (r'\\rho', 'ρ'),
+        (r'\\epsilon', 'ε'), (r'\\eta', 'η'), (r'\\tau', 'τ'), (r'\\partial', '∂'),
+        (r'\\nabla', '∇'), (r'\\forall', '∀'), (r'\\exists', '∃'),
+        (r'\\in', '∈'), (r'\\notin', '∉'), (r'\\ldots', '…'), (r'\\cdots', '⋯'),
+        (r'\\left\(', '('), (r'\\right\)', ')'), (r'\\left\[', '['), (r'\\right\]', ']'),
+        (r'\\left', ''), (r'\\right', ''), (r'\\langle', '⟨'), (r'\\rangle', '⟩'),
+    ]
+    for pat, sym in _syms:
+        text = re.sub(pat, sym, text)
+    text = re.sub(r'\\[a-zA-Z]+\*?', '', text)
+    text = re.sub(r'\$\$(.+?)\$\$', r'\1', text, flags=re.DOTALL)
+    text = re.sub(r'\$(.+?)\$', r'\1', text)
+    text = text.replace('{', '').replace('}', '')
+    text = re.sub(r'  +', ' ', text)
+    return text
+
+
 def _strip_md(text: str) -> str:
-    """Strip Markdown formatting for plain-text VK messages."""
+    """Strip Markdown formatting and LaTeX for plain-text VK messages."""
+    # LaTeX math → Unicode first
+    text = _clean_latex(text)
     # Code blocks → keep content only
     text = re.sub(r"```(?:[^\n`]*)?\n?(.*?)```", lambda m: m.group(1).strip(), text, flags=re.DOTALL)
     # Inline code → keep content

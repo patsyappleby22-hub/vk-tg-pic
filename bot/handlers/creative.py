@@ -27,6 +27,62 @@ router = Router(name="creative")
 _sessions: dict[int, list[dict[str, Any]]] = {}
 
 
+def _clean_latex(text: str) -> str:
+    """Convert LaTeX math notation to readable Unicode."""
+    # \frac{num}{den} → (num/den) — handle up to 4 levels of nesting
+    for _ in range(4):
+        text = re.sub(r'\\frac\{([^{}]+)\}\{([^{}]+)\}', r'(\1/\2)', text)
+    # \sqrt{x} → √x
+    text = re.sub(r'\\sqrt\{([^{}]+)\}', r'√\1', text)
+    text = re.sub(r'\\sqrt', '√', text)
+    # \text{...} and similar wrappers → inner content
+    for cmd in (r'\\text', r'\\mathrm', r'\\mathbf', r'\\mathit', r'\\mathbb'):
+        text = re.sub(cmd + r'\{([^}]*)\}', r'\1', text)
+    # Superscripts ^{...} and ^x
+    _sup = {'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹',
+            '+':'⁺','-':'⁻','n':'ⁿ','i':'ⁱ','T':'ᵀ','a':'ᵃ','b':'ᵇ'}
+    text = re.sub(r'\^\{([^{}]+)\}', lambda m: ''.join(_sup.get(c, c) for c in m.group(1)), text)
+    text = re.sub(r'\^([0-9nix])', lambda m: _sup.get(m.group(1), m.group(1)), text)
+    # Subscripts _{...} and _x
+    _sub = {'0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉',
+            '+':'₊','-':'₋','n':'ₙ','i':'ᵢ','k':'ₖ','0':'₀'}
+    text = re.sub(r'_\{([^{}]+)\}', lambda m: ''.join(_sub.get(c, c) for c in m.group(1)), text)
+    text = re.sub(r'_([0-9nk])', lambda m: _sub.get(m.group(1), m.group(1)), text)
+    # Named operators and symbols
+    _syms = [
+        (r'\\approx', '≈'), (r'\\cdot', '·'), (r'\\times', '×'), (r'\\div', '÷'),
+        (r'\\pm', '±'), (r'\\mp', '∓'), (r'\\leq', '≤'), (r'\\geq', '≥'),
+        (r'\\neq', '≠'), (r'\\ne', '≠'), (r'\\infty', '∞'),
+        (r'\\implies', '⟹'), (r'\\Rightarrow', '⟹'), (r'\\rightarrow', '→'),
+        (r'\\leftarrow', '←'), (r'\\Leftrightarrow', '⟺'), (r'\\leftrightarrow', '↔'),
+        (r'\\pi', 'π'), (r'\\alpha', 'α'), (r'\\beta', 'β'), (r'\\gamma', 'γ'),
+        (r'\\delta', 'δ'), (r'\\Delta', 'Δ'), (r'\\theta', 'θ'), (r'\\Theta', 'Θ'),
+        (r'\\lambda', 'λ'), (r'\\Lambda', 'Λ'), (r'\\mu', 'μ'), (r'\\nu', 'ν'),
+        (r'\\xi', 'ξ'), (r'\\sigma', 'σ'), (r'\\Sigma', 'Σ'), (r'\\phi', 'φ'),
+        (r'\\Phi', 'Φ'), (r'\\psi', 'ψ'), (r'\\Psi', 'Ψ'), (r'\\omega', 'ω'),
+        (r'\\Omega', 'Ω'), (r'\\rho', 'ρ'), (r'\\epsilon', 'ε'), (r'\\eta', 'η'),
+        (r'\\tau', 'τ'), (r'\\kappa', 'κ'), (r'\\chi', 'χ'), (r'\\zeta', 'ζ'),
+        (r'\\partial', '∂'), (r'\\nabla', '∇'), (r'\\forall', '∀'), (r'\\exists', '∃'),
+        (r'\\in', '∈'), (r'\\notin', '∉'), (r'\\subset', '⊂'), (r'\\cup', '∪'),
+        (r'\\cap', '∩'), (r'\\ldots', '…'), (r'\\cdots', '⋯'), (r'\\vdots', '⋮'),
+        (r'\\left\(', '('), (r'\\right\)', ')'), (r'\\left\[', '['), (r'\\right\]', ']'),
+        (r'\\left\|', '|'), (r'\\right\|', '|'), (r'\\left', ''), (r'\\right', ''),
+        (r'\\langle', '⟨'), (r'\\rangle', '⟩'),
+    ]
+    for pat, sym in _syms:
+        text = re.sub(pat, sym, text)
+    # Remove remaining unknown \commands
+    text = re.sub(r'\\[a-zA-Z]+\*?', '', text)
+    # Strip $$ and $ delimiters
+    text = re.sub(r'\$\$(.+?)\$\$', r'\1', text, flags=re.DOTALL)
+    text = re.sub(r'\$(.+?)\$', r'\1', text)
+    # Clean up remaining curly braces
+    text = text.replace('{', '').replace('}', '')
+    # Collapse multiple spaces
+    text = re.sub(r'  +', ' ', text)
+    return text
+
+
 def _md_to_tg_html(text: str) -> str:
     """Convert Gemini Markdown output to Telegram HTML."""
     # 1. Save and protect triple-backtick code blocks
@@ -49,10 +105,13 @@ def _md_to_tg_html(text: str) -> str:
 
     text = re.sub(r"`([^`\n]+)`", _save_inline, text)
 
-    # 3. Escape HTML in the remaining text
+    # 3. Convert LaTeX math to readable Unicode
+    text = _clean_latex(text)
+
+    # 4. Escape HTML in the remaining text
     text = html.escape(text, quote=False)
 
-    # 4. Headings → bold
+    # 5. Headings → bold
     text = re.sub(r"^#{1,6} (.+)$", r"<b>\1</b>", text, flags=re.MULTILINE)
 
     # 5. Bold: **text**
