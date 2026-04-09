@@ -464,13 +464,13 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
                 await edit_msg(f"✅ Модель переключена на {info['label']}\n\nОтправьте запрос ещё раз.")
 
         elif cmd == "buy":
-            from bot.services.freekassa_service import create_payment_url, CREDIT_PACKAGES as FK_PACKAGES
+            from bot.services.lava_service import create_payment_url, CREDIT_PACKAGES as LAVA_PACKAGES
             pack_key = data.get("pack", "")
-            pack = FK_PACKAGES.get(pack_key)
+            pack = LAVA_PACKAGES.get(pack_key)
             if not pack:
                 await edit_msg("Неизвестный пакет.")
                 return
-            result = create_payment_url(uid, pack_key)
+            result = await create_payment_url(uid, pack_key)
             if result["ok"]:
                 await edit_msg(
                     f"💳 Оплата: {pack['label']}\n\n"
