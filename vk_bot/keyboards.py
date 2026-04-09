@@ -156,7 +156,7 @@ def get_chat_cancel_keyboard() -> str:
 
 def get_balance_keyboard() -> str:
     kb = Keyboard(inline=True)
-    kb.add(Callback("💎 30 кредитов — 99₽", payload={"cmd": "buy", "pack": "pack_30"}))
+    kb.add(Callback("💎 30 кредитов — 10₽", payload={"cmd": "buy", "pack": "pack_30"}))
     kb.row()
     kb.add(Callback("💎 100 кредитов — 299₽", payload={"cmd": "buy", "pack": "pack_100"}))
     kb.row()

@@ -211,7 +211,7 @@ def get_settings_summary_keyboard(user_id: int) -> InlineKeyboardMarkup:
 
 def get_balance_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💎 30 кредитов — 99₽", callback_data="buy_pack_30")],
+        [InlineKeyboardButton(text="💎 30 кредитов — 10₽", callback_data="buy_pack_30")],
         [InlineKeyboardButton(text="💎 100 кредитов — 299₽", callback_data="buy_pack_100")],
         [InlineKeyboardButton(text="💎 200 кредитов — 549₽", callback_data="buy_pack_200")],
     ])

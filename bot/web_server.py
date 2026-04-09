@@ -23,7 +23,7 @@ PALLY_SHOP_ID = os.getenv("PALLY_SHOP_ID", "")
 PALLY_TOKEN = os.getenv("PALLY_TOKEN", "")
 
 CREDIT_PACKAGES = {
-    "pack_30": {"credits": 30, "amount": 99.00, "label": "30 кредитов"},
+    "pack_30": {"credits": 30, "amount": 10.00, "label": "30 кредитов"},
     "pack_100": {"credits": 100, "amount": 299.00, "label": "100 кредитов"},
     "pack_200": {"credits": 200, "amount": 549.00, "label": "200 кредитов"},
 }
