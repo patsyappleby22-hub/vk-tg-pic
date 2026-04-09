@@ -334,6 +334,11 @@ async def handle_lava_webhook(request: web.Request) -> web.Response:
                     "Lava credits added: user=%s pack=%s credits=+%d balance=%d",
                     stored["user_id"], stored["pack_key"], pack["credits"], new_balance,
                 )
+                from bot.notify import notify_payment
+                await notify_payment(
+                    stored["user_id"], pack["credits"],
+                    stored["amount"], pack["label"],
+                )
         else:
             if not _db.mark_order_processed_memory(f"lava_{order_id}"):
                 logger.info("Lava duplicate in-memory webhook for %s — skipping", order_id)

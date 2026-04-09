@@ -54,6 +54,10 @@ async def run_telegram(vertex_service):
         token=tg_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
+
+    from bot.notify import set_bot
+    set_bot(bot)
+
     dp = Dispatcher()
     dp.update.outer_middleware(LoggingMiddleware())
     dp.message.middleware(AlbumMiddleware())
