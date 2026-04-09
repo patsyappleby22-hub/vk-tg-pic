@@ -1372,65 +1372,8 @@ async def api_test_log_channel(request: web.Request) -> web.Response:
 async def handle_api_keys(request: web.Request) -> web.Response:
     msg = request.rel_url.query.get("msg", "")
 
-    # Stored keys (from DB)
     stored_keys = _key_store.get_all_keys()
-
-    # Live slot statuses (from running service)
-    slot_map: dict[str, dict] = {}
-    if _vertex_service is not None:
-        for s in _vertex_service.get_slots_status():
-            slot_map[s["label"]] = s
-
-    # Build key rows
-    key_rows = ""
-    for i, key in enumerate(stored_keys):
-        label = f"api_key_{i + 1}"
-        slot = slot_map.get(label)
-        masked = _key_store.mask_key(key)
-
-        if slot is None:
-            # Service not loaded this key yet (added after boot)
-            status_badge = '<span class="badge badge-yellow">⏳ Не загружен</span>'
-            detail = '<span style="color:var(--muted);font-size:.8em">Требуется перезапуск</span>'
-        elif slot["status"] == "auth_error":
-            status_badge = '<span class="badge badge-red">🔴 Ошибка авторизации</span>'
-            msg_short = slot["auth_error_msg"][:80] if slot["auth_error_msg"] else ""
-            detail = f'<span style="color:var(--red);font-size:.78em" title="{msg_short}">Биллинг / ключ отозван</span>'
-        elif slot["status"] == "cooldown":
-            rem = slot["cooldown_remaining"]
-            status_badge = f'<span class="badge badge-yellow">⏳ Кулдаун {rem}с</span>'
-            detail = f'<span style="color:var(--yellow);font-size:.8em">429 — лимит запросов</span>'
-        else:
-            status_badge = '<span class="badge badge-green">🟢 Активен</span>'
-            rf = slot["req_flash"]; qf = slot["qpm_flash"]
-            rp = slot["req_pro"];   qp = slot["qpm_pro"]
-            detail = (
-                f'<span style="color:var(--muted);font-size:.8em">'
-                f'Flash: {rf}/{qf} QPM &nbsp;·&nbsp; Pro: {rp}/{qp} QPM'
-                f'</span>'
-            )
-
-        key_rows += f"""<tr>
-  <td style="font-weight:600;color:var(--muted)">{i+1}</td>
-  <td><code style="font-size:.9em;color:var(--accent)">{masked}</code></td>
-  <td>{status_badge}</td>
-  <td>{detail}</td>
-  <td>
-    <button class="btn btn-sm" style="background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.2)"
-      onclick="deleteKey({i})">🗑 Удалить</button>
-  </td>
-</tr>
-"""
-
-    if not key_rows:
-        key_rows = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:28px">Ключей нет — добавьте первый ниже</td></tr>'
-
-    # Summary stats
     total = len(stored_keys)
-    ok_count = sum(1 for s in slot_map.values() if s["status"] == "ok")
-    err_count = sum(1 for s in slot_map.values() if s["status"] == "auth_error")
-    cool_count = sum(1 for s in slot_map.values() if s["status"] == "cooldown")
-    unloaded = total - len(slot_map)
 
     msg_html = ""
     if msg == "added":
@@ -1442,24 +1385,58 @@ async def handle_api_keys(request: web.Request) -> web.Response:
     elif msg == "empty":
         msg_html = '<div class="alert alert-error">⚠️ Введите непустой ключ.</div>'
 
+    # Build static rows — JS will fill in live status cells
+    key_rows = ""
+    for i, key in enumerate(stored_keys):
+        masked = _key_store.mask_key(key)
+        key_rows += f"""<tr id="key-row-{i}">
+  <td style="font-weight:600;color:var(--muted);width:36px">{i+1}</td>
+  <td><code style="font-size:.88em;color:var(--accent)">{masked}</code></td>
+  <td id="st-{i}"><span class="badge badge-yellow" style="opacity:.5">…</span></td>
+  <td id="act-{i}" style="font-size:.82em;color:var(--muted)">—</td>
+  <td id="load-{i}" style="font-size:.82em;color:var(--muted)">—</td>
+  <td id="stat-{i}" style="font-size:.82em;color:var(--muted)">—</td>
+  <td>
+    <button class="btn btn-sm" style="background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.2);white-space:nowrap"
+      onclick="deleteKey({i})">🗑 Удалить</button>
+  </td>
+</tr>
+"""
+
+    if not key_rows:
+        key_rows = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:28px">Ключей нет — добавьте первый ниже</td></tr>'
+
     content = f"""
-<h1 class="page-title">🔑 API ключи</h1>
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+  <h1 class="page-title" style="margin:0">🔑 API ключи</h1>
+  <div style="display:flex;align-items:center;gap:8px">
+    <span id="live-dot" style="width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block"></span>
+    <span id="live-label" style="font-size:.8em;color:var(--muted)">подключение…</span>
+  </div>
+</div>
 {msg_html}
 
-<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));margin-bottom:24px">
+<!-- Summary cards — updated by JS -->
+<div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr));margin-bottom:24px">
   <div class="card"><div class="card-label">Всего ключей</div><div class="card-value purple">{total}</div></div>
-  <div class="card"><div class="card-label">Активных</div><div class="card-value green">{ok_count}</div></div>
-  <div class="card"><div class="card-label">Ошибка авт.</div><div class="card-value red">{err_count}</div></div>
-  <div class="card"><div class="card-label">Кулдаун</div><div class="card-value yellow">{cool_count}</div></div>
-  <div class="card"><div class="card-label">Не загружены</div><div class="card-value" style="color:var(--muted)">{unloaded}</div></div>
+  <div class="card"><div class="card-label">🟢 Активны</div><div class="card-value green" id="cnt-ok">—</div></div>
+  <div class="card"><div class="card-label">⚡ В работе</div><div class="card-value" style="color:var(--accent2)" id="cnt-active">—</div></div>
+  <div class="card"><div class="card-label">⏳ Кулдаун</div><div class="card-value yellow" id="cnt-cool">—</div></div>
+  <div class="card"><div class="card-label">🔴 Ошибка</div><div class="card-value red" id="cnt-err">—</div></div>
 </div>
 
 <div class="table-wrap" style="margin-bottom:24px">
 <table>
   <thead><tr>
-    <th>#</th><th>Ключ (маска)</th><th>Статус</th><th>Нагрузка (60с окно)</th><th>Действие</th>
+    <th>#</th>
+    <th>Ключ</th>
+    <th>Статус</th>
+    <th>В работе</th>
+    <th>Нагрузка (60с)</th>
+    <th>Всего ok/err</th>
+    <th>Действие</th>
   </tr></thead>
-  <tbody>{key_rows}</tbody>
+  <tbody id="keys-tbody">{key_rows}</tbody>
 </table>
 </div>
 
@@ -1472,17 +1449,115 @@ async def handle_api_keys(request: web.Request) -> web.Response:
     <button class="btn btn-primary" onclick="addKey()" style="white-space:nowrap">Добавить ключ</button>
   </div>
   <p style="color:var(--muted);font-size:.78em;margin-top:10px">
-    Ключ хранится в БД. После добавления/удаления нужен <b>перезапуск сервиса</b>, чтобы изменения вступили в силу.
-    После перезапуска статусы обновятся автоматически.
+    Ключ хранится в БД. После добавления/удаления нужен <b>перезапуск сервиса</b> чтобы изменения вступили в силу.
   </p>
-  <p style="color:var(--red);font-size:.78em;margin-top:6px">
-    🔴 <b>Ошибка авторизации</b> — ключ заблокирован, биллинг отключён или нет доступа к Vertex AI.<br>
-    ⏳ <b>Кулдаун</b> — ключ получил 429 (лимит), временно приостановлен на 60с.<br>
-    ⏳ <b>Не загружен</b> — ключ добавлен после старта, требуется перезапуск.
+  <p style="color:var(--muted);font-size:.78em;margin-top:6px;line-height:1.6">
+    ⚡ <b>В работе</b> — прямо сейчас обрабатывает запрос(ы)<br>
+    🟢 <b>Активен</b> — готов принимать запросы<br>
+    ⏳ <b>Кулдаун</b> — получил 429, ждёт 60с<br>
+    🔴 <b>Ошибка авт.</b> — биллинг отключён или ключ отозван
   </p>
 </div>
 
 <script>
+const TOTAL_KEYS = {total};
+
+function fmtAgo(sec) {{
+  if (sec === null || sec === undefined) return '—';
+  if (sec < 5) return 'только что';
+  if (sec < 60) return sec + 'с назад';
+  return Math.floor(sec/60) + 'м назад';
+}}
+
+function modelShort(m) {{
+  if (!m) return '';
+  if (m.includes('flash-image')) return 'Flash🖼';
+  if (m.includes('pro-image'))   return 'Pro🖼';
+  if (m.includes('pro-preview')) return 'Pro💬';
+  if (m.includes('flash'))       return 'Flash💬';
+  return m.split('-').slice(-2).join('-');
+}}
+
+function statusBadge(s, cd) {{
+  if (s === 'active')     return '<span class="badge badge-blue" style="animation:pulse 1s infinite">⚡ В работе</span>';
+  if (s === 'auth_error') return '<span class="badge badge-red">🔴 Ошибка авт.</span>';
+  if (s === 'cooldown')   return `<span class="badge badge-yellow">⏳ Кулдаун ${{cd}}с</span>`;
+  return '<span class="badge badge-green">🟢 Активен</span>';
+}}
+
+async function poll() {{
+  try {{
+    const r = await fetch('/admin/api/keys/status');
+    if (!r.ok) throw new Error(r.status);
+    const data = await r.json();
+
+    // Update live indicator
+    document.getElementById('live-dot').style.background = 'var(--green)';
+    document.getElementById('live-label').textContent = 'live';
+
+    const slots = data.slots || [];
+    let cntOk=0, cntActive=0, cntCool=0, cntErr=0;
+
+    slots.forEach((s, i) => {{
+      if (s.status === 'ok')         cntOk++;
+      if (s.status === 'active')     cntActive++;
+      if (s.status === 'cooldown')   cntCool++;
+      if (s.status === 'auth_error') cntErr++;
+
+      const st   = document.getElementById('st-'   + i);
+      const act  = document.getElementById('act-'  + i);
+      const load = document.getElementById('load-' + i);
+      const stat = document.getElementById('stat-' + i);
+      if (!st) return;
+
+      st.innerHTML   = statusBadge(s.status, s.cooldown_remaining);
+
+      // Active requests cell
+      if (s.active_requests > 0) {{
+        const model = modelShort(s.last_model);
+        act.innerHTML = `<span style="color:var(--accent2);font-weight:600">⚡ ${{s.active_requests}} шт</span>`
+                      + (model ? ` <span style="color:var(--muted)">[${{model}}]</span>` : '');
+      }} else {{
+        const ago = fmtAgo(s.last_used_ago);
+        const model = modelShort(s.last_model);
+        act.innerHTML = s.last_used_ago !== null
+          ? `<span style="color:var(--muted)">${{ago}}</span>` + (model ? ` <span style="opacity:.6">[${{model}}]</span>` : '')
+          : '<span style="color:var(--muted)">не использовался</span>';
+      }}
+
+      // Load cell — QPM usage bars
+      const rf=s.req_flash, qf=s.qpm_flash, rp=s.req_pro, qp=s.qpm_pro;
+      const pctF = Math.round(rf/qf*100), pctP = Math.round(rp/qp*100);
+      const barF = `<div style="display:inline-block;width:36px;height:6px;border-radius:3px;background:rgba(255,255,255,.1);vertical-align:middle">
+        <div style="width:${{Math.min(pctF,100)}}%;height:100%;border-radius:3px;background:${{pctF>80?'var(--yellow)':'var(--accent2)'}}"></div></div>`;
+      const barP = `<div style="display:inline-block;width:36px;height:6px;border-radius:3px;background:rgba(255,255,255,.1);vertical-align:middle">
+        <div style="width:${{Math.min(pctP,100)}}%;height:100%;border-radius:3px;background:${{pctP>80?'var(--yellow)':'var(--green)'}}"></div></div>`;
+      load.innerHTML = `Flash: ${{rf}}/${{qf}} ${{barF}} &nbsp; Pro: ${{rp}}/${{qp}} ${{barP}}`;
+
+      // Total stats
+      const ok_ = s.total_ok, err_ = s.total_err;
+      stat.innerHTML = `<span style="color:var(--green)">✓${{ok_}}</span> / <span style="color:var(--red)">✗${{err_}}</span>`;
+    }});
+
+    document.getElementById('cnt-ok').textContent     = cntOk;
+    document.getElementById('cnt-active').textContent  = cntActive;
+    document.getElementById('cnt-cool').textContent   = cntCool;
+    document.getElementById('cnt-err').textContent    = cntErr;
+
+  }} catch(e) {{
+    document.getElementById('live-dot').style.background  = 'var(--red)';
+    document.getElementById('live-label').textContent = 'нет связи';
+  }}
+}}
+
+// Add pulse animation
+const style = document.createElement('style');
+style.textContent = '@keyframes pulse {{ 0%,100%{{opacity:1}} 50%{{opacity:.4}} }}';
+document.head.appendChild(style);
+
+poll();
+setInterval(poll, 2000);
+
 async function addKey() {{
   const val = document.getElementById('new-key-input').value.trim();
   if (!val) return;
@@ -1494,18 +1569,38 @@ async function addKey() {{
 }}
 
 async function deleteKey(idx) {{
-  if (!confirm('Удалить ключ #' + (idx+1) + '? После этого нужен перезапуск.')) return;
+  if (!confirm('Удалить ключ #' + (idx+1) + '?\\nПосле удаления нужен перезапуск сервиса.')) return;
   const r = await fetch('/admin/api/keys/delete', {{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{index:idx}})}});
   const d = await r.json();
   if (d.ok) location.href = '/admin/api-keys?msg=deleted';
   else alert('Ошибка: ' + (d.error || 'неизвестная'));
 }}
-
-// Auto-refresh page every 15s to update cooldown timers
-setTimeout(() => location.reload(), 15000);
 </script>
 """
     return web.Response(text=_layout("API ключи", content, "apikeys"), content_type="text/html")
+
+
+@_api_require_auth
+async def api_keys_status(request: web.Request) -> web.Response:
+    """Return live slot statuses as JSON — polled by the admin page every 2s."""
+    if _vertex_service is None:
+        return web.Response(
+            text=json.dumps({"slots": [], "no_service": True}),
+            content_type="application/json",
+        )
+    try:
+        slots = _vertex_service.get_slots_status()
+        return web.Response(
+            text=json.dumps({"slots": slots, "no_service": False}),
+            content_type="application/json",
+        )
+    except Exception as e:
+        logger.exception("api_keys_status error")
+        return web.Response(
+            text=json.dumps({"slots": [], "error": str(e)}),
+            content_type="application/json",
+            status=500,
+        )
 
 
 @_api_require_auth
@@ -1557,6 +1652,7 @@ def register_admin_routes(app: web.Application) -> None:
     app.router.add_post("/admin/api/users/{uid}/reset_gens", api_reset_gens)
     app.router.add_post("/admin/api/users/{uid}/delete",     api_delete)
     app.router.add_post("/admin/api/test-log-channel",       api_test_log_channel)
+    app.router.add_get("/admin/api/keys/status",             api_keys_status)
     app.router.add_post("/admin/api/keys/add",               api_keys_add)
     app.router.add_post("/admin/api/keys/delete",            api_keys_delete)
     app.router.add_get("/admin/tg-photo/{file_unique_id}",   handle_tg_photo)
