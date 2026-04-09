@@ -175,15 +175,7 @@ async def start_chat(message: Message) -> None:
     uid = message.from_user.id
     _sessions[uid] = []
     await message.answer(
-        "💬 <b>Режим «Чат»</b> — <i>gemini-3.1-pro-preview</i>\n\n"
-        "Принимаю любые типы данных:\n"
-        "• Текст и вопросы\n"
-        "• Изображения\n"
-        "• Голосовые сообщения и аудио\n"
-        "• Видео и видео-кружки\n"
-        "• Документы (PDF, текст)\n"
-        "• Стикеры\n\n"
-        "<i>Для выхода — ⛔ Стоп</i>",
+        "💬 <b>Чат</b> — принимаю любые данные. Для выхода — ⛔ Стоп",
         parse_mode="HTML",
     )
 

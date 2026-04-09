@@ -328,9 +328,7 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
         uid = message.from_id
         _chat_sessions[uid] = []
         await message.answer(
-            "💬 Режим «Чат» — gemini-3.1-pro-preview\n\n"
-            "Принимаю: текст, фото, голосовые, аудио, документы (PDF/текст).\n\n"
-            "Для выхода нажмите ⛔ Стоп",
+            "💬 Чат — принимаю любые данные. Для выхода нажмите ⛔ Стоп",
             keyboard=get_chat_cancel_keyboard(),
         )
 
