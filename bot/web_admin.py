@@ -495,7 +495,14 @@ async def handle_admin_root(request: web.Request) -> web.Response:
 
 @_require_auth
 async def handle_dashboard(request: web.Request) -> web.Response:
-    users = list(_users.values())
+    # Always read fresh data from DB for accurate stats
+    if _db.is_available():
+        fresh_users = _db.load_all_users()
+        users = list(fresh_users.values())
+        uid_map = {uid: u.get("first_name", str(uid)) for uid, u in fresh_users.items()}
+    else:
+        users = list(_users.values())
+        uid_map = {uid: u.get("first_name", str(uid)) for uid, u in _users.items()}
     total_users = len(users)
     blocked_users = sum(1 for u in users if u.get("blocked"))
     tg_users = sum(1 for u in users if u.get("platform") == "tg")
@@ -508,7 +515,6 @@ async def handle_dashboard(request: web.Request) -> web.Response:
     paid_count = pstats.get("success_count", 0)
 
     recent_payments = _db.get_all_payments(limit=10)
-    uid_map = {uid: u.get("first_name", str(uid)) for uid, u in _users.items()}
 
     payments_rows = ""
     for p in recent_payments:
@@ -600,7 +606,12 @@ async def handle_users(request: web.Request) -> web.Response:
     filter_blocked = request.rel_url.query.get("blocked", "")
     filter_platform = request.rel_url.query.get("platform", "")
 
-    users_list = [(uid, u) for uid, u in _users.items()]
+    # Always read fresh data from DB so list is always accurate
+    if _db.is_available():
+        db_users = _db.load_all_users()
+        users_list = [(uid, u) for uid, u in db_users.items()]
+    else:
+        users_list = [(uid, u) for uid, u in _users.items()]
 
     if q:
         users_list = [
@@ -846,13 +857,25 @@ async def handle_user_detail(request: web.Request) -> web.Response:
         raise web.HTTPNotFound()
 
     msg = request.rel_url.query.get("msg", "")
-    if uid not in _users:
-        raise web.HTTPNotFound()
 
     try:
-        u = get_user_settings(uid)
+        # Always load fresh data from DB for accurate profile display
+        if _db.is_available():
+            db_data = _db.load_one_user(uid)
+            if db_data is None:
+                raise web.HTTPNotFound()
+            # Merge DB data over in-memory defaults so we always have all keys
+            u = {**get_user_settings(uid), **db_data}
+            # Sync in-memory dict with fresh DB data
+            get_user_settings(uid).update(db_data)
+        else:
+            u = get_user_settings(uid)
+            if uid not in _users:
+                raise web.HTTPNotFound()
         payments = _db.get_user_payments(uid)
         image_logs = _db.get_user_image_logs(uid, limit=60)
+    except web.HTTPNotFound:
+        raise
     except Exception as exc:
         logger.error("handle_user_detail db error uid=%s: %s", uid, exc)
         err_content = f'<div class="alert alert-error">Ошибка загрузки данных пользователя: {exc}</div><a href="/admin/users">← Назад</a>'
