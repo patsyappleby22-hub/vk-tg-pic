@@ -175,7 +175,7 @@ _THINKING_FRAMES = ["💭 Думаю.", "💭 Думаю..", "💭 Думаю...
 
 
 async def _animate_thinking(msg: Any, stop: asyncio.Event) -> None:
-    i = 0
+    i = 1
     while not stop.is_set():
         await asyncio.sleep(0.8)
         if stop.is_set():
@@ -183,7 +183,7 @@ async def _animate_thinking(msg: Any, stop: asyncio.Event) -> None:
         try:
             await msg.edit_text(_THINKING_FRAMES[i % 3])
         except Exception:
-            break
+            pass
         i += 1
 
 

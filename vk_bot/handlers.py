@@ -516,7 +516,7 @@ _THINKING_FRAMES = ["💭 Думаю.", "💭 Думаю..", "💭 Думаю...
 async def _animate_thinking_vk(
     bot: Bot, peer_id: int, message_id: int, stop: asyncio.Event
 ) -> None:
-    i = 0
+    i = 1
     while not stop.is_set():
         await asyncio.sleep(0.8)
         if stop.is_set():
@@ -528,7 +528,7 @@ async def _animate_thinking_vk(
                 message=_THINKING_FRAMES[i % 3],
             )
         except Exception:
-            break
+            pass
         i += 1
 
 
