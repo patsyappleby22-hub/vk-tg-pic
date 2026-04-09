@@ -371,6 +371,17 @@ async def handle_lava_webhook(request: web.Request) -> web.Response:
 
 
 @web.middleware
+async def _no_cache_middleware(request: web.Request, handler) -> web.Response:
+    """Add Cache-Control: no-store to all /admin/* responses so CDN never caches them."""
+    response = await handler(request)
+    if request.path.startswith("/admin"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
+
+@web.middleware
 async def _error_middleware(request: web.Request, handler) -> web.Response:
     """Global safety net: catch any unhandled exception so the server never crashes."""
     try:
@@ -386,7 +397,7 @@ async def _error_middleware(request: web.Request, handler) -> web.Response:
 
 
 def create_web_app() -> web.Application:
-    app = web.Application(middlewares=[_error_middleware])
+    app = web.Application(middlewares=[_no_cache_middleware, _error_middleware])
     app.router.add_get("/", handle_index)
     app.router.add_get("/shop-verification-WG76VJD7xl.txt", handle_verification)
     app.router.add_get("/payment/success", handle_success)
