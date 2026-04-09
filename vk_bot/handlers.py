@@ -510,6 +510,25 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
         await _generate_and_send(bot, vertex_service, uid, peer_id, text)
 
 
+def _strip_md(text: str) -> str:
+    """Strip Markdown formatting for plain-text VK messages."""
+    # Code blocks → keep content only
+    text = re.sub(r"```(?:[^\n`]*)?\n?(.*?)```", lambda m: m.group(1).strip(), text, flags=re.DOTALL)
+    # Inline code → keep content
+    text = re.sub(r"`([^`\n]+)`", r"\1", text)
+    # Headings
+    text = re.sub(r"^#{1,6} ", "", text, flags=re.MULTILINE)
+    # Bold **text** or __text__
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text, flags=re.DOTALL)
+    text = re.sub(r"__(.+?)__", r"\1", text, flags=re.DOTALL)
+    # Italic *text* or _text_
+    text = re.sub(r"\*([^*\n]+?)\*", r"\1", text)
+    text = re.sub(r"_([^_\n]+?)_", r"\1", text)
+    # Bullet points * item / - item → • item
+    text = re.sub(r"^[*\-] ", "• ", text, flags=re.MULTILINE)
+    return text.strip()
+
+
 _THINKING_FRAMES = ["💭 Думаю.", "💭 Думаю..", "💭 Думаю..."]
 
 
@@ -626,18 +645,27 @@ async def _handle_vk_chat_message(
         if len(history) > 42:
             _chat_sessions[uid] = history[:2] + history[-40:]
 
-        reply = response[:4096]
+        cleaned = _strip_md(response)
+        vk_chunks: list[str] = []
+        tmp = cleaned
+        while len(tmp) > 4096:
+            split_at = tmp.rfind("\n", 0, 4096)
+            if split_at <= 0:
+                split_at = 4096
+            vk_chunks.append(tmp[:split_at].rstrip())
+            tmp = tmp[split_at:].lstrip()
+        vk_chunks.append(tmp)
+
         await bot.api.messages.edit(
             peer_id=peer_id, message_id=thinking_id,
-            message=reply,
+            message=vk_chunks[0],
             keyboard=get_chat_cancel_keyboard(),
         )
-        if len(response) > 4096:
-            for i in range(4096, len(response), 4096):
-                await bot.api.messages.send(
-                    peer_id=peer_id, random_id=0,
-                    message=response[i:i + 4096],
-                )
+        for chunk in vk_chunks[1:]:
+            await bot.api.messages.send(
+                peer_id=peer_id, random_id=0,
+                message=chunk,
+            )
 
     except Exception as exc:
         stop_event.set()

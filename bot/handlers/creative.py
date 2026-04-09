@@ -8,8 +8,10 @@ Accepts text, images, voice, audio, video, video notes, documents (PDF/text), st
 from __future__ import annotations
 
 import asyncio
+import html
 import io
 import logging
+import re
 from typing import Any
 
 from aiogram import Bot, Router
@@ -23,6 +25,71 @@ logger = logging.getLogger(__name__)
 router = Router(name="creative")
 
 _sessions: dict[int, list[dict[str, Any]]] = {}
+
+
+def _md_to_tg_html(text: str) -> str:
+    """Convert Gemini Markdown output to Telegram HTML."""
+    # 1. Save and protect triple-backtick code blocks
+    code_blocks: list[str] = []
+
+    def _save_code(m: re.Match) -> str:
+        content = html.escape(m.group(1) if m.group(1) else "")
+        code_blocks.append(f"<pre>{content}</pre>")
+        return f"\x00CB{len(code_blocks) - 1}\x00"
+
+    text = re.sub(r"```(?:[^\n`]*)?\n?(.*?)```", _save_code, text, flags=re.DOTALL)
+
+    # 2. Save inline code
+    inline_codes: list[str] = []
+
+    def _save_inline(m: re.Match) -> str:
+        content = html.escape(m.group(1))
+        inline_codes.append(f"<code>{content}</code>")
+        return f"\x00IC{len(inline_codes) - 1}\x00"
+
+    text = re.sub(r"`([^`\n]+)`", _save_inline, text)
+
+    # 3. Escape HTML in the remaining text
+    text = html.escape(text, quote=False)
+
+    # 4. Headings → bold
+    text = re.sub(r"^#{1,6} (.+)$", r"<b>\1</b>", text, flags=re.MULTILINE)
+
+    # 5. Bold: **text**
+    text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text, flags=re.DOTALL)
+    text = re.sub(r"__(.+?)__", r"<b>\1</b>", text, flags=re.DOTALL)
+
+    # 6. Italic: *text* or _text_ (single asterisk/underscore)
+    text = re.sub(r"\*([^*\n]+?)\*", r"<i>\1</i>", text)
+    text = re.sub(r"_([^_\n]+?)_", r"<i>\1</i>", text)
+
+    # 7. Bullet points at line start (* item  or  - item)
+    text = re.sub(r"^[*\-] ", "• ", text, flags=re.MULTILINE)
+
+    # 8. Restore code blocks
+    for i, block in enumerate(code_blocks):
+        text = text.replace(f"\x00CB{i}\x00", block)
+    for i, block in enumerate(inline_codes):
+        text = text.replace(f"\x00IC{i}\x00", block)
+
+    return text.strip()
+
+
+def _split_html(text: str, limit: int = 4096) -> list[str]:
+    """Split text into chunks ≤ limit chars, breaking at newlines when possible."""
+    if len(text) <= limit:
+        return [text]
+    chunks: list[str] = []
+    while len(text) > limit:
+        split_at = text.rfind("\n", 0, limit)
+        if split_at <= 0:
+            split_at = limit
+        chunks.append(text[:split_at].rstrip())
+        text = text[split_at:].lstrip()
+    if text:
+        chunks.append(text)
+    return chunks
+
 
 _SUPPORTED_IMAGE_MIMES = {"image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"}
 _SUPPORTED_AUDIO_MIMES = {
@@ -245,22 +312,19 @@ async def chat_message(message: Message, vertex_service: VertexAIService) -> Non
         if len(_sessions[uid]) > 42:
             _sessions[uid] = _sessions[uid][:2] + _sessions[uid][-40:]
 
-        if len(response) <= 4096:
+        formatted = _md_to_tg_html(response)
+        chunks = _split_html(formatted, 4096)
+
+        try:
+            await thinking_msg.edit_text(chunks[0], parse_mode="HTML")
+        except TelegramBadRequest:
+            await thinking_msg.edit_text(chunks[0], parse_mode=None)
+
+        for chunk in chunks[1:]:
             try:
-                await thinking_msg.edit_text(response)
+                await message.answer(chunk, parse_mode="HTML")
             except TelegramBadRequest:
-                await thinking_msg.edit_text(response, parse_mode=None)
-        else:
-            try:
-                await thinking_msg.edit_text(response[:4096])
-            except TelegramBadRequest:
-                await thinking_msg.edit_text(response[:4096], parse_mode=None)
-            for i in range(4096, len(response), 4096):
-                chunk = response[i:i + 4096]
-                try:
-                    await message.answer(chunk)
-                except TelegramBadRequest:
-                    await message.answer(chunk, parse_mode=None)
+                await message.answer(chunk, parse_mode=None)
 
     except Exception as exc:
         stop_event.set()
