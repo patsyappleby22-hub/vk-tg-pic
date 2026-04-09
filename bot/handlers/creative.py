@@ -45,14 +45,6 @@ _MIME_ALIASES: dict[str, str] = {
     "video/x-mp4": "video/mp4",
 }
 
-_SYSTEM_CONTEXT = (
-    "Ты — умный многофункциональный ИИ-ассистент. "
-    "Отвечай на русском языке, если пользователь пишет по-русски, "
-    "иначе используй язык пользователя. "
-    "Ты понимаешь текст, изображения, аудио, видео и документы. "
-    "Отвечай развёрнуто и полезно."
-)
-
 
 def _is_in_session(user_id: int) -> bool:
     return user_id in _sessions
@@ -181,16 +173,7 @@ def _build_api_contents(history: list[dict[str, Any]]) -> list[Any]:
 @router.message(lambda m: m.text == BTN_CHAT)
 async def start_chat(message: Message) -> None:
     uid = message.from_user.id
-    _sessions[uid] = [
-        {
-            "role": "user",
-            "parts": [{"type": "text", "text": _SYSTEM_CONTEXT}],
-        },
-        {
-            "role": "model",
-            "parts": [{"type": "text", "text": "Привет! Готов общаться. Отправьте текст, изображение, аудио, видео или документ."}],
-        },
-    ]
+    _sessions[uid] = []
     await message.answer(
         "💬 <b>Режим «Чат»</b> — <i>gemini-3.1-pro-preview</i>\n\n"
         "Принимаю любые типы данных:\n"

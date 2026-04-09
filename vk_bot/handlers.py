@@ -151,13 +151,6 @@ def _upscale_image(image_bytes: bytes, max_side: int) -> bytes:
     return buf.getvalue()
 
 
-_CHAT_SYSTEM_CONTEXT = (
-    "Ты — умный многофункциональный ИИ-ассистент. "
-    "Отвечай на русском языке, если пользователь пишет по-русски, "
-    "иначе используй язык пользователя. "
-    "Ты понимаешь текст, изображения, аудио и документы. "
-    "Отвечай развёрнуто и полезно."
-)
 
 _SUPPORTED_IMAGE_MIMES = {"image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"}
 _SUPPORTED_AUDIO_MIMES = {
@@ -333,10 +326,7 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
     @bot.on.message(text=list(CHAT_TEXTS))
     async def cmd_chat(message: Message):
         uid = message.from_id
-        _chat_sessions[uid] = [
-            {"role": "user", "parts": [{"type": "text", "text": _CHAT_SYSTEM_CONTEXT}]},
-            {"role": "model", "parts": [{"type": "text", "text": "Привет! Готов общаться. Отправьте текст, изображение, аудио или документ."}]},
-        ]
+        _chat_sessions[uid] = []
         await message.answer(
             "💬 Режим «Чат» — gemini-3.1-pro-preview\n\n"
             "Принимаю: текст, фото, голосовые, аудио, документы (PDF/текст).\n\n"
