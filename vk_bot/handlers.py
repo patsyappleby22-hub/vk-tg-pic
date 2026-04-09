@@ -26,7 +26,6 @@ from vk_bot.keyboards import (
     get_persistent_keyboard,
     get_settings_keyboard,
     get_switch_model_keyboard,
-    get_chat_cancel_keyboard,
     get_balance_keyboard,
 )
 from vk_bot.photo_upload import upload_photo_to_vk, upload_document_to_vk, download_vk_photo
@@ -336,7 +335,6 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
             "📎 Разбираю PDF и файлы\n"
             "🎯 Решаю задачи, объясняю, генерирую идеи\n\n"
             "Для выхода — ⛔ Стоп",
-            keyboard=get_chat_cancel_keyboard(),
         )
 
     @bot.on.raw_event(GroupEventType.MESSAGE_EVENT, dataclass=dict)
@@ -717,7 +715,6 @@ async def _handle_vk_chat_message(
         await bot.api.messages.edit(
             peer_id=peer_id, message_id=thinking_id,
             message=vk_chunks[0],
-            keyboard=get_chat_cancel_keyboard(),
         )
         for chunk in vk_chunks[1:]:
             await bot.api.messages.send(
