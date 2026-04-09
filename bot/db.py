@@ -13,21 +13,42 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 _DATABASE_URL: str | None = os.environ.get("DATABASE_URL", "").strip() or None
-_conn = None
+
+# Thread-local storage: each thread (main asyncio thread, VK bot thread, etc.)
+# gets its own psycopg2 connection — psycopg2 connections are NOT thread-safe.
+_local = threading.local()
+
+# Global lock for write operations that touch many rows (save_all_users)
+_write_lock = threading.Lock()
 
 
 def _get_conn():
-    global _conn
-    if _conn is None or _conn.closed:
+    """Return a psycopg2 connection for the current thread."""
+    conn = getattr(_local, "conn", None)
+    if conn is None or conn.closed:
         import psycopg2
-        _conn = psycopg2.connect(_DATABASE_URL)
-        _conn.autocommit = True
-    return _conn
+        conn = psycopg2.connect(_DATABASE_URL)
+        conn.autocommit = True
+        _local.conn = conn
+        logger.debug("db: opened new connection for thread '%s'", threading.current_thread().name)
+    return conn
+
+
+def _close_conn() -> None:
+    """Close the current thread's connection (call on thread exit)."""
+    conn = getattr(_local, "conn", None)
+    if conn and not conn.closed:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    _local.conn = None
 
 
 def is_available() -> bool:
@@ -114,18 +135,36 @@ def save_all_users(snapshot: dict[int, dict[str, Any]]) -> None:
     """Upsert all users in one transaction."""
     if not _DATABASE_URL:
         return
-    try:
-        conn = _get_conn()
-        with conn.cursor() as cur:
-            for uid, data in snapshot.items():
+    with _write_lock:
+        try:
+            conn = _get_conn()
+            with conn.cursor() as cur:
+                for uid, data in snapshot.items():
+                    cur.execute("""
+                        INSERT INTO bot_user_settings (user_id, data)
+                        VALUES (%s, %s)
+                        ON CONFLICT (user_id) DO UPDATE SET data = EXCLUDED.data
+                    """, (uid, json.dumps(data, ensure_ascii=False)))
+            logger.info("db: saved %d users to PostgreSQL", len(snapshot))
+        except Exception:
+            logger.exception("db: failed to save users")
+
+
+def save_one_user(user_id: int, data: dict[str, Any]) -> None:
+    """Upsert a single user — faster than save_all_users."""
+    if not _DATABASE_URL:
+        return
+    with _write_lock:
+        try:
+            conn = _get_conn()
+            with conn.cursor() as cur:
                 cur.execute("""
                     INSERT INTO bot_user_settings (user_id, data)
                     VALUES (%s, %s)
                     ON CONFLICT (user_id) DO UPDATE SET data = EXCLUDED.data
-                """, (uid, json.dumps(data, ensure_ascii=False)))
-        logger.info("db: saved %d users to PostgreSQL", len(snapshot))
-    except Exception:
-        logger.exception("db: failed to save users")
+                """, (user_id, json.dumps(data, ensure_ascii=False)))
+        except Exception:
+            logger.exception("db: failed to save user %s", user_id)
 
 
 # ── API keys ───────────────────────────────────────────────────────────────────
