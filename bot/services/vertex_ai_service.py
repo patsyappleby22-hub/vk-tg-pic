@@ -151,6 +151,8 @@ class _BaseSlot:
         self.index = index
         self.client: Any = None
         self.cooldown_until: float = 0.0
+        self.auth_error: bool = False
+        self.auth_error_msg: str = ""
         # Per-model sliding-window: { model_name: [timestamps] }
         # Each model has an independent quota on the same API key.
         self._model_request_times: dict[str, list[float]] = {}
@@ -340,6 +342,36 @@ class VertexAIService:
     def key_count(self) -> int:
         return len(self._slots)
 
+    def get_slots_status(self) -> list[dict]:
+        """Return status info for each credential slot (for admin panel display)."""
+        from bot import api_keys_store
+        now = time.monotonic()
+        result = []
+        for slot in self._slots:
+            remaining = max(0.0, slot.cooldown_until - now)
+            if slot.auth_error:
+                status = "auth_error"
+            elif remaining > 0:
+                status = "cooldown"
+            else:
+                status = "ok"
+            key_masked = api_keys_store.mask_key(slot._api_key) if isinstance(slot, _ApiKeySlot) else None
+            sa_name = slot.sa_path.stem if isinstance(slot, _CredSlot) else None
+            result.append({
+                "label": slot.label,
+                "key_masked": key_masked,
+                "sa_name": sa_name,
+                "type": "api_key" if isinstance(slot, _ApiKeySlot) else "service_account",
+                "status": status,
+                "cooldown_remaining": int(remaining),
+                "auth_error_msg": slot.auth_error_msg,
+                "req_flash": slot.requests_in_window("flash-image"),
+                "req_pro": slot.requests_in_window("pro-image"),
+                "qpm_flash": _qpm_for_model("flash-image"),
+                "qpm_pro": _qpm_for_model("pro-image"),
+            })
+        return result
+
     def _get_next_available_slot(self, model: str) -> _BaseSlot | None:
         """Return the ready slot with the most remaining capacity for model.
 
@@ -429,6 +461,8 @@ class VertexAIService:
                         continue
                     if _is_auth_error(exc):
                         slot.reset_client()
+                        slot.auth_error = True
+                        slot.auth_error_msg = str(exc)[:120]
                         logger.warning(
                             "Slot '%s' auth error, key invalid — skipping: %s",
                             slot.label, exc,
