@@ -545,38 +545,65 @@ class VertexAIService:
     CHAT_MODEL = "gemini-3.1-pro-preview"
 
     async def chat_text(self, contents: list[Any]) -> str:
-        n = len(self._slots)
-        tried_keys: set[int] = set()
+        """Send a chat request with the same key-rotation and wait logic as image generation."""
+        model = self.CHAT_MODEL
+        deadline = time.monotonic() + 300  # 5-minute absolute deadline
 
-        while len(tried_keys) < n:
+        while time.monotonic() < deadline:
             async with self._lock:
-                slot = self._get_next_available_slot(self.CHAT_MODEL)
+                slot = self._get_next_available_slot(model)
 
-            if slot is None:
-                break
-            if slot.index in tried_keys:
-                break
-            tried_keys.add(slot.index)
-
-            try:
-                loop = asyncio.get_running_loop()
-                return await loop.run_in_executor(
-                    None, self._sync_chat, slot, contents
+            if slot is not None:
+                slot.record_request(model)
+                try:
+                    logger.info(
+                        "Chat: trying '%s' [%d/%d used for %s]",
+                        slot.label,
+                        slot.requests_in_window(model),
+                        _qpm_for_model(model),
+                        model,
+                    )
+                    loop = asyncio.get_running_loop()
+                    return await loop.run_in_executor(
+                        None, self._sync_chat, slot, contents
+                    )
+                except Exception as exc:
+                    logger.error("Chat: slot '%s' error: %s", slot.label, repr(exc))
+                    if _is_retryable(exc):
+                        slot.mark_rate_limited()
+                        logger.warning(
+                            "Chat: slot '%s' returned 429 — 60s cooldown, rotating...",
+                            slot.label,
+                        )
+                        continue
+                    if _is_auth_error(exc):
+                        slot.reset_client()
+                        logger.warning(
+                            "Chat: slot '%s' auth error, key invalid — skipping: %s",
+                            slot.label, exc,
+                        )
+                        continue
+                    if _is_model_error(exc):
+                        logger.warning(
+                            "Chat: slot '%s' returned 400, model issue — skipping",
+                            slot.label,
+                        )
+                        continue
+                    raise GenerationError(str(exc)) from exc
+            else:
+                # All slots busy — wait for the soonest one to become ready
+                earliest = self._earliest_ready_at(model)
+                now = time.monotonic()
+                wait = max(0.1, earliest - now)
+                if now + wait > deadline:
+                    break
+                logger.info(
+                    "Chat: all %d slot(s) at capacity for %s; waiting %.1fs...",
+                    len(self._slots), model, wait,
                 )
-            except Exception as exc:
-                if _is_retryable(exc):
-                    slot.mark_rate_limited()
-                    logger.warning("Chat: slot '%s' returned 429, rotating...", slot.label)
-                    continue
-                if _is_auth_error(exc):
-                    slot.reset_client()
-                    logger.warning("Chat: slot '%s' auth error, key invalid — skipping: %s", slot.label, exc)
-                    continue
-                if _is_model_error(exc):
-                    logger.warning("Chat: slot '%s' returned 400, model issue — skipping", slot.label)
-                    continue
-                raise GenerationError(str(exc)) from exc
+                await asyncio.sleep(wait + 0.1)
 
+        logger.error("Chat: deadline reached — all slots busy for %s", model)
         raise QuotaExceededError()
 
     def _sync_chat(self, slot: _BaseSlot, contents: list[Any]) -> str:
