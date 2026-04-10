@@ -102,6 +102,42 @@ def init_tables() -> None:
                 CREATE INDEX IF NOT EXISTS idx_image_logs_user_id
                 ON bot_image_logs (user_id, created_at DESC)
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS autopub_posts (
+                    id              SERIAL PRIMARY KEY,
+                    topic           TEXT NOT NULL DEFAULT '',
+                    caption         TEXT NOT NULL DEFAULT '',
+                    prompt          TEXT NOT NULL DEFAULT '',
+                    tg_file_id      TEXT NOT NULL DEFAULT '',
+                    tg_file_unique  TEXT NOT NULL DEFAULT '',
+                    status          TEXT NOT NULL DEFAULT 'draft',
+                    tg_msg_id       BIGINT,
+                    vk_post_id      BIGINT,
+                    error_text      TEXT DEFAULT '',
+                    created_at      TIMESTAMP DEFAULT NOW(),
+                    published_at    TIMESTAMP
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS autopub_settings (
+                    id              INT PRIMARY KEY DEFAULT 1,
+                    enabled         BOOLEAN NOT NULL DEFAULT FALSE,
+                    tg_channel_id   TEXT NOT NULL DEFAULT '',
+                    vk_group_id     TEXT NOT NULL DEFAULT '',
+                    posts_per_day   INT NOT NULL DEFAULT 3,
+                    auto_approve    BOOLEAN NOT NULL DEFAULT FALSE,
+                    topic_hints     TEXT NOT NULL DEFAULT '',
+                    post_template   TEXT NOT NULL DEFAULT '',
+                    post_cta        TEXT NOT NULL DEFAULT '',
+                    bot_username    TEXT NOT NULL DEFAULT '',
+                    image_style     TEXT NOT NULL DEFAULT ''
+                )
+            """)
+            # Ensure one settings row always exists
+            cur.execute("""
+                INSERT INTO autopub_settings (id) VALUES (1)
+                ON CONFLICT (id) DO NOTHING
+            """)
         logger.info("db: tables ready (PostgreSQL)")
     except Exception:
         logger.exception("db: failed to init tables")
@@ -531,3 +567,175 @@ def api_keys_table_has_rows() -> bool:
             return cur.fetchone() is not None
     except Exception:
         return False
+
+
+# ── Autopub ────────────────────────────────────────────────────────────────────
+
+def autopub_get_settings() -> dict:
+    """Return autopub configuration (always a dict, never None)."""
+    defaults = {
+        "enabled": False, "tg_channel_id": "", "vk_group_id": "",
+        "posts_per_day": 3, "auto_approve": False, "topic_hints": "",
+        "post_template": "", "post_cta": "", "bot_username": "", "image_style": "",
+    }
+    if not _DATABASE_URL:
+        return defaults
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT enabled,tg_channel_id,vk_group_id,posts_per_day,
+                       auto_approve,topic_hints,post_template,post_cta,
+                       bot_username,image_style
+                FROM autopub_settings WHERE id=1
+            """)
+            r = cur.fetchone()
+        if r:
+            return {
+                "enabled": bool(r[0]), "tg_channel_id": r[1] or "",
+                "vk_group_id": r[2] or "", "posts_per_day": r[3] or 3,
+                "auto_approve": bool(r[4]), "topic_hints": r[5] or "",
+                "post_template": r[6] or "", "post_cta": r[7] or "",
+                "bot_username": r[8] or "", "image_style": r[9] or "",
+            }
+    except Exception:
+        logger.exception("db: failed to get autopub settings")
+    return defaults
+
+
+def autopub_save_settings(s: dict) -> None:
+    if not _DATABASE_URL:
+        return
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO autopub_settings
+                    (id,enabled,tg_channel_id,vk_group_id,posts_per_day,
+                     auto_approve,topic_hints,post_template,post_cta,bot_username,image_style)
+                VALUES (1,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (id) DO UPDATE SET
+                    enabled=EXCLUDED.enabled,
+                    tg_channel_id=EXCLUDED.tg_channel_id,
+                    vk_group_id=EXCLUDED.vk_group_id,
+                    posts_per_day=EXCLUDED.posts_per_day,
+                    auto_approve=EXCLUDED.auto_approve,
+                    topic_hints=EXCLUDED.topic_hints,
+                    post_template=EXCLUDED.post_template,
+                    post_cta=EXCLUDED.post_cta,
+                    bot_username=EXCLUDED.bot_username,
+                    image_style=EXCLUDED.image_style
+            """, (
+                bool(s.get("enabled")), s.get("tg_channel_id",""),
+                s.get("vk_group_id",""), int(s.get("posts_per_day",3)),
+                bool(s.get("auto_approve")), s.get("topic_hints",""),
+                s.get("post_template",""), s.get("post_cta",""),
+                s.get("bot_username",""), s.get("image_style",""),
+            ))
+    except Exception:
+        logger.exception("db: failed to save autopub settings")
+
+
+def autopub_create_post(topic: str, caption: str, prompt: str,
+                        tg_file_id: str, tg_file_unique: str,
+                        status: str = "draft") -> int | None:
+    """Insert a new autopub post, return its id."""
+    if not _DATABASE_URL:
+        return None
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO autopub_posts
+                    (topic,caption,prompt,tg_file_id,tg_file_unique,status)
+                VALUES (%s,%s,%s,%s,%s,%s)
+                RETURNING id
+            """, (topic, caption, prompt, tg_file_id, tg_file_unique, status))
+            row = cur.fetchone()
+        return row[0] if row else None
+    except Exception:
+        logger.exception("db: failed to create autopub post")
+        return None
+
+
+def autopub_get_posts(status: str | None = None, limit: int = 50) -> list[dict]:
+    if not _DATABASE_URL:
+        return []
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            if status:
+                cur.execute("""
+                    SELECT id,topic,caption,prompt,tg_file_id,tg_file_unique,
+                           status,tg_msg_id,vk_post_id,error_text,created_at,published_at
+                    FROM autopub_posts WHERE status=%s
+                    ORDER BY created_at DESC LIMIT %s
+                """, (status, limit))
+            else:
+                cur.execute("""
+                    SELECT id,topic,caption,prompt,tg_file_id,tg_file_unique,
+                           status,tg_msg_id,vk_post_id,error_text,created_at,published_at
+                    FROM autopub_posts
+                    ORDER BY created_at DESC LIMIT %s
+                """, (limit,))
+            rows = cur.fetchall()
+        return [
+            {
+                "id": r[0], "topic": r[1], "caption": r[2], "prompt": r[3],
+                "tg_file_id": r[4], "tg_file_unique": r[5], "status": r[6],
+                "tg_msg_id": r[7], "vk_post_id": r[8], "error_text": r[9] or "",
+                "created_at": r[10].isoformat() if r[10] else "",
+                "published_at": r[11].isoformat() if r[11] else "",
+            }
+            for r in rows
+        ]
+    except Exception:
+        logger.exception("db: failed to get autopub posts")
+        return []
+
+
+def autopub_update_post(post_id: int, **fields) -> None:
+    if not _DATABASE_URL or not fields:
+        return
+    allowed = {"topic","caption","prompt","tg_file_id","tg_file_unique",
+               "status","tg_msg_id","vk_post_id","error_text","published_at"}
+    safe = {k: v for k, v in fields.items() if k in allowed}
+    if not safe:
+        return
+    try:
+        conn = _get_conn()
+        parts = ", ".join(f"{k}=%s" for k in safe)
+        vals = list(safe.values()) + [post_id]
+        with conn.cursor() as cur:
+            cur.execute(f"UPDATE autopub_posts SET {parts} WHERE id=%s", vals)
+    except Exception:
+        logger.exception("db: failed to update autopub post %s", post_id)
+
+
+def autopub_delete_post(post_id: int) -> None:
+    if not _DATABASE_URL:
+        return
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM autopub_posts WHERE id=%s", (post_id,))
+    except Exception:
+        logger.exception("db: failed to delete autopub post %s", post_id)
+
+
+def autopub_count_published_today() -> int:
+    """Count posts published since midnight Moscow time today."""
+    if not _DATABASE_URL:
+        return 0
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT COUNT(*) FROM autopub_posts
+                WHERE status='published'
+                AND published_at >= (NOW() AT TIME ZONE 'Europe/Moscow')::date
+            """)
+            row = cur.fetchone()
+        return row[0] if row else 0
+    except Exception:
+        return 0
