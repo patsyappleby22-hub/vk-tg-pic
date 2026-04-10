@@ -115,9 +115,13 @@ def init_tables() -> None:
                     vk_post_id      BIGINT,
                     error_text      TEXT DEFAULT '',
                     created_at      TIMESTAMP DEFAULT NOW(),
-                    published_at    TIMESTAMP
+                    published_at    TIMESTAMP,
+                    source_trend    TEXT DEFAULT '',
+                    admin_comment   TEXT DEFAULT ''
                 )
             """)
+            cur.execute("ALTER TABLE autopub_posts ADD COLUMN IF NOT EXISTS source_trend TEXT DEFAULT ''")
+            cur.execute("ALTER TABLE autopub_posts ADD COLUMN IF NOT EXISTS admin_comment TEXT DEFAULT ''")
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS autopub_settings (
                     id              INT PRIMARY KEY DEFAULT 1,
@@ -518,7 +522,8 @@ def get_all_image_logs(limit: int = 200) -> list[dict]:
 
 
 def get_image_log_by_unique_id(file_unique_id: str) -> dict | None:
-    """Return a single image log row by file_unique_id."""
+    """Return a single image log row by file_unique_id.
+    Falls back to autopub_posts if not found in bot_image_logs."""
     if not _DATABASE_URL:
         return None
     try:
@@ -539,6 +544,28 @@ def get_image_log_by_unique_id(file_unique_id: str) -> dict | None:
             }
     except Exception:
         logger.exception("db: failed to get image log for unique_id %s", file_unique_id)
+    # Fallback: look in autopub_posts
+    return autopub_get_file_id_by_unique(file_unique_id)
+
+
+def autopub_get_file_id_by_unique(file_unique_id: str) -> dict | None:
+    """Look up tg_file_id from autopub_posts by tg_file_unique."""
+    if not _DATABASE_URL:
+        return None
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT tg_file_id, tg_file_unique
+                FROM autopub_posts
+                WHERE tg_file_unique = %s
+                LIMIT 1
+            """, (file_unique_id,))
+            row = cur.fetchone()
+        if row:
+            return {"file_id": row[0], "file_unique_id": row[1]}
+    except Exception:
+        logger.exception("db: failed to get autopub file for unique_id %s", file_unique_id)
     return None
 
 
@@ -638,7 +665,9 @@ def autopub_save_settings(s: dict) -> None:
 
 def autopub_create_post(topic: str, caption: str, prompt: str,
                         tg_file_id: str, tg_file_unique: str,
-                        status: str = "draft") -> int | None:
+                        status: str = "draft",
+                        source_trend: str = "",
+                        admin_comment: str = "") -> int | None:
     """Insert a new autopub post, return its id."""
     if not _DATABASE_URL:
         return None
@@ -647,10 +676,10 @@ def autopub_create_post(topic: str, caption: str, prompt: str,
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO autopub_posts
-                    (topic,caption,prompt,tg_file_id,tg_file_unique,status)
-                VALUES (%s,%s,%s,%s,%s,%s)
+                    (topic,caption,prompt,tg_file_id,tg_file_unique,status,source_trend,admin_comment)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
                 RETURNING id
-            """, (topic, caption, prompt, tg_file_id, tg_file_unique, status))
+            """, (topic, caption, prompt, tg_file_id, tg_file_unique, status, source_trend, admin_comment))
             row = cur.fetchone()
         return row[0] if row else None
     except Exception:
@@ -667,14 +696,18 @@ def autopub_get_posts(status: str | None = None, limit: int = 50) -> list[dict]:
             if status:
                 cur.execute("""
                     SELECT id,topic,caption,prompt,tg_file_id,tg_file_unique,
-                           status,tg_msg_id,vk_post_id,error_text,created_at,published_at
+                           status,tg_msg_id,vk_post_id,error_text,created_at,published_at,
+                           COALESCE(source_trend,'') AS source_trend,
+                           COALESCE(admin_comment,'') AS admin_comment
                     FROM autopub_posts WHERE status=%s
                     ORDER BY created_at DESC LIMIT %s
                 """, (status, limit))
             else:
                 cur.execute("""
                     SELECT id,topic,caption,prompt,tg_file_id,tg_file_unique,
-                           status,tg_msg_id,vk_post_id,error_text,created_at,published_at
+                           status,tg_msg_id,vk_post_id,error_text,created_at,published_at,
+                           COALESCE(source_trend,'') AS source_trend,
+                           COALESCE(admin_comment,'') AS admin_comment
                     FROM autopub_posts
                     ORDER BY created_at DESC LIMIT %s
                 """, (limit,))
@@ -686,6 +719,7 @@ def autopub_get_posts(status: str | None = None, limit: int = 50) -> list[dict]:
                 "tg_msg_id": r[7], "vk_post_id": r[8], "error_text": r[9] or "",
                 "created_at": r[10].isoformat() if r[10] else "",
                 "published_at": r[11].isoformat() if r[11] else "",
+                "source_trend": r[12] or "", "admin_comment": r[13] or "",
             }
             for r in rows
         ]
@@ -694,11 +728,30 @@ def autopub_get_posts(status: str | None = None, limit: int = 50) -> list[dict]:
         return []
 
 
+def autopub_get_recent_topics(limit: int = 30) -> list[str]:
+    """Return recent post topics to avoid repeats in generation."""
+    if not _DATABASE_URL:
+        return []
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT topic FROM autopub_posts
+                ORDER BY created_at DESC LIMIT %s
+            """, (limit,))
+            rows = cur.fetchall()
+        return [r[0] for r in rows if r[0]]
+    except Exception:
+        logger.exception("db: failed to get recent topics")
+        return []
+
+
 def autopub_update_post(post_id: int, **fields) -> None:
     if not _DATABASE_URL or not fields:
         return
     allowed = {"topic","caption","prompt","tg_file_id","tg_file_unique",
-               "status","tg_msg_id","vk_post_id","error_text","published_at"}
+               "status","tg_msg_id","vk_post_id","error_text","published_at",
+               "source_trend","admin_comment"}
     safe = {k: v for k, v in fields.items() if k in allowed}
     if not safe:
         return
