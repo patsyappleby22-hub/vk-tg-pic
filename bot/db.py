@@ -399,7 +399,7 @@ def save_image_log(
         logger.exception("db: failed to save image log for user %s", user_id)
 
 
-def get_user_image_logs(user_id: int, limit: int = 50) -> list[dict]:
+def get_user_image_logs(user_id: int, limit: int = 50, offset: int = 0) -> list[dict]:
     """Return recent image generations for a user, newest first."""
     if not _DATABASE_URL:
         return []
@@ -411,8 +411,8 @@ def get_user_image_logs(user_id: int, limit: int = 50) -> list[dict]:
                 FROM bot_image_logs
                 WHERE user_id = %s
                 ORDER BY created_at DESC
-                LIMIT %s
-            """, (user_id, limit))
+                LIMIT %s OFFSET %s
+            """, (user_id, limit, offset))
             rows = cur.fetchall()
         return [
             {
@@ -429,6 +429,23 @@ def get_user_image_logs(user_id: int, limit: int = 50) -> list[dict]:
     except Exception:
         logger.exception("db: failed to get image logs for user %s", user_id)
         return []
+
+
+def count_user_image_logs(user_id: int) -> int:
+    """Return total number of image generations for a user."""
+    if not _DATABASE_URL:
+        return 0
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) FROM bot_image_logs WHERE user_id = %s",
+                (user_id,),
+            )
+            return cur.fetchone()[0]
+    except Exception:
+        logger.exception("db: failed to count image logs for user %s", user_id)
+        return 0
 
 
 def get_all_image_logs(limit: int = 200) -> list[dict]:
