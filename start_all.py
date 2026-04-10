@@ -166,6 +166,10 @@ async def main():
 
     tasks.append(asyncio.create_task(web_server()))
 
+    # Autopub scheduler
+    from bot.autopub.scheduler import autopub_loop
+    tasks.append(asyncio.create_task(autopub_loop(vertex_service)))
+
     if not tasks:
         logger.error("No bot tokens set — set TELEGRAM_BOT_TOKEN and/or VK_BOT_TOKEN")
         return
