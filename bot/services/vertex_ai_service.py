@@ -30,6 +30,13 @@ from core.exceptions import (
 
 logger = logging.getLogger(__name__)
 
+_alert_task_refs: set[asyncio.Task] = set()
+
+def _fire_alert(coro):
+    task = asyncio.ensure_future(coro)
+    _alert_task_refs.add(task)
+    task.add_done_callback(_alert_task_refs.discard)
+
 # When a 429 is received the slot is locked out for the full quota-reset window.
 COOLDOWN_SECONDS = 60
 
@@ -427,6 +434,28 @@ class VertexAIService:
             return float("inf")
         return min(s.ready_at(model) for s in usable)
 
+    def _check_and_alert_auth_errors(self) -> None:
+        from bot import admin_alerts
+        auth_err_slots = [s for s in self._slots if s.auth_error]
+        total = len(self._slots)
+        if not total:
+            return
+        err_details = [f"{s.label}: {s.auth_error_msg}" for s in auth_err_slots]
+        if len(auth_err_slots) == total:
+            _fire_alert(admin_alerts.alert_all_keys_auth_error(total, err_details))
+        elif len(auth_err_slots) >= 1:
+            _fire_alert(admin_alerts.alert_keys_degraded(total, len(auth_err_slots), err_details))
+
+    def _alert_quota_exhausted(self, model: str) -> None:
+        from bot import admin_alerts
+        auth_err_count = sum(1 for s in self._slots if s.auth_error)
+        total = len(self._slots)
+        if auth_err_count == total:
+            err_details = [f"{s.label}: {s.auth_error_msg}" for s in self._slots if s.auth_error]
+            _fire_alert(admin_alerts.alert_all_keys_auth_error(total, err_details))
+        else:
+            _fire_alert(admin_alerts.alert_all_keys_quota(total, model))
+
     async def generate_image(
         self,
         prompt: str,
@@ -508,6 +537,7 @@ class VertexAIService:
                             "Slot '%s' auth error, key invalid — skipping: %s",
                             slot.label, exc,
                         )
+                        self._check_and_alert_auth_errors()
                     elif _is_model_error(exc):
                         # 400 INVALID_ARGUMENT — config/model mismatch; block slot to avoid tight loop
                         slot.cooldown_until = time.monotonic() + 300
@@ -548,6 +578,7 @@ class VertexAIService:
                 await asyncio.sleep(wait + 0.1)
 
         logger.error("Deadline reached — all credential slots busy for model %s", model)
+        self._alert_quota_exhausted(model)
         raise QuotaExceededError()
 
     async def _call_api(
@@ -683,8 +714,8 @@ class VertexAIService:
                             "Chat: slot '%s' auth error, key invalid — skipping: %s",
                             slot.label, exc,
                         )
+                        self._check_and_alert_auth_errors()
                     elif _is_model_error(exc):
-                        # 400 INVALID_ARGUMENT — config/model mismatch; block slot to avoid tight loop
                         slot.cooldown_until = time.monotonic() + 300
                         logger.warning(
                             "Chat: slot '%s' returned 400 INVALID_ARGUMENT — 5min cooldown applied, rotating...",
@@ -697,7 +728,6 @@ class VertexAIService:
                 if _chat_exc is not None:
                     raise _chat_exc
             else:
-                # All slots busy — wait for the soonest one to become ready
                 earliest = self._earliest_ready_at(model)
                 now = time.monotonic()
                 wait = max(0.1, earliest - now)
@@ -710,6 +740,7 @@ class VertexAIService:
                 await asyncio.sleep(wait + 0.1)
 
         logger.error("Chat: deadline reached — all slots busy for %s", model)
+        self._alert_quota_exhausted(model)
         raise QuotaExceededError()
 
     def _sync_chat(
