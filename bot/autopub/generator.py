@@ -22,15 +22,35 @@ logger = logging.getLogger(__name__)
 _TG_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 
 _DEFAULT_TOPICS = [
-    "домашний уют", "lifestyle фото", "мода и стиль", "природа и лето",
-    "кофе и утро", "путешествия", "красота и макияж", "осенние прогулки",
+    "домашний уют", "lifestyle фото", "мода и стиль", "природа",
+    "кофе и утро", "путешествия", "красота и макияж", "прогулки",
     "зимние вечера", "книги и отдых", "спорт и здоровье", "романтика",
+    "примерка одежды", "дизайн интерьера", "расстановка мебели",
+    "аватар для соцсетей", "арт-стиль (аниме, Ghibli, Pixar)",
+    "фото в стиле ретро", "кинопостер из портрета", "food-фото",
+    "портрет питомца", "смена причёски", "визуализация ремонта",
+    "фото из путешествия", "профессиональное портфолио",
 ]
 
 # ─── Trend search ────────────────────────────────────────────────────────────
 
-_TREND_SEARCH_PROMPT = """Используй поиск в интернете и найди 5-7 АКТУАЛЬНЫХ трендов, мемов или вирусных тем, \
+_TREND_SEARCH_PROMPT = """Сегодня {today_date} ({today_weekday}).
+{holiday_block}
+
+Используй поиск в интернете и найди 5-7 АКТУАЛЬНЫХ трендов, мемов или вирусных тем, \
 которые сейчас (сегодня) популярны в русскоязычном интернете, Instagram, TikTok, ВКонтакте или Telegram.
+
+ВАЖНО: Разнообразие! Каждый раз предлагай РАЗНЫЕ категории:
+— Мода/стиль/примерка одежды
+— Интерьер/мебель/ремонт
+— Арт-стили (аниме, Ghibli, Pixar, масло, акварель)
+— Портреты/селфи/аватары
+— Путешествия/локации
+— Еда/рецепты
+— Питомцы
+— Праздники и события (если есть ближайшие)
+— Ретро/винтаж/эпохи
+— Кино/сериалы/поп-культура
 
 Уже использованные темы (НЕ повторяй их):
 {used_topics}
@@ -45,7 +65,46 @@ _TREND_SEARCH_PROMPT = """Используй поиск в интернете и
 - Только реальные актуальные тренды, которые сейчас обсуждают
 - Подходящие для визуального контента (можно сгенерировать красивое изображение)
 - Без политики, новостей катастроф, 18+ тематики
-- Предпочтительно: lifestyle, красота, мода, природа, уют, путешествия, food, эстетика"""
+- РАЗНЫЕ категории в каждом запросе — не зацикливайся на одной теме!
+- Если сегодня или скоро праздник — обязательно включи 1-2 тренда по нему"""
+
+
+_RU_HOLIDAYS = {
+    (1, 1): "Новый год 🎄", (1, 7): "Рождество",
+    (2, 14): "День святого Валентина 💕", (2, 23): "День защитника Отечества",
+    (3, 8): "Международный женский день 🌷", (3, 14): "День числа Пи",
+    (4, 1): "День смеха 😂", (4, 12): "День космонавтики 🚀",
+    (5, 1): "Первомай", (5, 9): "День Победы 🎖️",
+    (6, 1): "День защиты детей", (6, 12): "День России",
+    (7, 8): "День семьи, любви и верности 💑",
+    (8, 22): "День Государственного флага",
+    (9, 1): "День знаний 📚",
+    (10, 5): "День учителя", (10, 31): "Хэллоуин 🎃",
+    (11, 4): "День народного единства",
+    (12, 25): "Рождество (западное) 🎄", (12, 31): "Канун Нового года 🎆",
+}
+_RU_WEEKDAYS = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
+
+def _get_holiday_block() -> tuple[str, str, str]:
+    import datetime
+    msk = datetime.timezone(datetime.timedelta(hours=3))
+    now = datetime.datetime.now(msk)
+    today_str = now.strftime("%d %B %Y")
+    weekday = _RU_WEEKDAYS[now.weekday()]
+
+    holidays_near = []
+    for delta in range(0, 7):
+        d = now + datetime.timedelta(days=delta)
+        h = _RU_HOLIDAYS.get((d.month, d.day))
+        if h:
+            prefix = "Сегодня" if delta == 0 else ("Завтра" if delta == 1 else f"Через {delta} дней")
+            holidays_near.append(f"{prefix}: {h} ({d.day}.{d.month:02d})")
+
+    if holidays_near:
+        block = "Ближайшие праздники:\n" + "\n".join(f"  🎉 {h}" for h in holidays_near)
+    else:
+        block = ""
+    return today_str, weekday, block
 
 
 async def search_current_trends(
@@ -58,8 +117,14 @@ async def search_current_trends(
     """
     import json
 
-    used_str = "\n".join(f"- {t}" for t in (used_topics or [])[:20]) or "(нет)"
-    prompt_text = _TREND_SEARCH_PROMPT.format(used_topics=used_str)
+    used_str = "\n".join(f"- {t}" for t in (used_topics or [])[:30]) or "(нет)"
+    today_date, today_weekday, holiday_block = _get_holiday_block()
+    prompt_text = _TREND_SEARCH_PROMPT.format(
+        used_topics=used_str,
+        today_date=today_date,
+        today_weekday=today_weekday,
+        holiday_block=holiday_block,
+    )
 
     search_model = getattr(vertex_service, "SEARCH_MODEL", "gemini-3.1-flash-lite-preview")
     logger.info("[autopub gen] поиск актуальных трендов через Google Search (модель=%s)...", search_model)
@@ -290,6 +355,34 @@ async def generate_image_for_post(
         return None
 
 
+_IMAGE_VARIATION_SUFFIXES = [
+    "",
+    " Use a different creative angle, composition, and color palette. Show a fresh perspective.",
+    " Create a completely different artistic interpretation with unique lighting and mood.",
+]
+
+
+async def generate_multiple_images(
+    vertex_service: "VertexAIService",
+    prompt: str,
+    count: int = 3,
+    model: str = "",
+) -> list[bytes]:
+    """Generate multiple image variations for a post. Returns list of image bytes."""
+    results: list[bytes] = []
+    for i in range(count):
+        suffix = _IMAGE_VARIATION_SUFFIXES[i] if i < len(_IMAGE_VARIATION_SUFFIXES) else f" Variation {i+1}, unique composition."
+        varied_prompt = prompt + suffix
+        logger.info("[autopub gen] генерирую изображение %d/%d...", i + 1, count)
+        img = await generate_image_for_post(vertex_service, varied_prompt, model)
+        if img:
+            results.append(img)
+            logger.info("[autopub gen] изображение %d/%d OK — %.1f KB", i + 1, count, len(img) / 1024)
+        else:
+            logger.warning("[autopub gen] изображение %d/%d FAILED — пропускаю", i + 1, count)
+    return results
+
+
 # ─── TG upload ───────────────────────────────────────────────────────────────
 
 async def upload_draft_to_telegram(image_bytes: bytes, caption: str) -> tuple[str, str] | None:
@@ -332,6 +425,36 @@ async def upload_draft_to_telegram(image_bytes: bytes, caption: str) -> tuple[st
     except Exception as exc:
         logger.error("[autopub gen] TG upload exception: %s", exc)
         return None
+
+
+async def upload_extra_images_to_telegram(images: list[bytes]) -> list[str]:
+    """Upload extra images to TG log channel, return list of file_ids."""
+    import aiohttp
+    if not _TG_TOKEN or not images:
+        return []
+    from bot.log_channel import LOG_CHANNEL_ID
+    file_ids: list[str] = []
+    url = f"https://api.telegram.org/bot{_TG_TOKEN}/sendPhoto"
+    try:
+        async with aiohttp.ClientSession() as session:
+            for i, img_bytes in enumerate(images):
+                data = aiohttp.FormData()
+                data.add_field("chat_id", str(LOG_CHANNEL_ID))
+                data.add_field("caption", f"📝 [autopub extra {i+2}]")
+                data.add_field("photo", img_bytes, filename=f"extra_{i+2}.jpg", content_type="image/jpeg")
+                async with session.post(url, data=data, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                    body = await resp.json(content_type=None)
+                if body.get("ok"):
+                    photos = body["result"].get("photo", [])
+                    if photos:
+                        largest = max(photos, key=lambda p: p.get("file_size", 0))
+                        file_ids.append(largest["file_id"])
+                        logger.info("[autopub gen] extra image %d upload OK: %s...", i + 2, largest["file_id"][:20])
+                else:
+                    logger.warning("[autopub gen] extra image %d upload failed: %s", i + 2, str(body)[:100])
+    except Exception as exc:
+        logger.error("[autopub gen] extra images upload exception: %s", exc)
+    return file_ids
 
 
 # ─── Post text builder ───────────────────────────────────────────────────────

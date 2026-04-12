@@ -91,7 +91,9 @@ async def _run_generate(
         search_idea_context,
         generate_post_idea,
         generate_image_for_post,
+        generate_multiple_images,
         upload_draft_to_telegram,
+        upload_extra_images_to_telegram,
         build_post_text,
         build_vk_post_text,
     )
@@ -214,27 +216,29 @@ async def _run_generate(
     if image_prompt != prompt:
         logger.info("[autopub] image_prompt отличается от user prompt (иллюстрация vs пользовательский)")
 
-    # Step 3: Image generation (uses image_prompt for illustration, NOT user-facing prompt)
-    _set_progress(3, "🎨 Генерирую пример-иллюстрацию 4:5...", 38,
-                  msg=f"Промпт иллюстрации: «{image_prompt[:80]}...»")
-    logger.info("[autopub] шаг 3/5 — генерирую иллюстрацию 4:5...")
+    # Step 3: Image generation — 3 variations
+    _set_progress(3, "🎨 Генерирую 3 иллюстрации 4:5...", 38,
+                  msg=f"Промпт: «{image_prompt[:80]}...»")
+    logger.info("[autopub] шаг 3/5 — генерирую 3 иллюстрации 4:5...")
     img_t = time.monotonic()
-    image_bytes = await generate_image_for_post(vertex_service, image_prompt)
-    if not image_bytes:
-        err = "Изображение не сгенерировано — проверьте логи"
-        _set_progress(3, "❌ Ошибка генерации изображения", 38, error=err)
-        logger.error("[autopub] шаг 3/5 FAILED — изображение не сгенерировано (см. ошибки выше)")
+    all_images = await generate_multiple_images(vertex_service, image_prompt, count=3)
+    if not all_images:
+        err = "Ни одно изображение не сгенерировано — проверьте логи"
+        _set_progress(3, "❌ Ошибка генерации изображений", 38, error=err)
+        logger.error("[autopub] шаг 3/5 FAILED — ни одно изображение не сгенерировано")
         return
-    img_kb = len(image_bytes) / 1024
-    _set_progress(3, "🎨 Изображение готово", 65,
-                  msg=f"Размер: {img_kb:.0f} KB  |  время: {time.monotonic()-img_t:.1f}s")
-    logger.info("[autopub] шаг 3/5 OK — изображение %.1f KB (%.1fs)",
-                img_kb, time.monotonic() - img_t)
+    image_bytes = all_images[0]
+    extra_images = all_images[1:]
+    total_kb = sum(len(img) / 1024 for img in all_images)
+    _set_progress(3, f"🎨 {len(all_images)} изображений готово", 65,
+                  msg=f"Всего: {total_kb:.0f} KB  |  время: {time.monotonic()-img_t:.1f}s")
+    logger.info("[autopub] шаг 3/5 OK — %d изображений, %.1f KB (%.1fs)",
+                len(all_images), total_kb, time.monotonic() - img_t)
 
-    # Step 4: Upload to TG log channel
+    # Step 4: Upload all images to TG log channel
     _set_progress(4, "📤 Загружаю в Telegram...", 70,
-                  msg="Отправляю черновик в лог-канал для хранения file_id")
-    logger.info("[autopub] шаг 4/5 — загружаю черновик в Telegram (лог-канал)...")
+                  msg=f"Отправляю {len(all_images)} фото в лог-канал")
+    logger.info("[autopub] шаг 4/5 — загружаю %d фото в Telegram (лог-канал)...", len(all_images))
     tg_result = await upload_draft_to_telegram(image_bytes, caption)
     if not tg_result:
         err = "Не удалось загрузить в Telegram — проверьте токен бота"
@@ -242,9 +246,19 @@ async def _run_generate(
         logger.error("[autopub] шаг 4/5 FAILED — не удалось загрузить в Telegram")
         return
     file_id, file_unique = tg_result
-    _set_progress(4, "📤 Telegram OK", 85,
-                  msg=f"file_id получен: {file_id[:25]}...")
-    logger.info("[autopub] шаг 4/5 OK — file_id=%s...", file_id[:30])
+
+    extra_file_id_list: list[str] = []
+    if extra_images:
+        logger.info("[autopub] шаг 4/5 — загружаю %d доп. фото...", len(extra_images))
+        extra_file_id_list = await upload_extra_images_to_telegram(extra_images)
+        logger.info("[autopub] шаг 4/5 — загружено %d доп. фото", len(extra_file_id_list))
+
+    extra_file_ids_str = ",".join(extra_file_id_list) if extra_file_id_list else ""
+    total_photos = 1 + len(extra_file_id_list)
+    _set_progress(4, f"📤 Telegram OK ({total_photos} фото)", 85,
+                  msg=f"Загружено {total_photos} фото")
+    logger.info("[autopub] шаг 4/5 OK — %d фото загружено (main + %d extra)",
+                total_photos, len(extra_file_id_list))
 
     # Step 5: Save to DB
     _set_progress(5, "💾 Сохраняю пост в очередь...", 90,
@@ -260,6 +274,7 @@ async def _run_generate(
         status=status,
         source_trend=source_trend,
         admin_comment=admin_feedback,
+        extra_file_ids=extra_file_ids_str,
     )
     elapsed = time.monotonic() - t0
     _set_progress(5, "✅ Пост готов!", 100,
@@ -305,24 +320,28 @@ async def _run_publish(settings: dict) -> None:
     tg_msg_id = None
     vk_post_id = None
 
+    extra_ids = [fid for fid in post.get("extra_file_ids", "").split(",") if fid.strip()]
+    total_photos = 1 + len(extra_ids)
+    logger.info("[autopub] пост содержит %d фото", total_photos)
+
     if tg_channel:
-        logger.info("[autopub] → Telegram: публикую в канал %s...", tg_channel)
-        tg_msg_id = await publish_to_telegram(tg_channel, post["tg_file_id"], post["caption"])
+        logger.info("[autopub] → Telegram: публикую %d фото в канал %s...", total_photos, tg_channel)
+        tg_msg_id = await publish_to_telegram(tg_channel, post["tg_file_id"], post["caption"], extra_file_ids=extra_ids or None)
         if tg_msg_id:
-            logger.info("[autopub] → Telegram OK: message_id=%s", tg_msg_id)
+            logger.info("[autopub] → Telegram OK: message_id=%s (%d фото)", tg_msg_id, total_photos)
         else:
             logger.error("[autopub] → Telegram FAILED (см. ошибки publisher выше)")
             errors.append("TG publish failed")
 
     if vk_group:
-        logger.info("[autopub] → VK: публикую в группу %s...", vk_group)
+        logger.info("[autopub] → VK: публикую %d фото в группу %s...", total_photos, vk_group)
         vk_caption = build_vk_post_text(
             topic=post.get("topic", ""),
             caption_intro=post.get("topic", ""),
             prompt=post.get("prompt", ""),
             vk_community="picgenai",
         )
-        vk_post_id = await publish_to_vk(vk_group, post["tg_file_id"], vk_caption)
+        vk_post_id = await publish_to_vk(vk_group, post["tg_file_id"], vk_caption, extra_file_ids=extra_ids or None)
         if vk_post_id:
             logger.info("[autopub] → VK OK: post_id=%s", vk_post_id)
         else:

@@ -94,11 +94,12 @@ async def publish_to_telegram(
     channel_id: str,
     file_id: str,
     caption: str,
+    extra_file_ids: list[str] | None = None,
 ) -> int | None:
-    """Send a single photo message with HTML caption to Telegram channel.
+    """Send photo(s) to Telegram channel.
 
-    Uses parse_mode=HTML so <code>...</code> renders as a copyable block.
-    Caption is pre-truncated to 1024 chars by build_post_text.
+    If extra_file_ids are provided, sends a media group (multiple photos).
+    Otherwise sends a single photo with HTML caption.
     Returns message_id or None on failure.
     """
     if not _TG_TOKEN:
@@ -112,27 +113,47 @@ async def publish_to_telegram(
         return None
 
     caption_text = caption.strip() if caption else ""
-
-    logger.info("[autopub TG] sendPhoto → channel=%s  caption=%d chars",
-                channel_id, len(caption_text))
+    all_file_ids = [file_id] + (extra_file_ids or [])
     t0 = time.monotonic()
+
     try:
         async with aiohttp.ClientSession() as session:
-            payload: dict = {
-                "chat_id": channel_id,
-                "photo": file_id,
-                "parse_mode": "HTML",
-            }
-            if caption_text:
-                payload["caption"] = caption_text
+            if len(all_file_ids) >= 2:
+                media = []
+                for i, fid in enumerate(all_file_ids):
+                    item: dict = {"type": "photo", "media": fid}
+                    if i == 0 and caption_text:
+                        item["caption"] = caption_text
+                        item["parse_mode"] = "HTML"
+                    media.append(item)
+                payload = {"chat_id": channel_id, "media": media}
+                logger.info("[autopub TG] sendMediaGroup → channel=%s  %d photos  caption=%d chars",
+                            channel_id, len(media), len(caption_text))
+                body = await _tg_api_post(session, "sendMediaGroup", payload)
 
-            body = await _tg_api_post(session, "sendPhoto", payload)
+                if body.get("ok"):
+                    results = body["result"]
+                    msg_id = results[0]["message_id"] if results else None
+                    logger.info("[autopub TG] ✓ медиа-группа опубликована  %d фото  message_id=%s (%.1fs)",
+                                len(results), msg_id, time.monotonic() - t0)
+                    return msg_id
+            else:
+                payload = {
+                    "chat_id": channel_id,
+                    "photo": file_id,
+                    "parse_mode": "HTML",
+                }
+                if caption_text:
+                    payload["caption"] = caption_text
+                logger.info("[autopub TG] sendPhoto → channel=%s  caption=%d chars",
+                            channel_id, len(caption_text))
+                body = await _tg_api_post(session, "sendPhoto", payload)
 
-        if body.get("ok"):
-            msg_id = body["result"]["message_id"]
-            logger.info("[autopub TG] ✓ опубликовано  message_id=%s (%.1fs)",
-                        msg_id, time.monotonic() - t0)
-            return msg_id
+                if body.get("ok"):
+                    msg_id = body["result"]["message_id"]
+                    logger.info("[autopub TG] ✓ опубликовано  message_id=%s (%.1fs)",
+                                msg_id, time.monotonic() - t0)
+                    return msg_id
 
         err = body.get("description", str(body))
         logger.error("[autopub TG] ✗ ошибка от API: %s  (channel=%s)", err, channel_id)
@@ -379,13 +400,14 @@ async def publish_to_vk(
     group_id: str,
     file_id: str,
     caption: str,
+    extra_file_ids: list[str] | None = None,
 ) -> int | None:
-    """Publish to VK Channel (messages.send) or Group wall (wall.post).
+    """Publish to VK Group wall (wall.post) with multiple photos.
 
     Strategy:
-      1. Download image from Telegram
-      2. Try Channel API (messages.send) — works for new VK Channels
-      3. If that fails, fall back to wall.post — works for traditional VK Groups
+      1. Download all images from Telegram
+      2. Upload all to VK wall photo server
+      3. Post with all attachments
     """
     if not (_VK_TOKEN or _VK_USER_TOKEN):
         logger.error("[autopub VK] нет VK токена — публикация невозможна")
@@ -398,60 +420,59 @@ async def publish_to_vk(
     gid = group_id.lstrip("-")
     peer_id = f"-{gid}"
 
-    logger.info("[autopub VK] начинаю публикацию  group=%s  peer=%s", gid, peer_id)
+    all_tg_file_ids = [file_id] + (extra_file_ids or [])
+    logger.info("[autopub VK] начинаю публикацию  group=%s  peer=%s  photos=%d", gid, peer_id, len(all_tg_file_ids))
     t0 = time.monotonic()
 
-    # ── Step 1: Download image from Telegram ────────────────────────────────
-    logger.info("[autopub VK] 1/4 скачиваю изображение из Telegram...")
-    image_bytes = await _tg_download_file(file_id)
-    if not image_bytes:
-        logger.error("[autopub VK] 1/4 FAILED — не удалось скачать фото")
+    # ── Step 1: Download all images from Telegram ────────────────────────────
+    logger.info("[autopub VK] 1/3 скачиваю %d изображений из Telegram...", len(all_tg_file_ids))
+    all_jpg: list[bytes] = []
+    for i, fid in enumerate(all_tg_file_ids):
+        image_bytes = await _tg_download_file(fid)
+        if image_bytes:
+            jpg = _vk_jpg_bytes(image_bytes)
+            all_jpg.append(jpg)
+            logger.info("[autopub VK] 1/3 фото %d/%d OK — %.1f KB", i + 1, len(all_tg_file_ids), len(jpg) / 1024)
+        else:
+            logger.warning("[autopub VK] 1/3 фото %d/%d FAILED — пропускаю", i + 1, len(all_tg_file_ids))
+    if not all_jpg:
+        logger.error("[autopub VK] 1/3 FAILED — не удалось скачать ни одно фото")
         return None
-    jpg_bytes = _vk_jpg_bytes(image_bytes)
-    logger.info("[autopub VK] 1/4 OK — %.1f KB → %.1f KB JPEG",
-                len(image_bytes) / 1024, len(jpg_bytes) / 1024)
 
-    # ── Step 2a: Try Channel API (messages.send) ─────────────────────────────
-    logger.info("[autopub VK] 2/4 пробую Channel API (messages.send)  peer_id=%s...", peer_id)
-    msg_upload_url = await _vk_get_msg_upload_url(peer_id)
-    if msg_upload_url:
-        try:
-            upload_result = await _vk_upload_photo(msg_upload_url, jpg_bytes)
-            attachment = await _vk_save_msg_photo(
-                server=upload_result.get("server", 0),
-                photo=upload_result.get("photo", ""),
-                photo_hash=upload_result.get("hash", ""),
-            )
-            if attachment:
-                post_id = await _vk_channel_send(peer_id, vk_text, attachment)
-                if post_id:
-                    logger.info("[autopub VK] ✓ опубликовано в канал (%.1fs)", time.monotonic() - t0)
-                    return post_id
-        except Exception as exc:
-            logger.error("[autopub VK] Channel API exception: %s", exc)
-    else:
-        logger.warning("[autopub VK] getMessagesUploadServer вернул None — пробую wall.post")
-
-    # ── Step 2b: Fallback → wall.post (traditional group) ────────────────────
-    logger.info("[autopub VK] 3/4 fallback: wall.post  group=%s...", gid)
+    # ── Step 2: Upload all photos to VK wall ─────────────────────────────────
+    logger.info("[autopub VK] 2/3 загружаю %d фото на VK wall...", len(all_jpg))
     wall_upload_url = await _vk_get_wall_upload_url(gid)
-    if wall_upload_url:
+    if not wall_upload_url:
+        logger.error("[autopub VK] 2/3 FAILED — не удалось получить upload URL")
+        return None
+
+    attachments: list[str] = []
+    for i, jpg in enumerate(all_jpg):
         try:
-            upload_result = await _vk_upload_photo(wall_upload_url, jpg_bytes)
-            attachment = await _vk_save_wall_photo(
+            upload_result = await _vk_upload_photo(wall_upload_url, jpg)
+            att = await _vk_save_wall_photo(
                 gid,
                 server=upload_result.get("server", 0),
                 photo=upload_result.get("photo", ""),
                 photo_hash=upload_result.get("hash", ""),
             )
-            if attachment:
-                post_id = await _vk_wall_post(gid, vk_text, attachment)
-                if post_id:
-                    logger.info("[autopub VK] ✓ опубликовано в группу wall (%.1fs)", time.monotonic() - t0)
-                    return post_id
+            if att:
+                attachments.append(att)
+                logger.info("[autopub VK] 2/3 фото %d/%d uploaded: %s", i + 1, len(all_jpg), att)
         except Exception as exc:
-            logger.error("[autopub VK] wall.post с фото exception: %s", exc)
+            logger.error("[autopub VK] 2/3 фото %d/%d upload failed: %s", i + 1, len(all_jpg), exc)
 
-    # ── Step 2c: No photo — refuse to publish text-only ──────────────────────
-    logger.error("[autopub VK] все фото-методы не сработали — публикация без фото запрещена, пропускаем")
+    if not attachments:
+        logger.error("[autopub VK] все фото-методы не сработали — публикация без фото запрещена")
+        return None
+
+    # ── Step 3: Post with all attachments ────────────────────────────────────
+    logger.info("[autopub VK] 3/3 wall.post  group=%s  attachments=%d...", gid, len(attachments))
+    combined_attachments = ",".join(attachments)
+    post_id = await _vk_wall_post(gid, vk_text, combined_attachments)
+    if post_id:
+        logger.info("[autopub VK] ✓ опубликовано %d фото в группу wall (%.1fs)", len(attachments), time.monotonic() - t0)
+        return post_id
+
+    logger.error("[autopub VK] wall.post failed")
     return None

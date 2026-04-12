@@ -122,6 +122,7 @@ def init_tables() -> None:
             """)
             cur.execute("ALTER TABLE autopub_posts ADD COLUMN IF NOT EXISTS source_trend TEXT DEFAULT ''")
             cur.execute("ALTER TABLE autopub_posts ADD COLUMN IF NOT EXISTS admin_comment TEXT DEFAULT ''")
+            cur.execute("ALTER TABLE autopub_posts ADD COLUMN IF NOT EXISTS extra_file_ids TEXT DEFAULT ''")
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS autopub_settings (
                     id              INT PRIMARY KEY DEFAULT 1,
@@ -667,7 +668,8 @@ def autopub_create_post(topic: str, caption: str, prompt: str,
                         tg_file_id: str, tg_file_unique: str,
                         status: str = "draft",
                         source_trend: str = "",
-                        admin_comment: str = "") -> int | None:
+                        admin_comment: str = "",
+                        extra_file_ids: str = "") -> int | None:
     """Insert a new autopub post, return its id."""
     if not _DATABASE_URL:
         return None
@@ -676,10 +678,10 @@ def autopub_create_post(topic: str, caption: str, prompt: str,
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO autopub_posts
-                    (topic,caption,prompt,tg_file_id,tg_file_unique,status,source_trend,admin_comment)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                    (topic,caption,prompt,tg_file_id,tg_file_unique,status,source_trend,admin_comment,extra_file_ids)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 RETURNING id
-            """, (topic, caption, prompt, tg_file_id, tg_file_unique, status, source_trend, admin_comment))
+            """, (topic, caption, prompt, tg_file_id, tg_file_unique, status, source_trend, admin_comment, extra_file_ids))
             row = cur.fetchone()
         return row[0] if row else None
     except Exception:
@@ -698,7 +700,8 @@ def autopub_get_posts(status: str | None = None, limit: int = 50) -> list[dict]:
                     SELECT id,topic,caption,prompt,tg_file_id,tg_file_unique,
                            status,tg_msg_id,vk_post_id,error_text,created_at,published_at,
                            COALESCE(source_trend,'') AS source_trend,
-                           COALESCE(admin_comment,'') AS admin_comment
+                           COALESCE(admin_comment,'') AS admin_comment,
+                           COALESCE(extra_file_ids,'') AS extra_file_ids
                     FROM autopub_posts WHERE status=%s
                     ORDER BY created_at DESC LIMIT %s
                 """, (status, limit))
@@ -707,7 +710,8 @@ def autopub_get_posts(status: str | None = None, limit: int = 50) -> list[dict]:
                     SELECT id,topic,caption,prompt,tg_file_id,tg_file_unique,
                            status,tg_msg_id,vk_post_id,error_text,created_at,published_at,
                            COALESCE(source_trend,'') AS source_trend,
-                           COALESCE(admin_comment,'') AS admin_comment
+                           COALESCE(admin_comment,'') AS admin_comment,
+                           COALESCE(extra_file_ids,'') AS extra_file_ids
                     FROM autopub_posts
                     ORDER BY created_at DESC LIMIT %s
                 """, (limit,))
@@ -720,6 +724,7 @@ def autopub_get_posts(status: str | None = None, limit: int = 50) -> list[dict]:
                 "created_at": r[10].isoformat() if r[10] else "",
                 "published_at": r[11].isoformat() if r[11] else "",
                 "source_trend": r[12] or "", "admin_comment": r[13] or "",
+                "extra_file_ids": r[14] or "",
             }
             for r in rows
         ]
@@ -751,7 +756,7 @@ def autopub_update_post(post_id: int, **fields) -> None:
         return
     allowed = {"topic","caption","prompt","tg_file_id","tg_file_unique",
                "status","tg_msg_id","vk_post_id","error_text","published_at",
-               "source_trend","admin_comment"}
+               "source_trend","admin_comment","extra_file_ids"}
     safe = {k: v for k, v in fields.items() if k in allowed}
     if not safe:
         return
