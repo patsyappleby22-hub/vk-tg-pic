@@ -126,7 +126,7 @@ async def publish_to_telegram(
                         item["caption"] = caption_text
                         item["parse_mode"] = "HTML"
                     media.append(item)
-                payload = {"chat_id": channel_id, "media": media}
+                payload = {"chat_id": channel_id, "media": json.dumps(media)}
                 logger.info("[autopub TG] sendMediaGroup → channel=%s  %d photos  caption=%d chars",
                             channel_id, len(media), len(caption_text))
                 body = await _tg_api_post(session, "sendMediaGroup", payload)
@@ -439,17 +439,20 @@ async def publish_to_vk(
         logger.error("[autopub VK] 1/3 FAILED — не удалось скачать ни одно фото")
         return None
 
-    # ── Step 2: Upload all photos to VK wall ─────────────────────────────────
+    # ── Step 2: Upload all photos to VK wall (fresh upload URL per photo) ────
     logger.info("[autopub VK] 2/3 загружаю %d фото на VK wall...", len(all_jpg))
-    wall_upload_url = await _vk_get_wall_upload_url(gid)
-    if not wall_upload_url:
-        logger.error("[autopub VK] 2/3 FAILED — не удалось получить upload URL")
-        return None
-
     attachments: list[str] = []
     for i, jpg in enumerate(all_jpg):
         try:
-            upload_result = await _vk_upload_photo(wall_upload_url, jpg)
+            upload_url = await _vk_get_wall_upload_url(gid)
+            if not upload_url:
+                logger.error("[autopub VK] 2/3 фото %d/%d — не удалось получить upload URL", i + 1, len(all_jpg))
+                continue
+            upload_result = await _vk_upload_photo(upload_url, jpg)
+            logger.debug("[autopub VK] 2/3 фото %d/%d upload_result: server=%s photo_len=%d hash=%s",
+                         i + 1, len(all_jpg),
+                         upload_result.get("server"), len(upload_result.get("photo", "")),
+                         upload_result.get("hash", "")[:20])
             att = await _vk_save_wall_photo(
                 gid,
                 server=upload_result.get("server", 0),
@@ -459,6 +462,8 @@ async def publish_to_vk(
             if att:
                 attachments.append(att)
                 logger.info("[autopub VK] 2/3 фото %d/%d uploaded: %s", i + 1, len(all_jpg), att)
+            else:
+                logger.error("[autopub VK] 2/3 фото %d/%d saveWallPhoto вернул None", i + 1, len(all_jpg))
         except Exception as exc:
             logger.error("[autopub VK] 2/3 фото %d/%d upload failed: %s", i + 1, len(all_jpg), exc)
 

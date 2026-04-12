@@ -368,19 +368,23 @@ async def generate_multiple_images(
     count: int = 3,
     model: str = "",
 ) -> list[bytes]:
-    """Generate multiple image variations for a post. Returns list of image bytes."""
-    results: list[bytes] = []
-    for i in range(count):
-        suffix = _IMAGE_VARIATION_SUFFIXES[i] if i < len(_IMAGE_VARIATION_SUFFIXES) else f" Variation {i+1}, unique composition."
+    """Generate multiple image variations in parallel. Returns list of image bytes."""
+    import asyncio
+
+    async def _gen_one(idx: int) -> bytes | None:
+        suffix = _IMAGE_VARIATION_SUFFIXES[idx] if idx < len(_IMAGE_VARIATION_SUFFIXES) else f" Variation {idx+1}, unique composition."
         varied_prompt = prompt + suffix
-        logger.info("[autopub gen] генерирую изображение %d/%d...", i + 1, count)
+        logger.info("[autopub gen] генерирую изображение %d/%d...", idx + 1, count)
         img = await generate_image_for_post(vertex_service, varied_prompt, model)
         if img:
-            results.append(img)
-            logger.info("[autopub gen] изображение %d/%d OK — %.1f KB", i + 1, count, len(img) / 1024)
+            logger.info("[autopub gen] изображение %d/%d OK — %.1f KB", idx + 1, count, len(img) / 1024)
         else:
-            logger.warning("[autopub gen] изображение %d/%d FAILED — пропускаю", i + 1, count)
-    return results
+            logger.warning("[autopub gen] изображение %d/%d FAILED — пропускаю", idx + 1, count)
+        return img
+
+    tasks = [_gen_one(i) for i in range(count)]
+    raw = await asyncio.gather(*tasks)
+    return [img for img in raw if img]
 
 
 # ─── TG upload ───────────────────────────────────────────────────────────────
