@@ -490,14 +490,26 @@ class VertexAIService:
             return list(self._slots[slot_index].history)
         return []
 
+    def _is_video_model(self, model: str) -> bool:
+        return model.startswith("veo-")
+
+    def _filter_slots_for_model(self, model: str) -> list[_BaseSlot]:
+        usable = [s for s in self._slots if not s.auth_error]
+        if self._is_video_model(model):
+            with_project = [s for s in usable if (isinstance(s, _ApiKeySlot) and s.has_project) or isinstance(s, _CredSlot)]
+            if with_project:
+                return with_project
+        return usable
+
     def _get_next_available_slot(self, model: str) -> _BaseSlot | None:
         """Return the next ready slot using round-robin rotation.
 
         After each use the pointer advances so every key gets equal traffic.
         'Ready' means: past cooldown_until AND has_capacity for this specific model
         AND no permanent auth error.
+        For video models (veo-*): prefers slots with project_id set.
         """
-        usable = [s for s in self._slots if not s.auth_error]
+        usable = self._filter_slots_for_model(model)
         if not usable:
             return None
         n = len(usable)
@@ -511,8 +523,7 @@ class VertexAIService:
 
     def _earliest_ready_at(self, model: str) -> float:
         """Monotonic timestamp when any slot will next be ready for model."""
-        # Only consider slots without permanent auth errors
-        usable = [s for s in self._slots if not s.auth_error]
+        usable = self._filter_slots_for_model(model)
         if not usable:
             return float("inf")
         return min(s.ready_at(model) for s in usable)
