@@ -20,3 +20,14 @@ pydantic-settings
 python-dotenv
 tenacity
 vkbottle
+aiofiles
+aiogram
+aiohttp
+google-genai
+Pillow
+psycopg2-binary
+pydantic
+pydantic-settings
+python-dotenv
+tenacity
+vkbottle
