@@ -11,7 +11,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardBu
 from bot.user_settings import (
     get_user_settings, AVAILABLE_MODELS, SEND_MODES, RESOLUTIONS, THINKING_LEVELS,
     VIDEO_DURATIONS, VIDEO_RESOLUTIONS, VIDEO_ASPECT_RATIOS, is_video_model,
-    get_video_credits_cost,
+    get_video_credits_cost, video_supports_audio,
 )
 
 BTN_MENU = "📋 Меню"
@@ -142,6 +142,8 @@ def get_video_panel_text(user_id: int) -> str:
     model_info = AVAILABLE_MODELS.get(model_id, {})
     model_label = model_info.get("label", model_id)
     credits = model_info.get("credits", 3)
+    has_audio = video_supports_audio(model_id)
+    has_image = model_info.get("supports_image", False)
 
     aspect = settings.get("video_aspect_ratio", "16:9")
     aspect_label = VIDEO_ASPECT_RATIOS.get(aspect, aspect)
@@ -151,17 +153,22 @@ def get_video_panel_text(user_id: int) -> str:
     res_label = res_info.get("label", res)
     audio = settings.get("video_audio", True)
 
+    input_type = "текст + фото" if has_image else "только текст"
+
     lines = [
-        f"🎬 <b>{model_label}</b>",
+        f"⚙️ <b>Настройки — {model_label}</b>",
         "",
         "┌─────────────────────",
         f"│ 📐 Формат: <b>{aspect_label}</b>",
         f"│ ⏱ Длительность: <b>{dur} сек</b>",
         f"│ 📺 Разрешение: <b>{res_label}</b>",
-        f"│ 🔊 Аудио: <b>{'Вкл' if audio else 'Выкл'}</b>",
+    ]
+    if has_audio:
+        lines.append(f"│ 🔊 Аудио: <b>{'Вкл' if audio else 'Выкл'}</b>")
+    lines += [
         "├─────────────────────",
         f"│ 💰 Стоимость: <b>{credits} кр.</b>",
-        "│ 📋 24 FPS • MP4",
+        f"│ 📋 24 FPS • MP4 • {input_type}",
         "└─────────────────────",
         "",
         "Нажмите на параметр чтобы изменить:",
@@ -171,10 +178,12 @@ def get_video_panel_text(user_id: int) -> str:
 
 def get_video_panel_keyboard(user_id: int) -> InlineKeyboardMarkup:
     settings = get_user_settings(user_id)
+    model_id = settings.get("model", "veo-3.1-generate-001")
     aspect = settings.get("video_aspect_ratio", "16:9")
     dur = settings.get("video_duration", 8)
     res = settings.get("video_resolution", "720p")
     audio = settings.get("video_audio", True)
+    has_audio = video_supports_audio(model_id)
 
     rows: list[list[InlineKeyboardButton]] = []
 
@@ -200,8 +209,9 @@ def get_video_panel_keyboard(user_id: int) -> InlineKeyboardMarkup:
         res_row.append(InlineKeyboardButton(text=text, callback_data=f"vp_res_{r}"))
     rows.append(res_row)
 
-    audio_text = "✅ 🔊 Аудио вкл" if audio else "🔇 Аудио выкл"
-    rows.append([InlineKeyboardButton(text=audio_text, callback_data="vp_audio")])
+    if has_audio:
+        audio_text = "✅ 🔊 Аудио вкл" if audio else "🔇 Аудио выкл"
+        rows.append([InlineKeyboardButton(text=audio_text, callback_data="vp_audio")])
 
     rows.append([InlineKeyboardButton(text="◀️ Назад к настройкам", callback_data="back_to_settings")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -315,6 +325,7 @@ def get_settings_summary_keyboard(user_id: int) -> InlineKeyboardMarkup:
         dur = settings.get("video_duration", 8)
         res = settings.get("video_resolution", "720p")
         audio = settings.get("video_audio", True)
+        has_audio = video_supports_audio(current_model)
 
         aspect_row: list[InlineKeyboardButton] = []
         for key, label in VIDEO_ASPECT_RATIOS.items():
@@ -335,8 +346,9 @@ def get_settings_summary_keyboard(user_id: int) -> InlineKeyboardMarkup:
             res_row.append(InlineKeyboardButton(text=text, callback_data=f"vp_res_{r}"))
         rows.append(res_row)
 
-        audio_text = "✅ 🔊 Аудио вкл" if audio else "🔇 Аудио выкл"
-        rows.append([InlineKeyboardButton(text=audio_text, callback_data="vp_audio")])
+        if has_audio:
+            audio_text = "✅ 🔊 Аудио вкл" if audio else "🔇 Аудио выкл"
+            rows.append([InlineKeyboardButton(text=audio_text, callback_data="vp_audio")])
     else:
         aspect_label = ASPECT_RATIOS.get(settings.get("aspect_ratio", "1:1"), "1:1")
         rows.append([

@@ -5,7 +5,7 @@ from vkbottle import Keyboard, KeyboardButtonColor, Text, Callback
 from bot.user_settings import (
     get_user_settings, AVAILABLE_MODELS, SEND_MODES, RESOLUTIONS, THINKING_LEVELS,
     VIDEO_DURATIONS, VIDEO_RESOLUTIONS, VIDEO_ASPECT_RATIOS, is_video_model,
-    get_video_credits_cost,
+    get_video_credits_cost, video_supports_audio,
 )
 from bot.keyboards import ASPECT_RATIOS
 
@@ -41,6 +41,7 @@ def get_settings_keyboard(user_id: int) -> str:
         dur = settings.get("video_duration", 8)
         res = settings.get("video_resolution", "720p")
         audio = settings.get("video_audio", True)
+        has_audio = video_supports_audio(current_model)
 
         for key, label in VIDEO_ASPECT_RATIOS.items():
             text = f"✅ {label}" if key == aspect else label
@@ -58,8 +59,9 @@ def get_settings_keyboard(user_id: int) -> str:
             kb.add(Callback(text, payload={"cmd": "vp_res", "id": r}))
         kb.row()
 
-        audio_text = "✅ 🔊 Аудио вкл" if audio else "🔇 Аудио выкл"
-        kb.add(Callback(audio_text, payload={"cmd": "vp_audio"}))
+        if has_audio:
+            audio_text = "✅ 🔊 Аудио вкл" if audio else "🔇 Аудио выкл"
+            kb.add(Callback(audio_text, payload={"cmd": "vp_audio"}))
     else:
         aspect_label = ASPECT_RATIOS.get(settings.get("aspect_ratio", "1:1"), "1:1")
         kb.add(Callback(f"📐 Размер: {aspect_label}", payload={"cmd": "choose_aspect"}))
@@ -161,6 +163,8 @@ def get_video_panel_text(user_id: int) -> str:
     model_info = AVAILABLE_MODELS.get(model_id, {})
     model_label = model_info.get("label", model_id)
     credits = model_info.get("credits", 3)
+    has_audio = video_supports_audio(model_id)
+    has_image = model_info.get("supports_image", False)
 
     aspect = settings.get("video_aspect_ratio", "16:9")
     aspect_label = VIDEO_ASPECT_RATIOS.get(aspect, aspect)
@@ -169,18 +173,22 @@ def get_video_panel_text(user_id: int) -> str:
     res_info = VIDEO_RESOLUTIONS.get(res, {})
     res_label = res_info.get("label", res)
     audio = settings.get("video_audio", True)
+    input_type = "текст + фото" if has_image else "только текст"
 
     lines = [
-        f"🎬 {model_label}",
+        f"⚙️ Настройки — {model_label}",
         "",
         "┌─────────────────────",
         f"│ 📐 Формат: {aspect_label}",
         f"│ ⏱ Длительность: {dur} сек",
         f"│ 📺 Разрешение: {res_label}",
-        f"│ 🔊 Аудио: {'Вкл' if audio else 'Выкл'}",
+    ]
+    if has_audio:
+        lines.append(f"│ 🔊 Аудио: {'Вкл' if audio else 'Выкл'}")
+    lines += [
         "├─────────────────────",
         f"│ 💰 Стоимость: {credits} кр.",
-        "│ 📋 24 FPS • MP4",
+        f"│ 📋 24 FPS • MP4 • {input_type}",
         "└─────────────────────",
         "",
         "Нажмите на параметр чтобы изменить:",
@@ -190,10 +198,12 @@ def get_video_panel_text(user_id: int) -> str:
 
 def get_video_panel_keyboard(user_id: int) -> str:
     settings = get_user_settings(user_id)
+    model_id = settings.get("model", "veo-3.1-generate-001")
     aspect = settings.get("video_aspect_ratio", "16:9")
     dur = settings.get("video_duration", 8)
     res = settings.get("video_resolution", "720p")
     audio = settings.get("video_audio", True)
+    has_audio = video_supports_audio(model_id)
 
     kb = Keyboard(inline=True)
 
@@ -213,9 +223,10 @@ def get_video_panel_keyboard(user_id: int) -> str:
         kb.add(Callback(text, payload={"cmd": "vp_res", "id": r}))
     kb.row()
 
-    audio_text = "✅ 🔊 Аудио вкл" if audio else "🔇 Аудио выкл"
-    kb.add(Callback(audio_text, payload={"cmd": "vp_audio"}))
-    kb.row()
+    if has_audio:
+        audio_text = "✅ 🔊 Аудио вкл" if audio else "🔇 Аудио выкл"
+        kb.add(Callback(audio_text, payload={"cmd": "vp_audio"}))
+        kb.row()
 
     kb.add(Callback("◀️ Назад к настройкам", payload={"cmd": "back_settings"}))
     return kb.get_json()

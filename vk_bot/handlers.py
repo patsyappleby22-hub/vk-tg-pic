@@ -265,7 +265,10 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
         )
 
     def _vk_get_settings_text(user_id: int) -> str:
-        from bot.user_settings import VIDEO_RESOLUTIONS as _VR, VIDEO_ASPECT_RATIOS as _VA
+        from bot.user_settings import (
+            VIDEO_RESOLUTIONS as _VR, VIDEO_ASPECT_RATIOS as _VA,
+            video_supports_audio as _vsa,
+        )
         s = get_user_settings(user_id)
         mid = s.get("model", "gemini-3.1-flash-image-preview")
         if not is_video_model(mid):
@@ -273,22 +276,32 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
         mi = AVAILABLE_MODELS.get(mid, {})
         ml = mi.get("label", mid)
         cr = mi.get("credits", 3)
+        has_audio = _vsa(mid)
+        has_image = mi.get("supports_image", False)
         al = _VA.get(s.get("video_aspect_ratio", "16:9"), "16:9")
         d = s.get("video_duration", 8)
         rl = _VR.get(s.get("video_resolution", "720p"), {}).get("label", s.get("video_resolution", "720p"))
         au = s.get("video_audio", True)
-        return (
-            f"⚙️ Настройки — {ml}\n\n"
-            "┌─────────────────────\n"
-            f"│ 📐 Формат: {al}\n"
-            f"│ ⏱ Длительность: {d} сек\n"
-            f"│ 📺 Разрешение: {rl}\n"
-            f"│ 🔊 Аудио: {'Вкл' if au else 'Выкл'}\n"
-            "├─────────────────────\n"
-            f"│ 💰 Стоимость: {cr} кр. • 24 FPS • MP4\n"
-            "└─────────────────────\n\n"
-            "Нажмите на параметр чтобы изменить:"
-        )
+        input_type = "текст + фото" if has_image else "только текст"
+        lines = [
+            f"⚙️ Настройки — {ml}",
+            "",
+            "┌─────────────────────",
+            f"│ 📐 Формат: {al}",
+            f"│ ⏱ Длительность: {d} сек",
+            f"│ 📺 Разрешение: {rl}",
+        ]
+        if has_audio:
+            lines.append(f"│ 🔊 Аудио: {'Вкл' if au else 'Выкл'}")
+        lines += [
+            "├─────────────────────",
+            f"│ 💰 Стоимость: {cr} кр.",
+            f"│ 📋 24 FPS • MP4 • {input_type}",
+            "└─────────────────────",
+            "",
+            "Нажмите на параметр чтобы изменить:",
+        ]
+        return "\n".join(lines)
 
     @bot.on.message(text=list(SETTINGS_TEXTS))
     async def cmd_settings(message: Message):
@@ -517,8 +530,11 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
 
         elif cmd == "vp_audio":
             settings = get_user_settings(uid)
-            settings["video_audio"] = not settings.get("video_audio", True)
-            save_user_settings(uid)
+            from bot.user_settings import video_supports_audio as _vsa2
+            model_id = settings.get("model", "")
+            if _vsa2(model_id):
+                settings["video_audio"] = not settings.get("video_audio", True)
+                save_user_settings(uid)
             await edit_msg(_vk_get_settings_text(uid), get_settings_keyboard(uid))
 
         elif cmd == "choose_video_duration":
@@ -902,7 +918,7 @@ async def _generate_and_send(
         model_label = AVAILABLE_MODELS.get(user_model, {}).get("label", user_model)
         await bot.api.messages.send(
             peer_id=peer_id, random_id=0,
-            message=f"🎬 Модель {model_label} поддерживает только текстовые запросы.\n\n"
+            message=f"🎬 Модель {model_label} — генерация видео по фото пока не поддерживается.\n\n"
                     "Отправьте текстовое описание для генерации видео, "
                     "или переключите модель на изображения в настройках.",
         )
@@ -948,10 +964,11 @@ async def _generate_and_send(
     start_time = time.monotonic()
 
     if _is_video:
+        from bot.user_settings import video_supports_audio
         video_aspect = settings.get("video_aspect_ratio", "16:9")
         video_duration = settings.get("video_duration", 8)
         video_resolution = settings.get("video_resolution", "720p")
-        video_audio = settings.get("video_audio", True)
+        video_audio = settings.get("video_audio", True) and video_supports_audio(user_model)
 
         async def _do_generate() -> bytes:
             return await vertex_service.generate_video(

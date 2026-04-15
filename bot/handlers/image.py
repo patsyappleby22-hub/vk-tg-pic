@@ -230,7 +230,7 @@ async def handle_photo_prompt(
     if is_video_model(user_model):
         model_label = AVAILABLE_MODELS.get(user_model, {}).get("label", user_model)
         await message.reply(
-            f"🎬 Модель <b>{model_label}</b> поддерживает только текстовые запросы.\n\n"
+            f"🎬 Модель <b>{model_label}</b> — генерация видео по фото пока не поддерживается.\n\n"
             "Отправьте текстовое описание для генерации видео, "
             "или переключите модель на изображения в настройках.",
             parse_mode="HTML",
@@ -490,10 +490,11 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
     _uname_t = message.from_user.username or message.from_user.first_name or ""
 
     if _is_video:
+        from bot.user_settings import video_supports_audio
         video_aspect = settings.get("video_aspect_ratio", "16:9")
         video_duration = settings.get("video_duration", 8)
         video_resolution = settings.get("video_resolution", "720p")
-        video_audio = settings.get("video_audio", True)
+        video_audio = settings.get("video_audio", True) and video_supports_audio(user_model)
 
         async def _do_video_generate() -> bytes:
             return await vertex_service.generate_video(

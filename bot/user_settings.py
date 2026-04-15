@@ -66,21 +66,27 @@ AVAILABLE_MODELS: dict[str, dict[str, Any]] = {
     },
     "veo-3.1-generate-001": {
         "label": "🎬 Veo 3.1 (Видео)",
-        "desc": "Высокое качество видео, до 8 сек",
+        "desc": "Высокое качество видео, только текст",
         "type": "video",
         "credits": 5,
+        "supports_audio": False,
+        "supports_image": False,
     },
     "veo-3.1-fast-generate-001": {
         "label": "⚡ Veo 3.1 Fast (Видео)",
-        "desc": "Быстрая генерация видео, до 8 сек",
+        "desc": "Быстрая генерация видео, только текст",
         "type": "video",
         "credits": 3,
+        "supports_audio": False,
+        "supports_image": False,
     },
     "veo-3.1-lite-generate-001": {
         "label": "💡 Veo 3.1 Lite (Видео)",
-        "desc": "Экономичная генерация видео",
+        "desc": "Экономичная генерация, аудио, только текст",
         "type": "video",
         "credits": 2,
+        "supports_audio": True,
+        "supports_image": False,
     },
 }
 
@@ -109,6 +115,16 @@ def is_video_model(model_id: str) -> bool:
 def get_video_credits_cost(model_id: str) -> int:
     info = AVAILABLE_MODELS.get(model_id, {})
     return info.get("credits", 3)
+
+
+def video_supports_audio(model_id: str) -> bool:
+    info = AVAILABLE_MODELS.get(model_id, {})
+    return bool(info.get("supports_audio", False))
+
+
+def video_supports_image(model_id: str) -> bool:
+    info = AVAILABLE_MODELS.get(model_id, {})
+    return bool(info.get("supports_image", False))
 
 RESOLUTIONS: dict[str, dict[str, Any]] = {
     "original": {
