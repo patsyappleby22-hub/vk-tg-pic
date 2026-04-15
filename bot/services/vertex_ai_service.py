@@ -357,10 +357,22 @@ class VertexAIService:
             sa_files = _load_sa_files()
             for i, f in enumerate(sa_files):
                 slots.append(_CredSlot(sa_path=f, index=i))
-        self._slots = slots
-        self._current_index = 0
+        if self._lock.locked():
+            self._slots = slots
+            self._current_index = 0
+        else:
+            try:
+                loop = asyncio.get_running_loop()
+                async def _swap():
+                    async with self._lock:
+                        self._slots = slots
+                        self._current_index = 0
+                loop.create_task(_swap())
+            except RuntimeError:
+                self._slots = slots
+                self._current_index = 0
         if slots:
-            logger.info("Reloaded %d credential slot(s)", len(self._slots))
+            logger.info("Reloaded %d credential slot(s)", len(slots))
         else:
             logger.warning("reload_keys: all credentials removed — bot will reject requests")
 
@@ -411,20 +423,23 @@ class VertexAIService:
         return result
 
     def _get_next_available_slot(self, model: str) -> _BaseSlot | None:
-        """Return the ready slot with the most remaining capacity for model.
+        """Return the next ready slot using round-robin rotation.
 
+        After each use the pointer advances so every key gets equal traffic.
         'Ready' means: past cooldown_until AND has_capacity for this specific model
         AND no permanent auth error.
-        Flash and Pro quotas on the same key are independent — a key saturated
-        with Flash requests can still serve Pro requests and vice-versa.
         """
-        # Permanently exclude slots with auth errors — the key is invalid until reload
         usable = [s for s in self._slots if not s.auth_error]
-        ready = [s for s in usable if s.is_ready(model)]
-        if not ready:
+        if not usable:
             return None
-        # Prefer the slot with fewest requests in the window for this model
-        return min(ready, key=lambda s: s.requests_in_window(model))
+        n = len(usable)
+        for i in range(n):
+            idx = (self._current_index + i) % n
+            slot = usable[idx]
+            if slot.is_ready(model):
+                self._current_index = (idx + 1) % n
+                return slot
+        return None
 
     def _earliest_ready_at(self, model: str) -> float:
         """Monotonic timestamp when any slot will next be ready for model."""
