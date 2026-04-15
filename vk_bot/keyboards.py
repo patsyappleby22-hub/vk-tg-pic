@@ -5,6 +5,7 @@ from vkbottle import Keyboard, KeyboardButtonColor, Text, Callback
 from bot.user_settings import (
     get_user_settings, AVAILABLE_MODELS, SEND_MODES, RESOLUTIONS, THINKING_LEVELS,
     VIDEO_DURATIONS, VIDEO_RESOLUTIONS, VIDEO_ASPECT_RATIOS, is_video_model,
+    get_video_credits_cost,
 )
 from bot.keyboards import ASPECT_RATIOS
 
@@ -36,20 +37,15 @@ def get_settings_keyboard(user_id: int) -> str:
     kb.row()
 
     if is_video_model(current_model):
-        v_aspect = VIDEO_ASPECT_RATIOS.get(settings.get("video_aspect_ratio", "16:9"), "16:9")
-        kb.add(Callback(f"📐 Формат: {v_aspect}", payload={"cmd": "choose_video_aspect"}))
-        kb.row()
-
+        credits = AVAILABLE_MODELS.get(current_model, {}).get("credits", 3)
         dur = settings.get("video_duration", 8)
-        dur_info = VIDEO_DURATIONS.get(dur, {})
-        dur_label = dur_info.get("label", f"⏱ {dur} сек")
-        kb.add(Callback(f"⏱ {dur_label}", payload={"cmd": "choose_video_duration"}))
-        kb.row()
-
         vres = settings.get("video_resolution", "720p")
-        vres_info = VIDEO_RESOLUTIONS.get(vres, {})
-        vres_label = vres_info.get("label", vres)
-        kb.add(Callback(f"📺 {vres_label}", payload={"cmd": "choose_video_resolution"}))
+        audio = settings.get("video_audio", True)
+        audio_icon = "🔊" if audio else "🔇"
+        kb.add(Callback(
+            f"🎬 Видео: {dur}с • {vres} • {audio_icon} ({credits} кр.)",
+            payload={"cmd": "open_video_panel"},
+        ))
     else:
         aspect_label = ASPECT_RATIOS.get(settings.get("aspect_ratio", "1:1"), "1:1")
         kb.add(Callback(f"📐 Размер: {aspect_label}", payload={"cmd": "choose_aspect"}))
@@ -142,6 +138,72 @@ def get_video_aspect_keyboard(user_id: int) -> str:
         kb.add(Callback(text, payload={"cmd": "set_video_aspect", "id": ratio}))
         kb.row()
     kb.add(Callback("◀️ Назад", payload={"cmd": "back_settings"}))
+    return kb.get_json()
+
+
+def get_video_panel_text(user_id: int) -> str:
+    settings = get_user_settings(user_id)
+    model_id = settings.get("model", "veo-3.1-generate-001")
+    model_info = AVAILABLE_MODELS.get(model_id, {})
+    model_label = model_info.get("label", model_id)
+    credits = model_info.get("credits", 3)
+
+    aspect = settings.get("video_aspect_ratio", "16:9")
+    aspect_label = VIDEO_ASPECT_RATIOS.get(aspect, aspect)
+    dur = settings.get("video_duration", 8)
+    res = settings.get("video_resolution", "720p")
+    res_info = VIDEO_RESOLUTIONS.get(res, {})
+    res_label = res_info.get("label", res)
+    audio = settings.get("video_audio", True)
+
+    lines = [
+        f"🎬 {model_label}",
+        "",
+        "┌─────────────────────",
+        f"│ 📐 Формат: {aspect_label}",
+        f"│ ⏱ Длительность: {dur} сек",
+        f"│ 📺 Разрешение: {res_label}",
+        f"│ 🔊 Аудио: {'Вкл' if audio else 'Выкл'}",
+        "├─────────────────────",
+        f"│ 💰 Стоимость: {credits} кр.",
+        "│ 📋 24 FPS • MP4",
+        "└─────────────────────",
+        "",
+        "Нажмите на параметр чтобы изменить:",
+    ]
+    return "\n".join(lines)
+
+
+def get_video_panel_keyboard(user_id: int) -> str:
+    settings = get_user_settings(user_id)
+    aspect = settings.get("video_aspect_ratio", "16:9")
+    dur = settings.get("video_duration", 8)
+    res = settings.get("video_resolution", "720p")
+    audio = settings.get("video_audio", True)
+
+    kb = Keyboard(inline=True)
+
+    for key, label in VIDEO_ASPECT_RATIOS.items():
+        text = f"✅ {label}" if key == aspect else label
+        kb.add(Callback(text, payload={"cmd": "vp_aspect", "id": key}))
+    kb.row()
+
+    for d in VIDEO_DURATIONS:
+        text = f"✅ {d}с" if d == dur else f"{d}с"
+        kb.add(Callback(text, payload={"cmd": "vp_dur", "id": d}))
+    kb.row()
+
+    for r in VIDEO_RESOLUTIONS:
+        r_label = r.upper() if r == "720p" else r
+        text = f"✅ {r_label}" if r == res else r_label
+        kb.add(Callback(text, payload={"cmd": "vp_res", "id": r}))
+    kb.row()
+
+    audio_text = "✅ 🔊 Аудио вкл" if audio else "🔇 Аудио выкл"
+    kb.add(Callback(audio_text, payload={"cmd": "vp_audio"}))
+    kb.row()
+
+    kb.add(Callback("◀️ Назад к настройкам", payload={"cmd": "back_settings"}))
     return kb.get_json()
 
 

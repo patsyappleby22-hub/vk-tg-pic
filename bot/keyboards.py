@@ -11,6 +11,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardBu
 from bot.user_settings import (
     get_user_settings, AVAILABLE_MODELS, SEND_MODES, RESOLUTIONS, THINKING_LEVELS,
     VIDEO_DURATIONS, VIDEO_RESOLUTIONS, VIDEO_ASPECT_RATIOS, is_video_model,
+    get_video_credits_cost,
 )
 
 BTN_MENU = "📋 Меню"
@@ -135,6 +136,77 @@ def get_video_aspect_keyboard(user_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def get_video_panel_text(user_id: int) -> str:
+    settings = get_user_settings(user_id)
+    model_id = settings.get("model", "veo-3.1-generate-001")
+    model_info = AVAILABLE_MODELS.get(model_id, {})
+    model_label = model_info.get("label", model_id)
+    credits = model_info.get("credits", 3)
+
+    aspect = settings.get("video_aspect_ratio", "16:9")
+    aspect_label = VIDEO_ASPECT_RATIOS.get(aspect, aspect)
+    dur = settings.get("video_duration", 8)
+    res = settings.get("video_resolution", "720p")
+    res_info = VIDEO_RESOLUTIONS.get(res, {})
+    res_label = res_info.get("label", res)
+    audio = settings.get("video_audio", True)
+
+    lines = [
+        f"🎬 <b>{model_label}</b>",
+        "",
+        "┌─────────────────────",
+        f"│ 📐 Формат: <b>{aspect_label}</b>",
+        f"│ ⏱ Длительность: <b>{dur} сек</b>",
+        f"│ 📺 Разрешение: <b>{res_label}</b>",
+        f"│ 🔊 Аудио: <b>{'Вкл' if audio else 'Выкл'}</b>",
+        "├─────────────────────",
+        f"│ 💰 Стоимость: <b>{credits} кр.</b>",
+        "│ 📋 24 FPS • MP4",
+        "└─────────────────────",
+        "",
+        "Нажмите на параметр чтобы изменить:",
+    ]
+    return "\n".join(lines)
+
+
+def get_video_panel_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    settings = get_user_settings(user_id)
+    aspect = settings.get("video_aspect_ratio", "16:9")
+    dur = settings.get("video_duration", 8)
+    res = settings.get("video_resolution", "720p")
+    audio = settings.get("video_audio", True)
+
+    rows: list[list[InlineKeyboardButton]] = []
+
+    rows.append([InlineKeyboardButton(text="── 📐 Формат ──", callback_data="noop")])
+    aspect_row: list[InlineKeyboardButton] = []
+    for key, label in VIDEO_ASPECT_RATIOS.items():
+        text = f"✅ {label}" if key == aspect else label
+        aspect_row.append(InlineKeyboardButton(text=text, callback_data=f"vp_aspect_{key}"))
+    rows.append(aspect_row)
+
+    rows.append([InlineKeyboardButton(text="── ⏱ Длительность ──", callback_data="noop")])
+    dur_row: list[InlineKeyboardButton] = []
+    for d in VIDEO_DURATIONS:
+        text = f"✅ {d}с" if d == dur else f"{d}с"
+        dur_row.append(InlineKeyboardButton(text=text, callback_data=f"vp_dur_{d}"))
+    rows.append(dur_row)
+
+    rows.append([InlineKeyboardButton(text="── 📺 Разрешение ──", callback_data="noop")])
+    res_row: list[InlineKeyboardButton] = []
+    for r in VIDEO_RESOLUTIONS:
+        r_label = r.upper() if r == "720p" else r
+        text = f"✅ {r_label}" if r == res else r_label
+        res_row.append(InlineKeyboardButton(text=text, callback_data=f"vp_res_{r}"))
+    rows.append(res_row)
+
+    audio_text = "✅ 🔊 Аудио вкл" if audio else "🔇 Аудио выкл"
+    rows.append([InlineKeyboardButton(text=audio_text, callback_data="vp_audio")])
+
+    rows.append([InlineKeyboardButton(text="◀️ Назад к настройкам", callback_data="back_to_settings")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def get_aspect_ratio_keyboard(user_id: int, page: int = 0) -> InlineKeyboardMarkup:
     settings = get_user_settings(user_id)
     current = settings.get("aspect_ratio", "1:1")
@@ -239,31 +311,15 @@ def get_settings_summary_keyboard(user_id: int) -> InlineKeyboardMarkup:
     ]
 
     if is_video_model(current_model):
-        v_aspect = VIDEO_ASPECT_RATIOS.get(settings.get("video_aspect_ratio", "16:9"), "16:9")
-        rows.append([
-            InlineKeyboardButton(
-                text=f"📐 Формат: {v_aspect}",
-                callback_data="choose_video_aspect",
-            ),
-        ])
-
+        credits = AVAILABLE_MODELS.get(current_model, {}).get("credits", 3)
         dur = settings.get("video_duration", 8)
-        dur_info = VIDEO_DURATIONS.get(dur, {})
-        dur_label = dur_info.get("label", f"⏱ {dur} сек")
-        rows.append([
-            InlineKeyboardButton(
-                text=f"⏱ Длительность: {dur_label}",
-                callback_data="choose_video_duration",
-            ),
-        ])
-
         vres = settings.get("video_resolution", "720p")
-        vres_info = VIDEO_RESOLUTIONS.get(vres, {})
-        vres_label = vres_info.get("label", vres)
+        audio = settings.get("video_audio", True)
+        audio_icon = "🔊" if audio else "🔇"
         rows.append([
             InlineKeyboardButton(
-                text=f"📺 Разрешение: {vres_label}",
-                callback_data="choose_video_resolution",
+                text=f"🎬 Видео: {dur}с • {vres} • {audio_icon} ({credits} кр.)",
+                callback_data="open_video_panel",
             ),
         ])
     else:

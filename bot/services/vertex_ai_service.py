@@ -791,6 +791,7 @@ class VertexAIService:
         duration_seconds: int = 8,
         resolution: str = "720p",
         person_generation: str = "allow_adult",
+        generate_audio: bool = True,
         user_id: int | None = None,
         username: str = "",
         on_progress: Any = None,
@@ -811,6 +812,7 @@ class VertexAIService:
                 prompt=prompt, model=model,
                 aspect_ratio=aspect_ratio, duration_seconds=duration_seconds,
                 resolution=resolution, person_generation=person_generation,
+                generate_audio=generate_audio,
                 user_id=user_id, username=username, on_progress=on_progress,
             )
 
@@ -822,6 +824,7 @@ class VertexAIService:
         duration_seconds: int,
         resolution: str,
         person_generation: str,
+        generate_audio: bool,
         user_id: int | None,
         username: str,
         on_progress: Any,
@@ -858,7 +861,7 @@ class VertexAIService:
                     person_generation=person_generation,
                     number_of_videos=1,
                     enhance_prompt=True,
-                    generate_audio=True,
+                    generate_audio=generate_audio,
                 )
 
                 logger.info(

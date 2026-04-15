@@ -30,6 +30,7 @@ _PERSISTENT_KEYS = {
     "first_name", "generations_count", "platform",
     "credits", "blocked",
     "video_duration", "video_resolution", "video_aspect_ratio",
+    "video_audio",
 }
 
 user_settings: dict[int, dict[str, Any]] = {}
@@ -178,6 +179,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "video_duration": 8,
     "video_resolution": "720p",
     "video_aspect_ratio": "16:9",
+    "video_audio": True,
 }
 
 

@@ -60,11 +60,14 @@ An asynchronous multi-platform bot (Telegram + VK) for AI image generation using
 
 ## Video Generation (Veo 3.1)
 - Models: veo-3.1-generate-001, veo-3.1-fast-generate-001, veo-3.1-lite-generate-001
-- Settings: duration (4/6/8 sec), resolution (720p/1080p), aspect ratio (16:9, 9:16)
+- Settings: duration (4/6/8 sec), resolution (720p/1080p), aspect ratio (16:9, 9:16), audio (on/off)
 - Video models only accept text prompts — photo input is rejected with a message
 - Implementation: `VertexAIService.generate_video()` with async polling (10s interval, 600s timeout)
 - Supported on both Telegram (reply_video) and VK (document upload as .mp4)
-- User settings: video_duration, video_resolution, video_aspect_ratio (persisted)
+- User settings: video_duration, video_resolution, video_aspect_ratio, video_audio (persisted)
+- Interactive video panel: after selecting a video model, opens unified panel with all settings + toggle buttons + cost info
+- Panel callbacks: `vp_aspect_*`, `vp_dur_*`, `vp_res_*`, `vp_audio` — each re-renders panel in-place
+- Settings summary shows compact "🎬 Видео: Xs • Xp • 🔊 (X кр.)" button that opens the panel
 
 ## Bot UI
 - Persistent keyboard: Menu, Ideas, Settings, Balance, Stop

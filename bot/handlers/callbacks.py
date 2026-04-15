@@ -25,11 +25,14 @@ from bot.keyboards import (
     get_video_duration_keyboard,
     get_video_resolution_keyboard,
     get_video_aspect_keyboard,
+    get_video_panel_text,
+    get_video_panel_keyboard,
 )
 from bot.user_settings import (
     user_settings, get_user_settings, set_last_menu, save_user_settings,
     AVAILABLE_MODELS, SEND_MODES, RESOLUTIONS, THINKING_LEVELS,
     VIDEO_DURATIONS, VIDEO_RESOLUTIONS, VIDEO_ASPECT_RATIOS,
+    is_video_model,
 )
 from bot.services.lava_service import create_payment_url, CREDIT_PACKAGES
 
@@ -93,7 +96,14 @@ async def set_model(callback: CallbackQuery) -> None:
     info = AVAILABLE_MODELS[model_id]
     await callback.answer(f"Модель: {info['label']}")
 
-    await _safe_edit(callback, _SETTINGS_TEXT, reply_markup=get_settings_summary_keyboard(uid))
+    if is_video_model(model_id):
+        await _safe_edit(
+            callback,
+            get_video_panel_text(uid),
+            reply_markup=get_video_panel_keyboard(uid),
+        )
+    else:
+        await _safe_edit(callback, _SETTINGS_TEXT, reply_markup=get_settings_summary_keyboard(uid))
 
 
 @router.callback_query(lambda c: c.data == "choose_aspect")
@@ -268,6 +278,13 @@ async def noop_callback(callback: CallbackQuery) -> None:
     await callback.answer()
 
 
+@router.callback_query(lambda c: c.data == "open_video_panel")
+async def open_video_panel(callback: CallbackQuery) -> None:
+    uid = callback.from_user.id
+    await _safe_edit(callback, get_video_panel_text(uid), reply_markup=get_video_panel_keyboard(uid))
+    await callback.answer()
+
+
 @router.callback_query(lambda c: c.data == "choose_video_duration")
 async def choose_video_duration(callback: CallbackQuery) -> None:
     uid = callback.from_user.id
@@ -294,6 +311,64 @@ async def set_video_duration(callback: CallbackQuery) -> None:
     save_user_settings(uid)
     await callback.answer(f"Длительность: {VIDEO_DURATIONS[dur]['label']}")
     await _safe_edit(callback, _SETTINGS_TEXT, reply_markup=get_settings_summary_keyboard(uid))
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("vp_aspect_"))
+async def vp_set_aspect(callback: CallbackQuery) -> None:
+    uid = callback.from_user.id
+    key = callback.data.replace("vp_aspect_", "", 1)
+    if key not in VIDEO_ASPECT_RATIOS:
+        await callback.answer("Неизвестный формат")
+        return
+    settings = get_user_settings(uid)
+    settings["video_aspect_ratio"] = key
+    save_user_settings(uid)
+    await callback.answer(f"Формат: {VIDEO_ASPECT_RATIOS[key]}")
+    await _safe_edit(callback, get_video_panel_text(uid), reply_markup=get_video_panel_keyboard(uid))
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("vp_dur_"))
+async def vp_set_duration(callback: CallbackQuery) -> None:
+    uid = callback.from_user.id
+    try:
+        dur = int(callback.data.replace("vp_dur_", "", 1))
+    except ValueError:
+        await callback.answer()
+        return
+    if dur not in VIDEO_DURATIONS:
+        await callback.answer("Неизвестная длительность")
+        return
+    settings = get_user_settings(uid)
+    settings["video_duration"] = dur
+    save_user_settings(uid)
+    await callback.answer(f"Длительность: {dur} сек")
+    await _safe_edit(callback, get_video_panel_text(uid), reply_markup=get_video_panel_keyboard(uid))
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("vp_res_"))
+async def vp_set_resolution(callback: CallbackQuery) -> None:
+    uid = callback.from_user.id
+    res_id = callback.data.replace("vp_res_", "", 1)
+    if res_id not in VIDEO_RESOLUTIONS:
+        await callback.answer("Неизвестное разрешение")
+        return
+    settings = get_user_settings(uid)
+    settings["video_resolution"] = res_id
+    save_user_settings(uid)
+    await callback.answer(f"Разрешение: {res_id}")
+    await _safe_edit(callback, get_video_panel_text(uid), reply_markup=get_video_panel_keyboard(uid))
+
+
+@router.callback_query(lambda c: c.data == "vp_audio")
+async def vp_toggle_audio(callback: CallbackQuery) -> None:
+    uid = callback.from_user.id
+    settings = get_user_settings(uid)
+    current = settings.get("video_audio", True)
+    settings["video_audio"] = not current
+    save_user_settings(uid)
+    state = "Вкл" if not current else "Выкл"
+    await callback.answer(f"Аудио: {state}")
+    await _safe_edit(callback, get_video_panel_text(uid), reply_markup=get_video_panel_keyboard(uid))
 
 
 @router.callback_query(lambda c: c.data == "choose_video_resolution")

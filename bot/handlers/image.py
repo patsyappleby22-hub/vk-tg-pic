@@ -493,6 +493,7 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
         video_aspect = settings.get("video_aspect_ratio", "16:9")
         video_duration = settings.get("video_duration", 8)
         video_resolution = settings.get("video_resolution", "720p")
+        video_audio = settings.get("video_audio", True)
 
         async def _do_video_generate() -> bytes:
             return await vertex_service.generate_video(
@@ -501,6 +502,7 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
                 aspect_ratio=video_aspect,
                 duration_seconds=video_duration,
                 resolution=video_resolution,
+                generate_audio=video_audio,
                 user_id=uid,
                 username=_uname_t,
             )
