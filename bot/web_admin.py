@@ -1643,10 +1643,10 @@ function fmtAgo(sec) {{
 
 function modelShort(m) {{
   if (!m) return '';
-  if (m.includes('flash-image')) return 'Flash🖼';
-  if (m.includes('pro-image'))   return 'Pro🖼';
-  if (m.includes('pro-preview')) return 'Pro💬';
-  if (m.includes('flash'))       return 'Flash💬';
+  if (m.includes('flash-image')) return 'Flash \uD83C\uDFA8';
+  if (m.includes('pro-image'))   return 'Pro \uD83C\uDFA8';
+  if (m.includes('pro-preview')) return 'Pro \uD83D\uDCAC';
+  if (m.includes('flash'))       return 'Flash \uD83D\uDCAC';
   return m.split('-').slice(-2).join('-');
 }}
 
