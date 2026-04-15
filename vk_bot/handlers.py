@@ -543,6 +543,30 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
                 save_user_settings(uid)
             await edit_msg(_vk_get_settings_text(uid), get_settings_keyboard(uid))
 
+        elif cmd == "choose_vtask":
+            from vk_bot.keyboards import get_video_task_keyboard
+            from bot.user_settings import VIDEO_TASKS as _VT, get_available_tasks_for_model as _gatm
+            settings = get_user_settings(uid)
+            model_id = settings.get("model", "")
+            avail = _gatm(model_id)
+            lines = ["🎯 Тип задачи:\n"]
+            for tid, tinfo in avail.items():
+                suffix = " (скоро)" if tinfo.get("coming_soon") else ""
+                lines.append(f"  {tinfo['label']}{suffix}\n  {tinfo['desc']}\n")
+            await edit_msg("\n".join(lines), get_video_task_keyboard(uid))
+
+        elif cmd == "set_vtask":
+            from bot.user_settings import VIDEO_TASKS as _VT2, get_available_tasks_for_model as _gatm2
+            task_id = data.get("id", "text-to-video")
+            if task_id in _VT2 and not _VT2[task_id].get("coming_soon"):
+                settings = get_user_settings(uid)
+                model_id = settings.get("model", "")
+                avail = _gatm2(model_id)
+                if task_id in avail:
+                    settings["video_task"] = task_id
+                    save_user_settings(uid)
+            await edit_msg(_vk_get_settings_text(uid), get_settings_keyboard(uid))
+
         elif cmd == "choose_video_duration":
             from vk_bot.keyboards import get_video_duration_keyboard
             from bot.user_settings import VIDEO_DURATIONS

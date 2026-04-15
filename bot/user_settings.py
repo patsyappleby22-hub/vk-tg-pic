@@ -30,7 +30,7 @@ _PERSISTENT_KEYS = {
     "first_name", "generations_count", "platform",
     "credits", "blocked",
     "video_duration", "video_resolution", "video_aspect_ratio",
-    "video_audio",
+    "video_audio", "video_task",
 }
 
 user_settings: dict[int, dict[str, Any]] = {}
@@ -109,6 +109,60 @@ VIDEO_ASPECT_RATIOS: dict[str, str] = {
     "16:9": "16:9 (Горизонтальный)",
     "9:16": "9:16 (Вертикальный)",
 }
+
+VIDEO_TASKS: dict[str, dict[str, Any]] = {
+    "text-to-video": {
+        "label": "📝 Text-to-video",
+        "desc": "Генерация видео по текстовому описанию",
+        "input": "text",
+    },
+    "image-to-video": {
+        "label": "🖼 Image-to-video",
+        "desc": "Генерация видео по изображению + текст",
+        "input": "image",
+        "requires_image_support": True,
+    },
+    "video-extension": {
+        "label": "🔄 Video extension",
+        "desc": "Продление существующего видео",
+        "input": "video",
+        "coming_soon": True,
+    },
+    "ref-subject": {
+        "label": "👤 Reference-to-video (Subject)",
+        "desc": "Видео с сохранением субъекта из фото",
+        "input": "image",
+        "coming_soon": True,
+    },
+    "ref-style": {
+        "label": "🎨 Reference-to-video (Style)",
+        "desc": "Видео в стиле референсного изображения",
+        "input": "image",
+        "coming_soon": True,
+    },
+    "inpaint-insert": {
+        "label": "✏️ Video inpaint (Insert)",
+        "desc": "Вставка объекта в видео",
+        "input": "video",
+        "coming_soon": True,
+    },
+    "inpaint-remove": {
+        "label": "🗑 Video inpaint (Remove)",
+        "desc": "Удаление объекта из видео",
+        "input": "video",
+        "coming_soon": True,
+    },
+}
+
+
+def get_available_tasks_for_model(model_id: str) -> dict[str, dict[str, Any]]:
+    has_image = video_supports_image(model_id)
+    result = {}
+    for tid, tinfo in VIDEO_TASKS.items():
+        if tinfo.get("requires_image_support") and not has_image:
+            continue
+        result[tid] = tinfo
+    return result
 
 
 def is_video_model(model_id: str) -> bool:
@@ -211,6 +265,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "video_resolution": "720p",
     "video_aspect_ratio": "16:9",
     "video_audio": True,
+    "video_task": "text-to-video",
 }
 
 

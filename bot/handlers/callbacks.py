@@ -27,12 +27,13 @@ from bot.keyboards import (
     get_video_aspect_keyboard,
     get_video_panel_text,
     get_video_panel_keyboard,
+    get_video_task_keyboard,
 )
 from bot.user_settings import (
     user_settings, get_user_settings, set_last_menu, save_user_settings,
     AVAILABLE_MODELS, SEND_MODES, RESOLUTIONS, THINKING_LEVELS,
-    VIDEO_DURATIONS, VIDEO_RESOLUTIONS, VIDEO_ASPECT_RATIOS,
-    is_video_model,
+    VIDEO_DURATIONS, VIDEO_RESOLUTIONS, VIDEO_ASPECT_RATIOS, VIDEO_TASKS,
+    is_video_model, get_available_tasks_for_model,
 )
 from bot.services.lava_service import create_payment_url, CREDIT_PACKAGES
 
@@ -385,6 +386,43 @@ async def vp_toggle_audio(callback: CallbackQuery) -> None:
     save_user_settings(uid)
     state = "Вкл" if not current else "Выкл"
     await callback.answer(f"Аудио: {state}")
+    await _safe_edit(callback, _video_settings_text(uid), reply_markup=get_settings_summary_keyboard(uid))
+
+
+@router.callback_query(lambda c: c.data == "choose_video_task")
+async def choose_video_task(callback: CallbackQuery) -> None:
+    uid = callback.from_user.id
+    lines = ["🎯 <b>Тип задачи:</b>\n"]
+    settings = get_user_settings(uid)
+    model_id = settings.get("model", "")
+    avail = get_available_tasks_for_model(model_id)
+    for tid, tinfo in avail.items():
+        suffix = " (скоро)" if tinfo.get("coming_soon") else ""
+        lines.append(f"  {tinfo['label']}{suffix}\n  <i>{tinfo['desc']}</i>\n")
+    await _safe_edit(callback, "\n".join(lines), reply_markup=get_video_task_keyboard(uid))
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("vtask_"))
+async def set_video_task(callback: CallbackQuery) -> None:
+    uid = callback.from_user.id
+    task_id = callback.data.replace("vtask_", "", 1)
+    if task_id not in VIDEO_TASKS:
+        await callback.answer("Неизвестная задача")
+        return
+    task_info = VIDEO_TASKS[task_id]
+    if task_info.get("coming_soon"):
+        await callback.answer("Эта функция пока недоступна", show_alert=True)
+        return
+    settings = get_user_settings(uid)
+    model_id = settings.get("model", "")
+    avail = get_available_tasks_for_model(model_id)
+    if task_id not in avail:
+        await callback.answer("Задача недоступна для этой модели", show_alert=True)
+        return
+    settings["video_task"] = task_id
+    save_user_settings(uid)
+    await callback.answer(f"Задача: {task_info['label']}")
     await _safe_edit(callback, _video_settings_text(uid), reply_markup=get_settings_summary_keyboard(uid))
 
 

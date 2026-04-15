@@ -4,9 +4,9 @@ from vkbottle import Keyboard, KeyboardButtonColor, Text, Callback
 
 from bot.user_settings import (
     get_user_settings, AVAILABLE_MODELS, SEND_MODES, RESOLUTIONS, THINKING_LEVELS,
-    VIDEO_DURATIONS, VIDEO_RESOLUTIONS, VIDEO_ASPECT_RATIOS, is_video_model,
-    get_video_credits_cost, video_supports_audio, video_supports_image,
-    get_video_resolutions_for_model,
+    VIDEO_DURATIONS, VIDEO_RESOLUTIONS, VIDEO_ASPECT_RATIOS, VIDEO_TASKS,
+    is_video_model, get_video_credits_cost, video_supports_audio, video_supports_image,
+    get_video_resolutions_for_model, get_available_tasks_for_model,
 )
 from bot.keyboards import ASPECT_RATIOS
 
@@ -168,7 +168,13 @@ def get_video_panel_text(user_id: int) -> str:
     model_label = model_info.get("label", model_id)
     credits = model_info.get("credits", 3)
     has_audio = video_supports_audio(model_id)
-    has_image = video_supports_image(model_id)
+
+    task_id = settings.get("video_task", "text-to-video")
+    avail_tasks = get_available_tasks_for_model(model_id)
+    if task_id not in avail_tasks:
+        task_id = "text-to-video"
+    task_info = VIDEO_TASKS.get(task_id, {})
+    task_label = task_info.get("label", task_id)
 
     aspect = settings.get("video_aspect_ratio", "16:9")
     aspect_label = VIDEO_ASPECT_RATIOS.get(aspect, aspect)
@@ -180,12 +186,12 @@ def get_video_panel_text(user_id: int) -> str:
     res_info = VIDEO_RESOLUTIONS.get(res, {})
     res_label = res_info.get("label", res)
     audio = settings.get("video_audio", True)
-    input_type = "текст + фото" if has_image else "только текст"
 
     lines = [
         f"⚙️ Настройки — {model_label}",
         "",
         "┌─────────────────────",
+        f"│ 🎯 Задача: {task_label}",
         f"│ 📐 Формат: {aspect_label}",
         f"│ ⏱ Длительность: {dur} сек",
         f"│ 📺 Разрешение: {res_label}",
@@ -195,12 +201,31 @@ def get_video_panel_text(user_id: int) -> str:
     lines += [
         "├─────────────────────",
         f"│ 💰 Стоимость: {credits} кр.",
-        f"│ 📋 24 FPS • MP4 • {input_type}",
+        f"│ 📋 24 FPS • MP4",
         "└─────────────────────",
         "",
         "Нажмите на параметр чтобы изменить:",
     ]
     return "\n".join(lines)
+
+
+def get_video_task_keyboard(user_id: int) -> str:
+    settings = get_user_settings(user_id)
+    model_id = settings.get("model", "veo-3.1-generate-001")
+    current = settings.get("video_task", "text-to-video")
+    avail = get_available_tasks_for_model(model_id)
+
+    kb = Keyboard(inline=True)
+    for tid, tinfo in avail.items():
+        label = tinfo["label"]
+        if tinfo.get("coming_soon"):
+            label += " (скоро)"
+        if tid == current:
+            label = "✅ " + label
+        kb.add(Callback(label, payload={"cmd": "set_vtask", "id": tid}))
+        kb.row()
+    kb.add(Callback("◀️ Назад", payload={"cmd": "back_settings"}))
+    return kb.get_json()
 
 
 def get_video_panel_keyboard(user_id: int) -> str:
@@ -214,8 +239,13 @@ def get_video_panel_keyboard(user_id: int) -> str:
     avail_res = get_video_resolutions_for_model(model_id)
     if res not in avail_res:
         res = "1080p"
+    task_id = settings.get("video_task", "text-to-video")
+    task_label = VIDEO_TASKS.get(task_id, {}).get("label", task_id)
 
     kb = Keyboard(inline=True)
+
+    kb.add(Callback(f"🎯 Задача: {task_label}", payload={"cmd": "choose_vtask"}))
+    kb.row()
 
     for key, label in VIDEO_ASPECT_RATIOS.items():
         text = f"✅ {label}" if key == aspect else label

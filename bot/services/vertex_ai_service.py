@@ -815,7 +815,7 @@ class VertexAIService:
         aspect_ratio: str = "16:9",
         duration_seconds: int = 8,
         resolution: str = "720p",
-        person_generation: str = "allow_adult",
+        person_generation: str = "allow_all",
         generate_audio: bool = True,
         user_id: int | None = None,
         username: str = "",

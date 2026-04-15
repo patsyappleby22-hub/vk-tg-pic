@@ -10,9 +10,9 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardBu
 
 from bot.user_settings import (
     get_user_settings, AVAILABLE_MODELS, SEND_MODES, RESOLUTIONS, THINKING_LEVELS,
-    VIDEO_DURATIONS, VIDEO_RESOLUTIONS, VIDEO_ASPECT_RATIOS, is_video_model,
-    get_video_credits_cost, video_supports_audio, video_supports_image,
-    get_video_resolutions_for_model,
+    VIDEO_DURATIONS, VIDEO_RESOLUTIONS, VIDEO_ASPECT_RATIOS, VIDEO_TASKS,
+    is_video_model, get_video_credits_cost, video_supports_audio, video_supports_image,
+    get_video_resolutions_for_model, get_available_tasks_for_model,
 )
 
 BTN_MENU = "📋 Меню"
@@ -144,7 +144,13 @@ def get_video_panel_text(user_id: int) -> str:
     model_label = model_info.get("label", model_id)
     credits = model_info.get("credits", 3)
     has_audio = video_supports_audio(model_id)
-    has_image = video_supports_image(model_id)
+
+    task_id = settings.get("video_task", "text-to-video")
+    avail_tasks = get_available_tasks_for_model(model_id)
+    if task_id not in avail_tasks:
+        task_id = "text-to-video"
+    task_info = VIDEO_TASKS.get(task_id, {})
+    task_label = task_info.get("label", task_id)
 
     aspect = settings.get("video_aspect_ratio", "16:9")
     aspect_label = VIDEO_ASPECT_RATIOS.get(aspect, aspect)
@@ -157,12 +163,11 @@ def get_video_panel_text(user_id: int) -> str:
     res_label = res_info.get("label", res)
     audio = settings.get("video_audio", True)
 
-    input_type = "текст + фото" if has_image else "только текст"
-
     lines = [
         f"⚙️ <b>Настройки — {model_label}</b>",
         "",
         "┌─────────────────────",
+        f"│ 🎯 Задача: <b>{task_label}</b>",
         f"│ 📐 Формат: <b>{aspect_label}</b>",
         f"│ ⏱ Длительность: <b>{dur} сек</b>",
         f"│ 📺 Разрешение: <b>{res_label}</b>",
@@ -172,12 +177,31 @@ def get_video_panel_text(user_id: int) -> str:
     lines += [
         "├─────────────────────",
         f"│ 💰 Стоимость: <b>{credits} кр.</b>",
-        f"│ 📋 24 FPS • MP4 • {input_type}",
+        f"│ 📋 24 FPS • MP4",
         "└─────────────────────",
         "",
         "Нажмите на параметр чтобы изменить:",
     ]
     return "\n".join(lines)
+
+
+def get_video_task_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    settings = get_user_settings(user_id)
+    model_id = settings.get("model", "veo-3.1-generate-001")
+    current = settings.get("video_task", "text-to-video")
+    avail = get_available_tasks_for_model(model_id)
+
+    rows: list[list[InlineKeyboardButton]] = []
+    for tid, tinfo in avail.items():
+        label = tinfo["label"]
+        if tinfo.get("coming_soon"):
+            label += " (скоро)"
+        if tid == current:
+            label = "✅ " + label
+        rows.append([InlineKeyboardButton(text=label, callback_data=f"vtask_{tid}")])
+
+    rows.append([InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_settings")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def get_video_panel_keyboard(user_id: int) -> InlineKeyboardMarkup:
@@ -189,8 +213,12 @@ def get_video_panel_keyboard(user_id: int) -> InlineKeyboardMarkup:
     audio = settings.get("video_audio", True)
     has_audio = video_supports_audio(model_id)
     avail_res = get_video_resolutions_for_model(model_id)
+    task_id = settings.get("video_task", "text-to-video")
+    task_label = VIDEO_TASKS.get(task_id, {}).get("label", task_id)
 
     rows: list[list[InlineKeyboardButton]] = []
+
+    rows.append([InlineKeyboardButton(text=f"🎯 Задача: {task_label}", callback_data="choose_video_task")])
 
     rows.append([InlineKeyboardButton(text="── 📐 Формат ──", callback_data="noop")])
     aspect_row: list[InlineKeyboardButton] = []
