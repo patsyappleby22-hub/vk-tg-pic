@@ -284,6 +284,7 @@ class _ApiKeySlot(_BaseSlot):
         super().__init__(index)
         self._api_key = api_key
         self._project_id = project_id
+        self._video_client = None
 
     @property
     def label(self) -> str:
@@ -296,17 +297,29 @@ class _ApiKeySlot(_BaseSlot):
     def get_client(self) -> Any:
         if self.client is None:
             import google.genai as genai
-            kwargs: dict[str, Any] = {
-                "vertexai": True,
-                "api_key": self._api_key,
-            }
-            if self._project_id:
-                kwargs["project"] = self._project_id
-                kwargs["location"] = "us-central1"
-            self.client = genai.Client(**kwargs)
+            self.client = genai.Client(
+                vertexai=True,
+                api_key=self._api_key,
+            )
             proj_info = f", project={self._project_id}" if self._project_id else ""
             logger.info("Initialised genai client for '%s' (Vertex AI + API key mode%s)", self.label, proj_info)
         return self.client
+
+    def get_video_client(self) -> Any:
+        if not self._project_id:
+            return self.get_client()
+        if self._video_client is None:
+            import google.genai as genai
+            from google.auth import api_key as api_key_module
+            creds = api_key_module.Credentials(self._api_key)
+            self._video_client = genai.Client(
+                vertexai=True,
+                project=self._project_id,
+                location="us-central1",
+                credentials=creds,
+            )
+            logger.info("Initialised VIDEO client for '%s' (project=%s)", self.label, self._project_id)
+        return self._video_client
 
 
 class _CredSlot(_BaseSlot):
@@ -874,7 +887,10 @@ class VertexAIService:
             slot.last_model = model
 
             try:
-                client = slot.get_client()
+                if isinstance(slot, _ApiKeySlot):
+                    client = slot.get_video_client()
+                else:
+                    client = slot.get_client()
 
                 config = genai_types.GenerateVideosConfig(
                     aspect_ratio=aspect_ratio,

@@ -364,6 +364,8 @@ async def chat_message(message: Message, vertex_service: VertexAIService) -> Non
             await thinking_msg.edit_text("Не удалось разобрать содержимое. Попробуйте ещё раз.")
             return
 
+        if uid not in _sessions:
+            _sessions[uid] = []
         _sessions[uid].append({"role": "user", "parts": parts})
 
         contents = _build_api_contents(_sessions[uid])
