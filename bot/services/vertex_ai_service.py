@@ -505,7 +505,7 @@ class VertexAIService:
         """
         text_retry_done = False
         current_prompt = prompt
-        deadline = time.monotonic() + 300  # 5-minute absolute deadline
+        deadline = time.monotonic() + 120  # 2-minute absolute deadline
 
         while time.monotonic() < deadline:
             async with self._lock:
@@ -527,9 +527,19 @@ class VertexAIService:
                         model,
                         current_prompt[:60],
                     )
-                    result = await self._call_api(slot, current_prompt, images, model, aspect_ratio, thinking_level)
+                    result = await asyncio.wait_for(
+                        self._call_api(slot, current_prompt, images, model, aspect_ratio, thinking_level),
+                        timeout=90,
+                    )
                     slot.total_ok += 1
                     return result
+                except asyncio.TimeoutError:
+                    slot.total_err += 1
+                    slot.mark_rate_limited()
+                    logger.warning(
+                        "Slot '%s' timed out (90s) for '%s', rotating to next key...",
+                        slot.label, current_prompt[:60],
+                    )
                 except Exception as exc:
                     slot.total_err += 1
                     logger.error(

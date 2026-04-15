@@ -31,8 +31,8 @@ class QuotaExceededError(VertexAIError):
         super().__init__(
             message="Vertex AI quota exceeded after maximum retries.",
             user_message=(
-                "Сервис генерации сейчас перегружен 😔\n\n"
-                "Попробуйте через пару минут или переключитесь на другую модель "
+                "Все ключи сейчас заняты или перегружены 😔\n\n"
+                "Попробуйте через минуту или переключитесь на другую модель "
                 "в ⚙️ <b>Настройках</b> — возможно, она сейчас свободна."
             ),
         )
@@ -41,13 +41,48 @@ class QuotaExceededError(VertexAIError):
 class SafetyFilterError(VertexAIError):
     """Raised when the prompt or response is blocked by safety filters."""
 
+    _REASON_MAP = {
+        "hate": "разжигание ненависти",
+        "harassment": "оскорбления или травля",
+        "sexual": "откровенный контент",
+        "dangerous": "опасный контент",
+        "violence": "насилие",
+        "prohibited": "запрещённый контент",
+    }
+
     def __init__(self, detail: str = "") -> None:
         base = "The prompt was blocked by Google's safety filters."
-        user_msg = (
-            "Ваш запрос был заблокирован, так как он может нарушать политику безопасности контента. "
-            "Пожалуйста, переформулируйте промпт и попробуйте снова."
-        )
+        reason = self._extract_reason(detail)
+        if reason:
+            user_msg = (
+                f"🚫 <b>Запрос заблокирован фильтрами безопасности Google</b>\n\n"
+                f"Причина: <i>{reason}</i>\n\n"
+                "Переформулируйте промпт и попробуйте снова."
+            )
+        else:
+            user_msg = (
+                "🚫 <b>Запрос заблокирован фильтрами безопасности Google</b>\n\n"
+                "Ваш запрос может нарушать политику безопасности контента.\n"
+                "Переформулируйте промпт и попробуйте снова."
+            )
         super().__init__(message=base, user_message=user_msg)
+
+    @classmethod
+    def _extract_reason(cls, detail: str) -> str:
+        if not detail:
+            return ""
+        lower = detail.lower()
+        reasons = []
+        for key, label in cls._REASON_MAP.items():
+            if key in lower:
+                reasons.append(label)
+        if reasons:
+            return ", ".join(reasons)
+        refusal_kw = ("не могу", "cannot", "sorry", "извините", "unable", "нельзя")
+        if any(kw in lower for kw in refusal_kw):
+            snippet = detail[:200].strip()
+            return snippet
+        return ""
 
 
 class GenerationError(VertexAIError):
