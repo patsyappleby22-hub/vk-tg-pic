@@ -452,8 +452,10 @@ class VertexAIService:
                 "total_err": slot.total_err,
                 "req_flash": slot.requests_in_window_family("flash-image"),
                 "req_pro": slot.requests_in_window_family("pro-image"),
+                "req_veo": slot.requests_in_window_family("veo-"),
                 "qpm_flash": _qpm_for_model("flash-image"),
                 "qpm_pro": _qpm_for_model("pro-image"),
+                "qpm_veo": _qpm_for_model("veo-3.1"),
             })
         return result
 
@@ -804,11 +806,34 @@ class VertexAIService:
         if duration_seconds not in (4, 6, 8):
             duration_seconds = 8
 
+        async with self._semaphore:
+            return await self._generate_video_inner(
+                prompt=prompt, model=model,
+                aspect_ratio=aspect_ratio, duration_seconds=duration_seconds,
+                resolution=resolution, person_generation=person_generation,
+                user_id=user_id, username=username, on_progress=on_progress,
+            )
+
+    async def _generate_video_inner(
+        self,
+        prompt: str,
+        model: str,
+        aspect_ratio: str,
+        duration_seconds: int,
+        resolution: str,
+        person_generation: str,
+        user_id: int | None,
+        username: str,
+        on_progress: Any,
+    ) -> bytes:
+        from google.genai import types as genai_types
+
         deadline = time.monotonic() + VIDEO_POLL_TIMEOUT
         _t0 = time.monotonic()
 
         while time.monotonic() < deadline:
-            slot = self._get_next_available_slot(model)
+            async with self._lock:
+                slot = self._get_next_available_slot(model)
             if slot is None:
                 earliest = self._earliest_ready_at(model)
                 now = time.monotonic()
@@ -833,6 +858,7 @@ class VertexAIService:
                     person_generation=person_generation,
                     number_of_videos=1,
                     enhance_prompt=True,
+                    generate_audio=True,
                 )
 
                 logger.info(

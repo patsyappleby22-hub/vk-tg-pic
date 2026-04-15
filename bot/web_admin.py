@@ -1698,7 +1698,7 @@ async function poll() {{
       }}
 
       // Load cell — QPM usage as colored text
-      const rf=s.req_flash, qf=s.qpm_flash, rp=s.req_pro, qp=s.qpm_pro;
+      const rf=s.req_flash, qf=s.qpm_flash, rp=s.req_pro, qp=s.qpm_pro, rv=s.req_veo||0, qv=s.qpm_veo||2;
       function qpmColor(used, max) {{
         if (used === 0) return 'var(--muted)';
         const pct = used / max;
@@ -1709,7 +1709,9 @@ async function poll() {{
       load.innerHTML =
         `<span style="color:${{qpmColor(rf,qf)}}">Flash&nbsp;${{rf}}/${{qf}}</span>`
         + `<span style="color:var(--border)"> &nbsp;|&nbsp; </span>`
-        + `<span style="color:${{qpmColor(rp,qp)}}">Pro&nbsp;${{rp}}/${{qp}}</span>`;
+        + `<span style="color:${{qpmColor(rp,qp)}}">Pro&nbsp;${{rp}}/${{qp}}</span>`
+        + `<span style="color:var(--border)"> &nbsp;|&nbsp; </span>`
+        + `<span style="color:${{qpmColor(rv,qv)}}">Veo&nbsp;${{rv}}/${{qv}}</span>`;
 
       // Total stats
       const ok_ = s.total_ok, err_ = s.total_err;

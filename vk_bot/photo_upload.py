@@ -24,6 +24,8 @@ def _detect_format(image_bytes: bytes) -> tuple[str, str]:
         return "image.jpg", "image/jpeg"
     if image_bytes[:4] == b"RIFF" and image_bytes[8:12] == b"WEBP":
         return "image.webp", "image/webp"
+    if len(image_bytes) >= 8 and image_bytes[4:8] == b"ftyp":
+        return "video.mp4", "video/mp4"
     return "image.png", "image/png"
 
 
