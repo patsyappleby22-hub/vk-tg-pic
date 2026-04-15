@@ -306,22 +306,12 @@ class _ApiKeySlot(_BaseSlot):
         return self.client
 
     def get_video_client(self) -> Any:
-        if not self._project_id:
-            return self.get_client()
         if self._video_client is None:
             import google.genai as genai
-            from google.genai import types as genai_types
-            from google.auth.api_key import Credentials as ApiKeyCredentials
             self._video_client = genai.Client(
-                vertexai=True,
-                project=self._project_id,
-                location="us-central1",
-                credentials=ApiKeyCredentials(self._api_key),
-                http_options=genai_types.HttpOptions(
-                    headers={"x-goog-api-key": self._api_key},
-                ),
+                api_key=self._api_key,
             )
-            logger.info("Initialised VIDEO client for '%s' (project=%s)", self.label, self._project_id)
+            logger.info("Initialised VIDEO client for '%s' (Gemini Developer API)", self.label)
         return self._video_client
 
 
@@ -497,12 +487,7 @@ class VertexAIService:
         return model.startswith("veo-")
 
     def _filter_slots_for_model(self, model: str) -> list[_BaseSlot]:
-        usable = [s for s in self._slots if not s.auth_error]
-        if self._is_video_model(model):
-            with_project = [s for s in usable if (isinstance(s, _ApiKeySlot) and s.has_project) or isinstance(s, _CredSlot)]
-            if with_project:
-                return with_project
-        return usable
+        return [s for s in self._slots if not s.auth_error]
 
     def _get_next_available_slot(self, model: str) -> _BaseSlot | None:
         """Return the next ready slot using round-robin rotation.
