@@ -13,10 +13,12 @@ Multiple keys/accounts rotate automatically on 429 errors.
 from __future__ import annotations
 
 import asyncio
+import datetime
 import json
 import logging
 import os
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -159,21 +161,43 @@ def _load_sa_files() -> list[Path]:
 class _BaseSlot:
     """Abstract base for credential slots."""
 
+    MAX_HISTORY = 200
+
     def __init__(self, index: int) -> None:
         self.index = index
         self.client: Any = None
         self.cooldown_until: float = 0.0
         self.auth_error: bool = False
         self.auth_error_msg: str = ""
-        # Real-time traffic tracking
-        self.active_requests: int = 0    # requests in flight right now
-        self.last_used_at: float = 0.0   # monotonic timestamp of last dispatch
-        self.last_model: str = ""        # which model was last used
-        self.total_ok: int = 0           # total successful requests ever
-        self.total_err: int = 0          # total failed requests ever
-        # Per-model sliding-window: { model_name: [timestamps] }
-        # Each model has an independent quota on the same API key.
+        self.active_requests: int = 0
+        self.last_used_at: float = 0.0
+        self.last_model: str = ""
+        self.total_ok: int = 0
+        self.total_err: int = 0
         self._model_request_times: dict[str, list[float]] = {}
+        self.history: deque[dict] = deque(maxlen=self.MAX_HISTORY)
+
+    def record_history(
+        self,
+        *,
+        user_id: int | None,
+        username: str,
+        prompt: str,
+        model: str,
+        status: str,
+        error: str = "",
+        duration_ms: int = 0,
+    ) -> None:
+        self.history.appendleft({
+            "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "user_id": user_id,
+            "username": username,
+            "prompt": prompt[:120],
+            "model": model,
+            "status": status,
+            "error": error[:200] if error else "",
+            "duration_ms": duration_ms,
+        })
 
     @property
     def label(self) -> str:
@@ -422,6 +446,11 @@ class VertexAIService:
             })
         return result
 
+    def get_slot_history(self, slot_index: int) -> list[dict]:
+        if 0 <= slot_index < len(self._slots):
+            return list(self._slots[slot_index].history)
+        return []
+
     def _get_next_available_slot(self, model: str) -> _BaseSlot | None:
         """Return the next ready slot using round-robin rotation.
 
@@ -478,9 +507,11 @@ class VertexAIService:
         model_override: str | None = None,
         aspect_ratio: str = "1:1",
         thinking_level: str = "low",
+        user_id: int | None = None,
+        username: str = "",
     ) -> bytes:
         model = model_override or self._settings.vertex_ai_model
-        return await self._try_all_keys(prompt, images, model, aspect_ratio, thinking_level)
+        return await self._try_all_keys(prompt, images, model, aspect_ratio, thinking_level, user_id=user_id, username=username)
 
     async def _try_all_keys(
         self,
@@ -489,6 +520,8 @@ class VertexAIService:
         model: str,
         aspect_ratio: str,
         thinking_level: str = "low",
+        user_id: int | None = None,
+        username: str = "",
     ) -> bytes:
         """Dispatch the request to the best available key, queuing if all are busy.
 
@@ -512,12 +545,12 @@ class VertexAIService:
                 slot = self._get_next_available_slot(model)
 
             if slot is not None:
-                # Reserve one quota slot in the per-model sliding window before the call.
                 slot.record_request(model)
                 slot.active_requests += 1
                 slot.last_used_at = time.monotonic()
                 slot.last_model = model
                 _exc_to_raise: Exception | None = None
+                _t0 = time.monotonic()
                 try:
                     logger.info(
                         "Trying '%s' [%d/%d used for %s], prompt='%s'",
@@ -532,29 +565,55 @@ class VertexAIService:
                         timeout=90,
                     )
                     slot.total_ok += 1
+                    slot.record_history(
+                        user_id=user_id, username=username, prompt=prompt,
+                        model=model, status="ok",
+                        duration_ms=int((time.monotonic() - _t0) * 1000),
+                    )
                     return result
                 except asyncio.TimeoutError:
                     slot.total_err += 1
                     slot.mark_rate_limited()
+                    slot.record_history(
+                        user_id=user_id, username=username, prompt=prompt,
+                        model=model, status="timeout", error="90s timeout",
+                        duration_ms=int((time.monotonic() - _t0) * 1000),
+                    )
                     logger.warning(
                         "Slot '%s' timed out (90s) for '%s', rotating to next key...",
                         slot.label, current_prompt[:60],
                     )
                 except Exception as exc:
                     slot.total_err += 1
+                    _dur = int((time.monotonic() - _t0) * 1000)
                     logger.error(
                         "Slot '%s' error for '%s': %s",
                         slot.label, current_prompt[:60], repr(exc),
                     )
                     if _is_safety_error(exc):
+                        slot.record_history(
+                            user_id=user_id, username=username, prompt=prompt,
+                            model=model, status="safety", error=str(exc)[:200],
+                            duration_ms=_dur,
+                        )
                         _exc_to_raise = SafetyFilterError(str(exc))
                     elif _is_retryable(exc):
+                        slot.record_history(
+                            user_id=user_id, username=username, prompt=prompt,
+                            model=model, status="rate_limit", error="429",
+                            duration_ms=_dur,
+                        )
                         slot.mark_rate_limited()
                         logger.warning(
                             "Slot '%s' returned 429 — 60s cooldown applied, rotating...",
                             slot.label,
                         )
                     elif _is_auth_error(exc):
+                        slot.record_history(
+                            user_id=user_id, username=username, prompt=prompt,
+                            model=model, status="auth_error", error=str(exc)[:200],
+                            duration_ms=_dur,
+                        )
                         slot.reset_client()
                         slot.auth_error = True
                         slot.auth_error_msg = str(exc)[:120]
@@ -564,7 +623,11 @@ class VertexAIService:
                         )
                         self._check_and_alert_auth_errors()
                     elif _is_model_error(exc):
-                        # 400 INVALID_ARGUMENT — config/model mismatch; block slot to avoid tight loop
+                        slot.record_history(
+                            user_id=user_id, username=username, prompt=prompt,
+                            model=model, status="error", error=str(exc)[:200],
+                            duration_ms=_dur,
+                        )
                         slot.cooldown_until = time.monotonic() + 300
                         logger.warning(
                             "Slot '%s' returned 400 INVALID_ARGUMENT — 5min cooldown applied, rotating...",
@@ -573,6 +636,11 @@ class VertexAIService:
                     elif isinstance(exc, GenerationError) and "вернула текст" in str(exc):
                         if not text_retry_done:
                             text_retry_done = True
+                            slot.record_history(
+                                user_id=user_id, username=username, prompt=prompt,
+                                model=model, status="text_retry", error="модель вернула текст",
+                                duration_ms=_dur,
+                            )
                             current_prompt = (
                                 f"Generate a high-quality image of: {prompt}. "
                                 "Important: output must be an IMAGE, not text."
@@ -582,8 +650,18 @@ class VertexAIService:
                                 prompt[:40],
                             )
                         else:
+                            slot.record_history(
+                                user_id=user_id, username=username, prompt=prompt,
+                                model=model, status="error", error=str(exc)[:200],
+                                duration_ms=_dur,
+                            )
                             _exc_to_raise = AmbiguousPromptError(str(exc))
                     else:
+                        slot.record_history(
+                            user_id=user_id, username=username, prompt=prompt,
+                            model=model, status="error", error=str(exc)[:200],
+                            duration_ms=_dur,
+                        )
                         _exc_to_raise = GenerationError(str(exc))
                 finally:
                     slot.active_requests = max(0, slot.active_requests - 1)

@@ -348,6 +348,8 @@ async def generate_image_for_post(
             prompt=prompt,
             model_override=use_model,
             aspect_ratio="4:5",
+            user_id=0,
+            username="autopub",
         )
         return image_bytes
     except Exception as exc:

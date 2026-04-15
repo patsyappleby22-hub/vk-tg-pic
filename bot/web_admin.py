@@ -1566,8 +1566,10 @@ async def handle_api_keys(request: web.Request) -> web.Response:
   <td id="act-{i}" style="font-size:.82em;color:var(--muted)">—</td>
   <td id="load-{i}" style="font-size:.82em;color:var(--muted)">—</td>
   <td id="stat-{i}" style="font-size:.82em;color:var(--muted)">—</td>
-  <td>
-    <button class="btn btn-sm" style="background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.2);white-space:nowrap"
+  <td style="white-space:nowrap">
+    <button class="btn btn-sm" style="background:rgba(139,92,246,.12);color:var(--accent);border:1px solid rgba(139,92,246,.2);margin-right:4px"
+      onclick="showHistory({i})">📋 История</button>
+    <button class="btn btn-sm" style="background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.2)"
       onclick="deleteKey({i})">🗑 Удалить</button>
   </td>
 </tr>
@@ -1750,7 +1752,88 @@ async function deleteKey(idx) {{
   if (d.ok) location.href = '/admin/api-keys?msg=deleted';
   else alert('Ошибка: ' + (d.error || 'неизвестная'));
 }}
+
+function esc(s) {{
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}}
+
+async function showHistory(idx) {{
+  const modal = document.getElementById('history-modal');
+  const tbody = document.getElementById('history-tbody');
+  const title = document.getElementById('history-title');
+  title.textContent = 'История ключа #' + (idx+1);
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted)">Загрузка...</td></tr>';
+  modal.style.display = 'flex';
+  try {{
+    const r = await fetch('/admin/api/keys/' + idx + '/history');
+    const data = await r.json();
+    const items = data.history || [];
+    if (items.length === 0) {{
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted)">История пуста — запросов ещё не было</td></tr>';
+      return;
+    }}
+    tbody.innerHTML = items.map(h => {{
+      const dt = new Date(h.ts);
+      const time = dt.toLocaleString('ru-RU', {{hour:'2-digit',minute:'2-digit',second:'2-digit',day:'2-digit',month:'2-digit'}});
+      const stMap = {{
+        'ok': '<span style="color:var(--green)">✅ Успех</span>',
+        'safety': '<span style="color:var(--yellow)">🚫 Безопасность</span>',
+        'timeout': '<span style="color:var(--red)">⏱ Таймаут</span>',
+        'rate_limit': '<span style="color:var(--yellow)">⚡ 429</span>',
+        'auth_error': '<span style="color:var(--red)">🔴 Авт. ошибка</span>',
+        'error': '<span style="color:var(--red)">❌ Ошибка</span>',
+        'text_retry': '<span style="color:var(--yellow)">🔄 Повтор</span>',
+      }};
+      const stHtml = stMap[h.status] || `<span style="color:var(--muted)">${{esc(h.status)}}</span>`;
+      const user = h.username ? `<span style="color:var(--accent)">@${{esc(h.username)}}</span>` : (h.user_id ? `id:${{h.user_id}}` : '—');
+      const dur = h.duration_ms ? (h.duration_ms / 1000).toFixed(1) + 'с' : '—';
+      const errText = h.error ? h.error.substring(0,60) + (h.error.length>60?'…':'') : '';
+      const errHtml = errText ? `<span style="color:var(--red);font-size:.78em" title="${{esc(h.error)}}">${{esc(errText)}}</span>` : '—';
+      return `<tr>
+        <td style="font-size:.82em;white-space:nowrap">${{time}}</td>
+        <td style="font-size:.82em">${{user}}</td>
+        <td style="font-size:.82em;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${{esc(h.prompt)}}">${{esc(h.prompt)}}</td>
+        <td style="font-size:.82em">${{modelShort(h.model)}}</td>
+        <td style="font-size:.82em">${{stHtml}}</td>
+        <td style="font-size:.82em">${{dur}}</td>
+        <td style="font-size:.78em;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${{errHtml}}</td>
+      </tr>`;
+    }}).join('');
+  }} catch(e) {{
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--red)">Ошибка загрузки</td></tr>';
+  }}
+}}
+
+function closeHistory() {{
+  document.getElementById('history-modal').style.display = 'none';
+}}
 </script>
+
+<div id="history-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;max-width:1000px;width:100%;max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid var(--border)">
+      <h2 id="history-title" style="margin:0;font-size:1.1em;color:var(--text)">История ключа</h2>
+      <button onclick="closeHistory()" style="background:none;border:none;color:var(--muted);font-size:1.4em;cursor:pointer;padding:4px 8px">&times;</button>
+    </div>
+    <div style="overflow:auto;padding:0">
+      <table style="width:100%;font-size:.9em">
+        <thead><tr>
+          <th style="padding:10px 12px">Время</th>
+          <th style="padding:10px 12px">Пользователь</th>
+          <th style="padding:10px 12px">Промпт</th>
+          <th style="padding:10px 12px">Модель</th>
+          <th style="padding:10px 12px">Статус</th>
+          <th style="padding:10px 12px">Время вып.</th>
+          <th style="padding:10px 12px">Ошибка</th>
+        </tr></thead>
+        <tbody id="history-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
 """
     return web.Response(text=_layout("API ключи", content, "apikeys"), content_type="text/html")
 
@@ -1812,6 +1895,26 @@ async def api_keys_delete(request: web.Request) -> web.Response:
     except Exception as e:
         logger.exception("api_keys_delete error")
         return web.Response(text=json.dumps({"ok": False, "error": str(e)}), content_type="application/json", status=500)
+
+
+@_api_require_auth
+async def api_keys_history(request: web.Request) -> web.Response:
+    if _vertex_service is None:
+        return web.Response(text=json.dumps({"history": []}), content_type="application/json")
+    try:
+        idx = int(request.match_info["index"])
+        history = _vertex_service.get_slot_history(idx)
+        return web.Response(
+            text=json.dumps({"history": history}),
+            content_type="application/json",
+        )
+    except Exception as e:
+        logger.exception("api_keys_history error")
+        return web.Response(
+            text=json.dumps({"history": [], "error": str(e)}),
+            content_type="application/json",
+            status=500,
+        )
 
 
 # ─── Autopub ─────────────────────────────────────────────────────────────────
@@ -2838,6 +2941,7 @@ def register_admin_routes(app: web.Application) -> None:
     app.router.add_get("/admin/api/keys/status",             api_keys_status)
     app.router.add_post("/admin/api/keys/add",               api_keys_add)
     app.router.add_post("/admin/api/keys/delete",            api_keys_delete)
+    app.router.add_get("/admin/api/keys/{index}/history",    api_keys_history)
     app.router.add_get("/admin/tg-photo/{file_unique_id}",   handle_tg_photo)
     app.router.add_get("/admin/tg-photo-fid/{file_id}",     handle_tg_photo_by_fileid)
     logger.info("Admin panel routes registered at /admin")

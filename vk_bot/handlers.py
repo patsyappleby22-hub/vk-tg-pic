@@ -819,6 +819,8 @@ async def _generate_and_send(
             model_override=user_model,
             aspect_ratio=aspect_ratio,
             thinking_level=thinking_level,
+            user_id=uid,
+            username=f"vk:{uid}",
         )
         if max_side > 0:
             loop = asyncio.get_running_loop()

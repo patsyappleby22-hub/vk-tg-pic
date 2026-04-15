@@ -270,6 +270,8 @@ async def handle_photo_prompt(
 
     thinking_level = settings.get("thinking_level", "low")
 
+    _uname = message.from_user.username or message.from_user.first_name or ""
+
     async def _do_generate() -> bytes:
         all_photo_bytes = await _download_photos(bot, photo_messages)
         raw = await vertex_service.generate_image(
@@ -277,6 +279,8 @@ async def handle_photo_prompt(
             images=all_photo_bytes,
             model_override=user_model,
             thinking_level=thinking_level,
+            user_id=uid,
+            username=_uname,
         )
         if max_side > 0:
             loop = asyncio.get_running_loop()
@@ -470,12 +474,16 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
     aspect_ratio = settings.get("aspect_ratio", "1:1")
     thinking_level = settings.get("thinking_level", "low")
 
+    _uname_t = message.from_user.username or message.from_user.first_name or ""
+
     async def _do_text_generate() -> bytes:
         raw = await vertex_service.generate_image(
             prompt=prompt,
             model_override=user_model,
             aspect_ratio=aspect_ratio,
             thinking_level=thinking_level,
+            user_id=uid,
+            username=_uname_t,
         )
         if max_side > 0:
             loop = asyncio.get_running_loop()
