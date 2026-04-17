@@ -304,6 +304,8 @@ class _ApiKeySlot(_BaseSlot):
             self.client = genai.Client(
                 vertexai=True,
                 api_key=self._api_key,
+                project=self._project_id,
+                location="us-central1"
             )
             proj_info = f", project={self._project_id}" if self._project_id else ""
             logger.info("Initialised genai client for '%s' (Vertex AI + API key mode%s)", self.label, proj_info)

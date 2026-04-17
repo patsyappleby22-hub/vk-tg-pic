@@ -97,21 +97,32 @@ def get_model_keyboard(user_id: int) -> str:
 
     kb = Keyboard(inline=True)
 
-    for model_id, info in image_models.items():
-        label = info["label"]
-        if model_id == current:
-            label = "✅ " + label
-        kb.add(Callback(label, payload={"cmd": "set_model", "id": model_id}))
+    # Let's put image models on the same row, or video models on the same row.
+    # Image models: 2. Put them in one row.
+
+
+    img_items = list(image_models.items())
+    for i in range(0, len(img_items), 2):
+        for model_id, info in img_items[i:i+2]:
+            label = info["label"]
+            if model_id == current:
+                label = "✅ " + label
+            # label might be long, let's keep it in one row? No, VK max characters per button is 40.
+            kb.add(Callback(label[:40], payload={"cmd": "set_model", "id": model_id}))
         kb.row()
 
     if video_models:
         kb.add(Callback("── 🎬 Видео модели ──", payload={"cmd": "noop"}))
         kb.row()
-        for model_id, info in video_models.items():
-            label = info["label"]
-            if model_id == current:
-                label = "✅ " + label
-            kb.add(Callback(label, payload={"cmd": "set_model", "id": model_id}))
+
+        vid_items = list(video_models.items())
+        # Let's put 2 video models per row.
+        for i in range(0, len(vid_items), 2):
+            for model_id, info in vid_items[i:i+2]:
+                label = info["label"]
+                if model_id == current:
+                    label = "✅ " + label
+                kb.add(Callback(label[:40], payload={"cmd": "set_model", "id": model_id}))
             kb.row()
 
     kb.add(Callback("◀️ Назад", payload={"cmd": "back_settings"}))
