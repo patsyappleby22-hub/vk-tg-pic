@@ -1212,7 +1212,7 @@ class VertexAIService:
                     raise GenerationError(f"Vertex AI error: {err_msg[:300]}")
                 # Log full structure to diagnose unexpected format
                 import json as _json
-                _logger.error(
+                logger.error(
                     "Video REST apikey: unexpected poll_data structure: %s",
                     _json.dumps(poll_data, ensure_ascii=False)[:1500],
                 )
