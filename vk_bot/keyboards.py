@@ -92,27 +92,29 @@ def get_model_keyboard(user_id: int) -> str:
     settings = get_user_settings(user_id)
     current = settings.get("model", "gemini-3.1-flash-image-preview")
 
-    image_models = {k: v for k, v in AVAILABLE_MODELS.items() if v.get("type") != "video"}
-    video_models = {k: v for k, v in AVAILABLE_MODELS.items() if v.get("type") == "video"}
+    image_models = [(k, v) for k, v in AVAILABLE_MODELS.items() if v.get("type") != "video"]
+    video_models = [(k, v) for k, v in AVAILABLE_MODELS.items() if v.get("type") == "video"]
 
     kb = Keyboard(inline=True)
 
-    for model_id, info in image_models.items():
+    for i, (model_id, info) in enumerate(image_models):
         label = info["label"]
         if model_id == current:
             label = "✅ " + label
         kb.add(Callback(label, payload={"cmd": "set_model", "id": model_id}))
-        kb.row()
+        if (i + 1) % 2 == 0 or i == len(image_models) - 1:
+            kb.row()
 
     if video_models:
-        kb.add(Callback("── 🎬 Видео модели ──", payload={"cmd": "noop"}))
+        kb.add(Callback("── 🎬 Видео ──", payload={"cmd": "noop"}))
         kb.row()
-        for model_id, info in video_models.items():
+        for i, (model_id, info) in enumerate(video_models):
             label = info["label"]
             if model_id == current:
                 label = "✅ " + label
             kb.add(Callback(label, payload={"cmd": "set_model", "id": model_id}))
-            kb.row()
+            if (i + 1) % 2 == 0 or i == len(video_models) - 1:
+                kb.row()
 
     kb.add(Callback("◀️ Назад", payload={"cmd": "back_settings"}))
     return kb.get_json()

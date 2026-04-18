@@ -1,0 +1,56 @@
+
+2026-04-18T08:27:00.100948998Z stderr F                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-18T08:27:00.100946329Z stderr F     response = await validator.validate(method, data, response, self)  # type: ignore
+2026-04-18T08:27:00.10094339Z stderr F   File "/usr/local/lib/python3.13/site-packages/vkbottle/api/api.py", line 107, in validate_response
+2026-04-18T08:27:00.100940238Z stderr F            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-18T08:27:00.100937363Z stderr F     return await self.validate_response(method, data, response)  # type: ignore
+2026-04-18T08:27:00.100933904Z stderr F   File "/usr/local/lib/python3.13/site-packages/vkbottle/api/api.py", line 79, in request
+2026-04-18T08:27:00.100929844Z stderr F                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-18T08:27:00.100892849Z stderr F     response = await self.api.request("messages.edit", params)
+2026-04-18T08:27:00.100912107Z stdout F            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-18T08:27:00.100909569Z stdout F     return await self.validate_response(method, data, response)  # type: ignore
+2026-04-18T08:27:00.100907647Z stdout F   File "/usr/local/lib/python3.13/site-packages/vkbottle/api/api.py", line 79, in request
+2026-04-18T08:27:00.100903306Z stdout F                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-18T08:27:00.100898314Z stdout F     response = await self.api.request("messages.edit", params)
+2026-04-18T08:27:00.100835214Z stdout F   File "/usr/local/lib/python3.13/site-packages/vkbottle_types/codegen/methods/messages.py", line 219, in edit
+2026-04-18T08:27:00.100889254Z stderr F   File "/usr/local/lib/python3.13/site-packages/vkbottle_types/codegen/methods/messages.py", line 219, in edit
+2026-04-18T08:27:00.100884903Z stderr F     await api.messages.edit(**kwargs)
+2026-04-18T08:27:00.100881398Z stderr F   File "/app/vk_bot/handlers.py", line 46, in _vk_safe_edit
+2026-04-18T08:27:00.100873196Z stderr F     await _vk_safe_edit(bot.api, **kwargs)
+2026-04-18T08:27:00.100727015Z stderr F   File "/app/vk_bot/handlers.py", line 421, in edit_msg
+2026-04-18T08:27:00.10083197Z stdout F     await api.messages.edit(**kwargs)
+2026-04-18T08:27:00.100829528Z stdout F   File "/app/vk_bot/handlers.py", line 46, in _vk_safe_edit
+2026-04-18T08:27:00.100826859Z stdout F     await _vk_safe_edit(bot.api, **kwargs)
+2026-04-18T08:27:00.100824478Z stdout F   File "/app/vk_bot/handlers.py", line 421, in edit_msg
+2026-04-18T08:27:00.100821773Z stdout F     await edit_msg("\n".join(lines), get_model_keyboard(uid))
+2026-04-18T08:27:00.100819453Z stdout F   File "/app/vk_bot/handlers.py", line 431, in handle_callback
+2026-04-18T08:27:00.100816673Z stdout F            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-18T08:27:00.100813704Z stdout F     return await self.handler(event, **magic_bundle(self.handler, context))
+2026-04-18T08:27:00.100810523Z stdout F   File "/usr/local/lib/python3.13/site-packages/vkbottle/dispatch/handlers/from_func_handler.py", line 43, in handle
+2026-04-18T08:27:00.100806428Z stdout F     ^
+2026-04-18T08:27:00.100804134Z stdout F     )
+2026-04-18T08:27:00.100802017Z stdout F     ...<2 lines>...
+2026-04-18T08:27:00.10079933Z stdout F                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-18T08:27:00.100796478Z stdout F     handler_response = await handler_basement.handler.handle(
+2026-04-18T08:27:00.100790921Z stdout F   File "/usr/local/lib/python3.13/site-packages/vkbottle/dispatch/views/abc/raw.py", line 79, in handle_event
+2026-04-18T08:27:00.100755291Z stdout F Traceback (most recent call last):
+2026-04-18T08:27:00.100722703Z stdout F 2026-04-18 11:27:00 [ERROR] vkbottle — Keyboard format is invalid: buttons contain too much rows
+2026-04-18T08:27:00.100723531Z stderr F     await edit_msg("\n".join(lines), get_model_keyboard(uid))
+2026-04-18T08:27:00.100720466Z stderr F   File "/app/vk_bot/handlers.py", line 431, in handle_callback
+2026-04-18T08:27:00.100717253Z stderr F            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-18T08:27:00.100714101Z stderr F     return await self.handler(event, **magic_bundle(self.handler, context))
+2026-04-18T08:27:00.100710022Z stderr F   File "/usr/local/lib/python3.13/site-packages/vkbottle/dispatch/handlers/from_func_handler.py", line 43, in handle
+2026-04-18T08:27:00.10070603Z stderr F     ^
+2026-04-18T08:27:00.100701966Z stderr F     )
+2026-04-18T08:27:00.10069894Z stderr F     ...<2 lines>...
+2026-04-18T08:27:00.100695532Z stderr F                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-18T08:27:00.100693213Z stderr F     handler_response = await handler_basement.handler.handle(
+2026-04-18T08:27:00.1006893Z stderr F   File "/usr/local/lib/python3.13/site-packages/vkbottle/dispatch/views/abc/raw.py", line 79, in handle_event
+2026-04-18T08:27:00.100684756Z stderr F Traceback (most recent call last):
+2026-04-18T08:27:00.100645474Z stderr F ERROR    | 2026-04-18 08:27:00,095 | vkbottle.exception_factory.error_handler.error_handler:handle:51 > Keyboard format is invalid: buttons contain too much rows
+2026-04-18T08:25:09.515410391Z stdout F 2026-04-18 11:25:09 [INFO] bot.autopub.scheduler — [autopub] scheduler tick #866  enabled=False  time=11:25 MSK
+2026-04-18T08:20:09.493160008Z stdout F 2026-04-18 11:20:09 [INFO] bot.autopub.scheduler — [autopub] scheduler tick #861  enabled=False  time=11:20 MSK
+2026-04-18T08:15:09.473288618Z stdout F 2026-04-18 11:15:09 [INFO] bot.autopub.scheduler — [autopub] scheduler tick #856  enabled=False  time=11:15 MSK
+2026-04-18T08:10:09.45304464Z stdout F 2026-04-18 11:10:09 [INFO] bot.autopub.scheduler — [autopub] scheduler tick #851  enabled=False  time=11:10 MSK
+2026-04-18T08:05:09.431216159Z stdout F 2026-04-18 11:05:09 [INFO] bot.autopub.scheduler — [autopub] scheduler tick #846  enabled=False  time=11:05 MSK
+2026-04-18T08:00:09.407967137Z stdout F 2026-04-18 11:00:09 [INFO] bot.autopub.scheduler — [autopub] schedul
