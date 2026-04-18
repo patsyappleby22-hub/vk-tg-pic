@@ -1198,7 +1198,11 @@ class VertexAIService:
                     break
 
             response = poll_data.get("response", {})
-            generated_videos = response.get("generateVideoResponse", {}).get("generatedSamples", [])
+            # Try both response structures Vertex AI may return
+            generated_videos = (
+                response.get("generateVideoResponse", {}).get("generatedSamples", [])
+                or response.get("generatedSamples", [])
+            )
             if not generated_videos:
                 error_detail = poll_data.get("error", {})
                 if error_detail:
@@ -1206,6 +1210,29 @@ class VertexAIService:
                     if _is_safety_error_text(err_msg):
                         raise SafetyFilterError(err_msg)
                     raise GenerationError(f"Vertex AI error: {err_msg[:300]}")
+                # Log full structure to diagnose unexpected format
+                import json as _json
+                _logger.error(
+                    "Video REST apikey: unexpected poll_data structure: %s",
+                    _json.dumps(poll_data, ensure_ascii=False)[:1500],
+                )
+                # Fallback: predictions array (alternate Vertex AI format)
+                predictions = response.get("predictions", [])
+                if predictions:
+                    first = predictions[0]
+                    if isinstance(first, dict):
+                        fb64 = first.get("bytesBase64Encoded", "")
+                        furi = first.get("uri", "")
+                        if fb64:
+                            return base64.b64decode(fb64)
+                        if furi:
+                            async with session.get(
+                                furi,
+                                headers={"x-goog-api-key": api_key},
+                                timeout=aiohttp.ClientTimeout(total=120),
+                            ) as dl_resp:
+                                if dl_resp.status == 200:
+                                    return await dl_resp.read()
                 raise GenerationError("Модель не вернула видео")
 
             video_info = generated_videos[0].get("video", {})
