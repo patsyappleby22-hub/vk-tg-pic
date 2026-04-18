@@ -612,7 +612,7 @@ class VertexAIService:
                     )
                     result = await asyncio.wait_for(
                         self._call_api(slot, current_prompt, images, model, aspect_ratio, thinking_level),
-                        timeout=90,
+                        timeout=180,
                     )
                     slot.total_ok += 1
                     slot.record_history(
@@ -626,11 +626,11 @@ class VertexAIService:
                     slot.mark_rate_limited()
                     slot.record_history(
                         user_id=user_id, username=username, prompt=prompt,
-                        model=model, status="timeout", error="90s timeout",
+                        model=model, status="timeout", error="180s timeout",
                         duration_ms=int((time.monotonic() - _t0) * 1000),
                     )
                     logger.warning(
-                        "Slot '%s' timed out (90s) for '%s', rotating to next key...",
+                        "Slot '%s' timed out (180s) for '%s', rotating to next key...",
                         slot.label, current_prompt[:60],
                     )
                 except Exception as exc:
