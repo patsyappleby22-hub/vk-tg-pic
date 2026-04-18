@@ -1198,61 +1198,60 @@ class VertexAIService:
                     break
 
             response = poll_data.get("response", {})
-            # Try both response structures Vertex AI may return
+            # Vertex AI returns: response.videos[{bytesBase64Encoded, uri}]
+            # Fallbacks: generateVideoResponse.generatedSamples[{video:{...}}]
+            error_detail = poll_data.get("error", {})
+            if error_detail:
+                err_msg = error_detail.get("message", str(error_detail))
+                if _is_safety_error_text(err_msg):
+                    raise SafetyFilterError(err_msg)
+                raise GenerationError(f"Vertex AI error: {err_msg[:300]}")
+
+            # Primary format: response.videos[]
+            videos_list = response.get("videos", [])
+            if videos_list:
+                v = videos_list[0]
+                v_b64 = v.get("bytesBase64Encoded", "")
+                v_uri = v.get("uri", "")
+                if v_b64:
+                    return base64.b64decode(v_b64)
+                if v_uri:
+                    async with session.get(
+                        v_uri,
+                        headers={"x-goog-api-key": api_key},
+                        timeout=aiohttp.ClientTimeout(total=120),
+                    ) as dl_resp:
+                        if dl_resp.status == 200:
+                            return await dl_resp.read()
+                        raise GenerationError(f"Не удалось скачать видео: HTTP {dl_resp.status}")
+
+            # Fallback: generateVideoResponse.generatedSamples[]
             generated_videos = (
                 response.get("generateVideoResponse", {}).get("generatedSamples", [])
                 or response.get("generatedSamples", [])
             )
-            if not generated_videos:
-                error_detail = poll_data.get("error", {})
-                if error_detail:
-                    err_msg = error_detail.get("message", str(error_detail))
-                    if _is_safety_error_text(err_msg):
-                        raise SafetyFilterError(err_msg)
-                    raise GenerationError(f"Vertex AI error: {err_msg[:300]}")
-                # Log full structure to diagnose unexpected format
-                import json as _json
-                logger.error(
-                    "Video REST apikey: unexpected poll_data structure: %s",
-                    _json.dumps(poll_data, ensure_ascii=False)[:1500],
-                )
-                # Fallback: predictions array (alternate Vertex AI format)
-                predictions = response.get("predictions", [])
-                if predictions:
-                    first = predictions[0]
-                    if isinstance(first, dict):
-                        fb64 = first.get("bytesBase64Encoded", "")
-                        furi = first.get("uri", "")
-                        if fb64:
-                            return base64.b64decode(fb64)
-                        if furi:
-                            async with session.get(
-                                furi,
-                                headers={"x-goog-api-key": api_key},
-                                timeout=aiohttp.ClientTimeout(total=120),
-                            ) as dl_resp:
-                                if dl_resp.status == 200:
-                                    return await dl_resp.read()
-                raise GenerationError("Модель не вернула видео")
+            if generated_videos:
+                video_info = generated_videos[0].get("video", {})
+                video_b64 = video_info.get("bytesBase64Encoded", "")
+                video_uri = video_info.get("uri", "")
+                if video_b64:
+                    return base64.b64decode(video_b64)
+                if video_uri:
+                    async with session.get(
+                        video_uri,
+                        headers={"x-goog-api-key": api_key},
+                        timeout=aiohttp.ClientTimeout(total=120),
+                    ) as dl_resp:
+                        if dl_resp.status == 200:
+                            return await dl_resp.read()
+                        raise GenerationError(f"Не удалось скачать видео: HTTP {dl_resp.status}")
 
-            video_info = generated_videos[0].get("video", {})
-            video_b64 = video_info.get("bytesBase64Encoded", "")
-            video_uri = video_info.get("uri", "")
-
-            if video_b64:
-                return base64.b64decode(video_b64)
-            elif video_uri:
-                dl_headers = {"x-goog-api-key": api_key}
-                async with session.get(
-                    video_uri,
-                    headers=dl_headers,
-                    timeout=aiohttp.ClientTimeout(total=120),
-                ) as dl_resp:
-                    if dl_resp.status == 200:
-                        return await dl_resp.read()
-                    raise GenerationError(f"Не удалось скачать видео: HTTP {dl_resp.status}")
-
-            raise GenerationError("Видео сгенерировано, но данные недоступны")
+            import json as _json
+            logger.error(
+                "Video REST apikey: unrecognised poll_data structure: %s",
+                _json.dumps(poll_data, ensure_ascii=False)[:800],
+            )
+            raise GenerationError("Модель не вернула видео")
 
     async def _video_via_rest_bearer(
         self,
