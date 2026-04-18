@@ -19,8 +19,10 @@ Routes:
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
+import html as _html
 import json
 import logging
 import os
@@ -186,6 +188,7 @@ def _layout(title: str, content: str, active: str = "") -> str:
         ("dashboard", "/admin/dashboard",  "📊", "Дашборд"),
         ("users",     "/admin/users",      "👥", "Пользователи"),
         ("payments",  "/admin/payments",   "💳", "Платежи"),
+        ("broadcast", "/admin/broadcast",  "📨", "Рассылки"),
         ("apikeys",   "/admin/api-keys",   "🔑", "API ключи"),
         ("autopub",   "/admin/autopub",    "📣", "Автопост"),
     ]
@@ -1287,6 +1290,310 @@ async def handle_payments(request: web.Request) -> web.Response:
     return web.Response(text=_layout(f"Платежи ({total})", content, "payments"), content_type="text/html")
 
 
+# ─── Broadcasts ──────────────────────────────────────────────────────────────
+
+_broadcast_runtime: dict[int, dict[str, Any]] = {}
+_broadcast_memory: list[dict[str, Any]] = []
+_broadcast_memory_next_id = 1
+
+
+def _json_ok(payload: dict, status: int = 200) -> web.Response:
+    return web.Response(
+        text=json.dumps(payload, ensure_ascii=False),
+        content_type="application/json",
+        status=status,
+    )
+
+
+def _get_admin_users_snapshot() -> dict[int, dict[str, Any]]:
+    if _db.is_available():
+        fresh = _db.load_all_users()
+        for uid, data in fresh.items():
+            get_user_settings(uid).update(data)
+        return fresh
+    return dict(_users)
+
+
+def _as_int(value: Any, default: int = 0) -> int:
+    try:
+        if value in (None, ""):
+            return default
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _broadcast_recipients(data: dict) -> list[dict[str, Any]]:
+    platform = str(data.get("platform", "all"))
+    audience = str(data.get("audience", "active"))
+    min_credits = _as_int(data.get("min_credits"), -10**9)
+    max_credits = _as_int(data.get("max_credits"), 10**9)
+    min_gens = _as_int(data.get("min_gens"), 0)
+    max_count = max(0, min(50000, _as_int(data.get("max_count"), 0)))
+
+    result = []
+    for uid, user in _get_admin_users_snapshot().items():
+        user_platform = str(user.get("platform") or "")
+        if user_platform not in ("tg", "vk"):
+            continue
+        if platform in ("tg", "vk") and user_platform != platform:
+            continue
+
+        blocked = bool(user.get("blocked", False))
+        credits = int(user.get("credits", 0) or 0)
+        gens = int(user.get("generations_count", 0) or 0)
+
+        if audience == "active" and blocked:
+            continue
+        if audience == "blocked" and not blocked:
+            continue
+        if audience == "no_credits" and (blocked or credits > 0):
+            continue
+        if audience == "with_credits" and (blocked or credits <= 0):
+            continue
+        if audience == "new" and (blocked or gens > 0):
+            continue
+        if audience == "power" and (blocked or gens < 10):
+            continue
+        if credits < min_credits or credits > max_credits:
+            continue
+        if gens < min_gens:
+            continue
+
+        result.append({"uid": int(uid), "platform": user_platform, "user": user})
+        if max_count and len(result) >= max_count:
+            break
+    return result
+
+
+def _render_broadcast_message(template: str, uid: int, user: dict[str, Any], *, html_mode: bool = False) -> str:
+    name = str(user.get("first_name") or "друг")
+    values = {
+        "{name}": name,
+        "{id}": str(uid),
+        "{credits}": str(user.get("credits", 0)),
+        "{generations}": str(user.get("generations_count", 0)),
+        "{platform}": "Telegram" if user.get("platform") == "tg" else "ВКонтакте",
+    }
+    if html_mode:
+        values = {k: _html.escape(v) for k, v in values.items()}
+    text = template
+    for key, val in values.items():
+        text = text.replace(key, val)
+    return text
+
+
+def _campaign_history_rows() -> str:
+    items = _db.broadcast_list_campaigns(limit=12) if _db.is_available() else list(reversed(_broadcast_memory[-12:]))
+    if not items:
+        return '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:18px">Рассылок пока нет</td></tr>'
+    rows = ""
+    for item in items:
+        status = item.get("status", "")
+        badge_cls = "badge-green" if status == "done" else "badge-yellow" if status == "running" else "badge-red" if status == "error" else "badge-purple"
+        platform = {"all": "TG + VK", "tg": "Telegram", "vk": "VK"}.get(item.get("platform", ""), item.get("platform", ""))
+        rows += f"""<tr>
+          <td>#{item.get('id')}</td>
+          <td style="white-space:normal;min-width:180px">{_html.escape(item.get('title') or 'Без названия')}</td>
+          <td>{platform}</td>
+          <td><span class="badge {badge_cls}">{status}</span></td>
+          <td>{item.get('sent', 0)}/{item.get('total', 0)}</td>
+          <td style="color:var(--red)">{item.get('failed', 0)}</td>
+          <td style="color:var(--muted)">{_msk(item.get('created_at', ''))}</td>
+        </tr>"""
+    return rows
+
+
+@_require_auth
+async def handle_broadcast(request: web.Request) -> web.Response:
+    users = _get_admin_users_snapshot()
+    total_users = len(users)
+    tg_users = sum(1 for u in users.values() if u.get("platform") == "tg")
+    vk_users = sum(1 for u in users.values() if u.get("platform") == "vk")
+    active_users = sum(1 for u in users.values() if u.get("platform") in ("tg", "vk") and not u.get("blocked"))
+    no_credits = sum(1 for u in users.values() if u.get("platform") in ("tg", "vk") and not u.get("blocked") and int(u.get("credits", 0) or 0) <= 0)
+
+    history_rows = _campaign_history_rows()
+    content = f"""
+<div class="cards">
+  <div class="card"><div class="card-label">Всего в базе</div><div class="card-value purple">{total_users}</div></div>
+  <div class="card"><div class="card-label">Для рассылки</div><div class="card-value green">{active_users}</div></div>
+  <div class="card"><div class="card-label">Telegram</div><div class="card-value blue">{tg_users}</div></div>
+  <div class="card"><div class="card-label">ВКонтакте</div><div class="card-value" style="color:#4c75a3">{vk_users}</div></div>
+  <div class="card"><div class="card-label">Без кредитов</div><div class="card-value red">{no_credits}</div></div>
+</div>
+
+<div class="card" style="margin-bottom:18px">
+  <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px">
+    <div>
+      <div class="section-heading" style="margin:0 0 4px">🚀 Новая рассылка</div>
+      <div style="color:var(--muted);font-size:.9em">Поддерживает TG/VK, фильтры аудитории, персонализацию, кнопку, тест и live‑прогресс.</div>
+    </div>
+    <button class="btn btn-muted" onclick="fillPromo()">✨ Шаблон промо</button>
+  </div>
+  <div class="form-grid-2">
+    <div>
+      <label class="form-label">Название кампании</label>
+      <input id="bc-title" class="form-input" placeholder="Например: Новые видео-модели">
+    </div>
+    <div>
+      <label class="form-label">Платформа</label>
+      <select id="bc-platform" class="form-input">
+        <option value="all">Telegram + ВКонтакте</option>
+        <option value="tg">Только Telegram</option>
+        <option value="vk">Только ВКонтакте</option>
+      </select>
+    </div>
+    <div>
+      <label class="form-label">Аудитория</label>
+      <select id="bc-audience" class="form-input">
+        <option value="active">Активные, не заблокированные</option>
+        <option value="all">Все с известной платформой</option>
+        <option value="no_credits">Без кредитов</option>
+        <option value="with_credits">С кредитами</option>
+        <option value="new">Новые без генераций</option>
+        <option value="power">Активные: 10+ генераций</option>
+        <option value="blocked">Только заблокированные</option>
+      </select>
+    </div>
+    <div>
+      <label class="form-label">Формат Telegram</label>
+      <select id="bc-parse" class="form-input">
+        <option value="plain">Обычный текст</option>
+        <option value="html">HTML разметка</option>
+      </select>
+    </div>
+    <div>
+      <label class="form-label">Мин. кредитов</label>
+      <input id="bc-min-credits" class="form-input" type="number" placeholder="не важно">
+    </div>
+    <div>
+      <label class="form-label">Макс. кредитов</label>
+      <input id="bc-max-credits" class="form-input" type="number" placeholder="не важно">
+    </div>
+    <div>
+      <label class="form-label">Мин. генераций</label>
+      <input id="bc-min-gens" class="form-input" type="number" value="0">
+    </div>
+    <div>
+      <label class="form-label">Лимит получателей</label>
+      <input id="bc-max-count" class="form-input" type="number" placeholder="0 = без лимита">
+    </div>
+    <div>
+      <label class="form-label">Текст кнопки</label>
+      <input id="bc-button-text" class="form-input" placeholder="Открыть бота">
+    </div>
+    <div>
+      <label class="form-label">URL кнопки</label>
+      <input id="bc-button-url" class="form-input" placeholder="https://t.me/PicGenAI_26_bot">
+    </div>
+    <div style="grid-column:1/-1">
+      <label class="form-label">Сообщение</label>
+      <textarea id="bc-message" class="form-input" rows="8" placeholder="Привет, {{name}}!&#10;&#10;У нас новость...&#10;&#10;Доступные переменные: {{name}}, {{id}}, {{credits}}, {{generations}}, {{platform}}"></textarea>
+    </div>
+    <div>
+      <label class="form-label">Тестовый user_id</label>
+      <input id="bc-test-id" class="form-input" placeholder="ID получателя для теста">
+    </div>
+    <div>
+      <label class="form-label">Тестовая платформа</label>
+      <select id="bc-test-platform" class="form-input"><option value="tg">Telegram</option><option value="vk">ВКонтакте</option></select>
+    </div>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px">
+    <button class="btn btn-muted" onclick="previewBroadcast()">👀 Предпросмотр</button>
+    <button class="btn btn-success" onclick="testBroadcast()">🧪 Тест себе</button>
+    <button class="btn btn-primary" onclick="sendBroadcast()">🚀 Запустить рассылку</button>
+  </div>
+  <div id="bc-result" style="display:none;margin-top:16px"></div>
+</div>
+
+<div class="section-heading">История рассылок</div>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>ID</th><th>Название</th><th>Платформа</th><th>Статус</th><th>Отправлено</th><th>Ошибки</th><th>Дата</th></tr></thead>
+  <tbody>{history_rows}</tbody>
+</table>
+</div>
+
+<script>
+let currentCampaign = null;
+function payload(){{
+  return {{
+    title: document.getElementById('bc-title').value.trim(),
+    platform: document.getElementById('bc-platform').value,
+    audience: document.getElementById('bc-audience').value,
+    parse_mode: document.getElementById('bc-parse').value,
+    min_credits: document.getElementById('bc-min-credits').value,
+    max_credits: document.getElementById('bc-max-credits').value,
+    min_gens: document.getElementById('bc-min-gens').value,
+    max_count: document.getElementById('bc-max-count').value,
+    button_text: document.getElementById('bc-button-text').value.trim(),
+    button_url: document.getElementById('bc-button-url').value.trim(),
+    message: document.getElementById('bc-message').value,
+    test_user_id: document.getElementById('bc-test-id').value.trim(),
+    test_platform: document.getElementById('bc-test-platform').value
+  }};
+}}
+function box(html, ok=true){{
+  const el=document.getElementById('bc-result');
+  el.style.display='block';
+  el.className='alert '+(ok?'alert-success':'alert-error');
+  el.innerHTML=html;
+}}
+async function postJson(url, body){{
+  const r=await fetch(url,{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(body)}});
+  const d=await r.json();
+  if(!d.ok) throw new Error(d.error||'ошибка');
+  return d;
+}}
+async function previewBroadcast(){{
+  try{{
+    const d=await postJson('/admin/api/broadcast/preview', payload());
+    const samples=(d.samples||[]).map(s=>'<li><b>'+s.platform.toUpperCase()+' #'+s.uid+'</b> '+s.name+'<br><span style="color:var(--muted);white-space:pre-wrap">'+s.text+'</span></li>').join('');
+    box('Получателей: <b>'+d.total+'</b> · TG: '+d.by_platform.tg+' · VK: '+d.by_platform.vk+'<ul style="margin:10px 0 0 18px">'+samples+'</ul>', true);
+  }}catch(e){{ box('Ошибка предпросмотра: '+e.message,false); }}
+}}
+async function testBroadcast(){{
+  try{{
+    const d=await postJson('/admin/api/broadcast/test', payload());
+    box('Тестовое сообщение отправлено: '+d.platform+' #'+d.user_id, true);
+  }}catch(e){{ box('Ошибка теста: '+e.message,false); }}
+}}
+async function sendBroadcast(){{
+  try{{
+    const p=payload();
+    const prev=await postJson('/admin/api/broadcast/preview', p);
+    if(prev.total<1){{ box('Нет получателей по выбранным фильтрам.', false); return; }}
+    if(!confirm('Запустить рассылку на '+prev.total+' получателей?')) return;
+    const d=await postJson('/admin/api/broadcast/send', p);
+    currentCampaign=d.campaign_id;
+    pollStatus();
+  }}catch(e){{ box('Ошибка запуска: '+e.message,false); }}
+}}
+async function pollStatus(){{
+  if(!currentCampaign) return;
+  try{{
+    const r=await fetch('/admin/api/broadcast/status/'+currentCampaign);
+    const d=await r.json();
+    if(!d.ok) throw new Error(d.error||'ошибка');
+    const pct=d.total?Math.round(((d.sent+d.failed+d.skipped)/d.total)*100):0;
+    box('Рассылка #'+currentCampaign+': <b>'+d.status+'</b><br>Прогресс: '+pct+'% · отправлено '+d.sent+' из '+d.total+' · ошибок '+d.failed+' · пропусков '+d.skipped, d.status!=='error');
+    if(d.status==='running') setTimeout(pollStatus, 1200);
+    else setTimeout(()=>location.reload(), 1500);
+  }}catch(e){{ box('Ошибка статуса: '+e.message,false); }}
+}}
+function fillPromo(){{
+  document.getElementById('bc-title').value='Промо: новые возможности PicGenAI';
+  document.getElementById('bc-message').value='Привет, {{name}}!\\n\\nВ PicGenAI появились новые возможности для генерации изображений и видео. Ваш баланс: {{credits}} кредитов.\\n\\nЗайдите в бота и попробуйте прямо сейчас.';
+  document.getElementById('bc-button-text').value='Открыть PicGenAI';
+  document.getElementById('bc-button-url').value='https://t.me/PicGenAI_26_bot';
+}}
+</script>
+"""
+    return web.Response(text=_layout("Рассылки", content, "broadcast"), content_type="text/html")
+
+
 # ─── API endpoints ───────────────────────────────────────────────────────────
 
 def _api_require_auth(fn):
@@ -1374,6 +1681,263 @@ async def api_delete(request: web.Request) -> web.Response:
             text=json.dumps({"ok": False, "error": str(e)}),
             content_type="application/json", status=400
         )
+
+
+async def _broadcast_send_tg(
+    user_id: int,
+    text: str,
+    parse_mode: str,
+    button_text: str,
+    button_url: str,
+) -> None:
+    from bot.notify import _tg_bot
+    if _tg_bot is None:
+        raise RuntimeError("Telegram bot is not running or TELEGRAM_BOT_TOKEN is not set")
+    kwargs: dict[str, Any] = {"chat_id": user_id, "text": text}
+    if parse_mode == "html":
+        kwargs["parse_mode"] = "HTML"
+    if button_url:
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        kwargs["reply_markup"] = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text=button_text or "Открыть", url=button_url)
+        ]])
+    await _tg_bot.send_message(**kwargs)
+
+
+async def _broadcast_send_vk(
+    user_id: int,
+    text: str,
+    button_text: str,
+    button_url: str,
+) -> None:
+    token = os.getenv("VK_BOT_TOKEN", "")
+    if not token:
+        raise RuntimeError("VK_BOT_TOKEN is not set")
+    data = {
+        "user_id": user_id,
+        "message": text,
+        "random_id": random.randint(1, 2**31 - 1),
+        "access_token": token,
+        "v": "5.131",
+    }
+    if button_url:
+        data["keyboard"] = json.dumps({
+            "inline": True,
+            "buttons": [[{
+                "action": {
+                    "type": "open_link",
+                    "label": button_text or "Открыть",
+                    "link": button_url,
+                },
+                "color": "primary",
+            }]],
+        }, ensure_ascii=False)
+    async with _aiohttp.ClientSession() as session:
+        async with session.post(
+            "https://api.vk.com/method/messages.send",
+            data=data,
+            timeout=_aiohttp.ClientTimeout(total=15),
+        ) as resp:
+            result = await resp.json(content_type=None)
+    if "error" in result:
+        err = result["error"]
+        raise RuntimeError(err.get("error_msg") or str(err))
+
+
+async def _broadcast_send_one(recipient: dict[str, Any], cfg: dict[str, Any]) -> None:
+    uid = recipient["uid"]
+    platform = recipient["platform"]
+    html_mode = platform == "tg" and cfg.get("parse_mode") == "html"
+    text = _render_broadcast_message(cfg["message"], uid, recipient["user"], html_mode=html_mode)
+    if platform == "tg":
+        await _broadcast_send_tg(
+            uid, text, cfg.get("parse_mode", "plain"),
+            cfg.get("button_text", ""), cfg.get("button_url", ""),
+        )
+    elif platform == "vk":
+        await _broadcast_send_vk(uid, text, cfg.get("button_text", ""), cfg.get("button_url", ""))
+    else:
+        raise RuntimeError("Unknown platform")
+
+
+def _broadcast_runtime_update(campaign_id: int, **fields: Any) -> dict[str, Any]:
+    job = _broadcast_runtime.setdefault(campaign_id, {})
+    job.update(fields)
+    if _db.is_available():
+        _db.broadcast_update_campaign(campaign_id, **fields)
+    else:
+        for item in _broadcast_memory:
+            if item.get("id") == campaign_id:
+                item.update(fields)
+                break
+    return job
+
+
+async def _run_broadcast_campaign(campaign_id: int, cfg: dict[str, Any], recipients: list[dict[str, Any]]) -> None:
+    delay = max(0.05, min(5.0, float(cfg.get("delay_ms", 350)) / 1000.0))
+    stats = {"status": "running", "total": len(recipients), "sent": 0, "failed": 0, "skipped": 0, "started_at": "now"}
+    _broadcast_runtime_update(campaign_id, **stats)
+    for recipient in recipients:
+        uid = recipient["uid"]
+        platform = recipient["platform"]
+        try:
+            await _broadcast_send_one(recipient, cfg)
+            stats["sent"] += 1
+            if _db.is_available():
+                _db.broadcast_add_delivery(campaign_id, uid, platform, "sent")
+        except Exception as exc:
+            stats["failed"] += 1
+            err = str(exc)[:500]
+            logger.warning("Broadcast #%s failed for %s:%s — %s", campaign_id, platform, uid, err)
+            if _db.is_available():
+                _db.broadcast_add_delivery(campaign_id, uid, platform, "failed", err)
+        _broadcast_runtime_update(
+            campaign_id,
+            status="running",
+            total=stats["total"],
+            sent=stats["sent"],
+            failed=stats["failed"],
+            skipped=stats["skipped"],
+        )
+        await asyncio.sleep(delay)
+    final_status = "done" if stats["failed"] == 0 else "done"
+    _broadcast_runtime_update(campaign_id, status=final_status, completed_at="now")
+    logger.info("Broadcast #%s completed: sent=%s failed=%s", campaign_id, stats["sent"], stats["failed"])
+
+
+def _broadcast_config_from_payload(data: dict[str, Any]) -> dict[str, Any]:
+    message = str(data.get("message", "")).strip()
+    if len(message) < 2:
+        raise ValueError("message is required")
+    button_url = str(data.get("button_url", "")).strip()
+    if button_url and not (button_url.startswith("https://") or button_url.startswith("http://")):
+        raise ValueError("button_url must start with http:// or https://")
+    parse_mode = str(data.get("parse_mode", "plain"))
+    if parse_mode not in ("plain", "html"):
+        parse_mode = "plain"
+    return {
+        "title": str(data.get("title") or "Рассылка").strip()[:160],
+        "message": message[:4096],
+        "platform": str(data.get("platform", "all")),
+        "audience": str(data.get("audience", "active")),
+        "parse_mode": parse_mode,
+        "button_text": str(data.get("button_text", "")).strip()[:80],
+        "button_url": button_url[:500],
+        "delay_ms": _as_int(data.get("delay_ms"), 350),
+        "filters": {
+            "min_credits": data.get("min_credits", ""),
+            "max_credits": data.get("max_credits", ""),
+            "min_gens": data.get("min_gens", ""),
+            "max_count": data.get("max_count", ""),
+        },
+    }
+
+
+@_api_require_auth
+async def api_broadcast_preview(request: web.Request) -> web.Response:
+    try:
+        data = await request.json()
+        cfg = _broadcast_config_from_payload(data)
+        recipients = _broadcast_recipients({**data, **cfg})
+        samples = []
+        by_platform = {"tg": 0, "vk": 0}
+        for rec in recipients:
+            by_platform[rec["platform"]] += 1
+        for rec in recipients[:5]:
+            text = _render_broadcast_message(cfg["message"], rec["uid"], rec["user"], html_mode=False)
+            samples.append({
+                "uid": rec["uid"],
+                "platform": rec["platform"],
+                "name": rec["user"].get("first_name") or "—",
+                "text": _html.escape(text[:700]),
+            })
+        return _json_ok({"ok": True, "total": len(recipients), "by_platform": by_platform, "samples": samples})
+    except Exception as exc:
+        return _json_ok({"ok": False, "error": str(exc)}, status=400)
+
+
+@_api_require_auth
+async def api_broadcast_test(request: web.Request) -> web.Response:
+    try:
+        data = await request.json()
+        cfg = _broadcast_config_from_payload(data)
+        uid = int(data.get("test_user_id") or 0)
+        platform = str(data.get("test_platform", "tg"))
+        if uid <= 0 or platform not in ("tg", "vk"):
+            raise ValueError("test user_id and platform are required")
+        user = get_user_settings(uid)
+        if not user.get("platform"):
+            user["platform"] = platform
+        await _broadcast_send_one({"uid": uid, "platform": platform, "user": user}, cfg)
+        return _json_ok({"ok": True, "user_id": uid, "platform": platform})
+    except Exception as exc:
+        logger.warning("Broadcast test failed: %s", exc)
+        return _json_ok({"ok": False, "error": str(exc)}, status=400)
+
+
+@_api_require_auth
+async def api_broadcast_send(request: web.Request) -> web.Response:
+    global _broadcast_memory_next_id
+    try:
+        data = await request.json()
+        cfg = _broadcast_config_from_payload(data)
+        recipients = _broadcast_recipients({**data, **cfg})
+        if not recipients:
+            raise ValueError("no recipients match selected filters")
+        if _db.is_available():
+            campaign_id = _db.broadcast_create_campaign(
+                title=cfg["title"],
+                message=cfg["message"],
+                platform=cfg["platform"],
+                audience=cfg["audience"],
+                button_text=cfg["button_text"],
+                button_url=cfg["button_url"],
+                parse_mode=cfg["parse_mode"],
+                filters=cfg["filters"],
+            )
+            if campaign_id is None:
+                raise RuntimeError("cannot create campaign")
+        else:
+            campaign_id = _broadcast_memory_next_id
+            _broadcast_memory_next_id += 1
+            _broadcast_memory.append({
+                "id": campaign_id, "title": cfg["title"], "platform": cfg["platform"],
+                "audience": cfg["audience"], "status": "draft", "total": len(recipients),
+                "sent": 0, "failed": 0, "skipped": 0, "created_at": "",
+            })
+        _broadcast_runtime[campaign_id] = {
+            "status": "queued", "total": len(recipients), "sent": 0, "failed": 0, "skipped": 0,
+        }
+        asyncio.create_task(_run_broadcast_campaign(campaign_id, cfg, recipients))
+        return _json_ok({"ok": True, "campaign_id": campaign_id, "total": len(recipients)})
+    except Exception as exc:
+        logger.exception("Broadcast send failed")
+        return _json_ok({"ok": False, "error": str(exc)}, status=400)
+
+
+@_api_require_auth
+async def api_broadcast_status(request: web.Request) -> web.Response:
+    try:
+        campaign_id = int(request.match_info["campaign_id"])
+        data = _broadcast_runtime.get(campaign_id)
+        if data is None and _db.is_available():
+            data = _db.broadcast_get_campaign(campaign_id)
+        if data is None:
+            raise web.HTTPNotFound()
+        payload = {
+            "ok": True,
+            "status": data.get("status", "unknown"),
+            "total": data.get("total", 0),
+            "sent": data.get("sent", 0),
+            "failed": data.get("failed", 0),
+            "skipped": data.get("skipped", 0),
+            "error": data.get("error_text", ""),
+        }
+        return _json_ok(payload)
+    except web.HTTPException:
+        return _json_ok({"ok": False, "error": "not found"}, status=404)
+    except Exception as exc:
+        return _json_ok({"ok": False, "error": str(exc)}, status=400)
 
 
 _TG_TOKEN_FOR_PROXY = os.getenv("TELEGRAM_BOT_TOKEN", "")
@@ -3017,8 +3581,13 @@ def register_admin_routes(app: web.Application) -> None:
     app.router.add_get("/admin/users",                    handle_users)
     app.router.add_get("/admin/users/{uid}",              handle_user_detail)
     app.router.add_get("/admin/payments",                 handle_payments)
+    app.router.add_get("/admin/broadcast",                handle_broadcast)
     app.router.add_get("/admin/api-keys",                 handle_api_keys)
     app.router.add_get("/admin/autopub",                  handle_autopub)
+    app.router.add_post("/admin/api/broadcast/preview",   api_broadcast_preview)
+    app.router.add_post("/admin/api/broadcast/test",      api_broadcast_test)
+    app.router.add_post("/admin/api/broadcast/send",      api_broadcast_send)
+    app.router.add_get("/admin/api/broadcast/status/{campaign_id}", api_broadcast_status)
     app.router.add_post("/admin/api/autopub/settings",       api_autopub_settings)
     app.router.add_get("/admin/api/autopub/trends",          api_autopub_fetch_trends)
     app.router.add_post("/admin/api/autopub/generate",       api_autopub_generate)

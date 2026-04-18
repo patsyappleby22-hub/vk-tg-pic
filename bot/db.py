@@ -143,6 +143,43 @@ def init_tables() -> None:
                     image_style     TEXT NOT NULL DEFAULT ''
                 )
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS bot_broadcast_campaigns (
+                    id              SERIAL PRIMARY KEY,
+                    title           TEXT NOT NULL DEFAULT '',
+                    message         TEXT NOT NULL DEFAULT '',
+                    platform        TEXT NOT NULL DEFAULT 'all',
+                    audience        TEXT NOT NULL DEFAULT 'active',
+                    button_text     TEXT NOT NULL DEFAULT '',
+                    button_url      TEXT NOT NULL DEFAULT '',
+                    parse_mode      TEXT NOT NULL DEFAULT 'plain',
+                    filters         TEXT NOT NULL DEFAULT '{}',
+                    status          TEXT NOT NULL DEFAULT 'draft',
+                    total           INT NOT NULL DEFAULT 0,
+                    sent            INT NOT NULL DEFAULT 0,
+                    failed          INT NOT NULL DEFAULT 0,
+                    skipped         INT NOT NULL DEFAULT 0,
+                    error_text      TEXT NOT NULL DEFAULT '',
+                    created_at      TIMESTAMP DEFAULT NOW(),
+                    started_at      TIMESTAMP,
+                    completed_at    TIMESTAMP
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS bot_broadcast_deliveries (
+                    id              SERIAL PRIMARY KEY,
+                    campaign_id     INT NOT NULL REFERENCES bot_broadcast_campaigns(id) ON DELETE CASCADE,
+                    user_id         BIGINT NOT NULL,
+                    platform        TEXT NOT NULL DEFAULT '',
+                    status          TEXT NOT NULL DEFAULT '',
+                    error_text      TEXT NOT NULL DEFAULT '',
+                    sent_at         TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_broadcast_deliveries_campaign
+                ON bot_broadcast_deliveries (campaign_id, status)
+            """)
             # Ensure one settings row always exists
             cur.execute("""
                 INSERT INTO autopub_settings (id) VALUES (1)
@@ -602,6 +639,173 @@ def api_keys_table_has_rows() -> bool:
             return cur.fetchone() is not None
     except Exception:
         return False
+
+
+# ── Broadcast campaigns ────────────────────────────────────────────────────────
+
+def broadcast_create_campaign(
+    *,
+    title: str,
+    message: str,
+    platform: str,
+    audience: str,
+    button_text: str = "",
+    button_url: str = "",
+    parse_mode: str = "plain",
+    filters: dict | None = None,
+) -> int | None:
+    if not _DATABASE_URL:
+        return None
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO bot_broadcast_campaigns
+                    (title, message, platform, audience, button_text, button_url, parse_mode, filters)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
+            """, (
+                title, message, platform, audience, button_text, button_url, parse_mode,
+                json.dumps(filters or {}, ensure_ascii=False),
+            ))
+            return int(cur.fetchone()[0])
+    except Exception:
+        logger.exception("db: failed to create broadcast campaign")
+        return None
+
+
+def broadcast_update_campaign(campaign_id: int, **fields) -> None:
+    if not _DATABASE_URL or not fields:
+        return
+    allowed = {
+        "status", "total", "sent", "failed", "skipped", "error_text",
+        "started_at", "completed_at",
+    }
+    clean = {k: v for k, v in fields.items() if k in allowed}
+    if not clean:
+        return
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            parts = []
+            vals = []
+            for key, val in clean.items():
+                if key in {"started_at", "completed_at"} and val == "now":
+                    parts.append(f"{key}=NOW()")
+                else:
+                    parts.append(f"{key}=%s")
+                    vals.append(val)
+            vals.append(campaign_id)
+            cur.execute(
+                f"UPDATE bot_broadcast_campaigns SET {', '.join(parts)} WHERE id=%s",
+                vals,
+            )
+    except Exception:
+        logger.exception("db: failed to update broadcast campaign %s", campaign_id)
+
+
+def broadcast_add_delivery(
+    campaign_id: int,
+    user_id: int,
+    platform: str,
+    status: str,
+    error_text: str = "",
+) -> None:
+    if not _DATABASE_URL:
+        return
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO bot_broadcast_deliveries
+                    (campaign_id, user_id, platform, status, error_text)
+                VALUES (%s,%s,%s,%s,%s)
+            """, (campaign_id, user_id, platform, status, error_text[:500]))
+    except Exception:
+        logger.exception("db: failed to save broadcast delivery")
+
+
+def broadcast_get_campaign(campaign_id: int) -> dict | None:
+    if not _DATABASE_URL:
+        return None
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id,title,message,platform,audience,button_text,button_url,parse_mode,
+                       filters,status,total,sent,failed,skipped,error_text,
+                       created_at,started_at,completed_at
+                FROM bot_broadcast_campaigns WHERE id=%s
+            """, (campaign_id,))
+            r = cur.fetchone()
+        if not r:
+            return None
+        return {
+            "id": r[0], "title": r[1], "message": r[2], "platform": r[3],
+            "audience": r[4], "button_text": r[5], "button_url": r[6],
+            "parse_mode": r[7], "filters": json.loads(r[8] or "{}"),
+            "status": r[9], "total": r[10], "sent": r[11], "failed": r[12],
+            "skipped": r[13], "error_text": r[14],
+            "created_at": r[15].isoformat() if r[15] else "",
+            "started_at": r[16].isoformat() if r[16] else "",
+            "completed_at": r[17].isoformat() if r[17] else "",
+        }
+    except Exception:
+        logger.exception("db: failed to get broadcast campaign %s", campaign_id)
+        return None
+
+
+def broadcast_list_campaigns(limit: int = 20) -> list[dict]:
+    if not _DATABASE_URL:
+        return []
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id,title,platform,audience,status,total,sent,failed,skipped,created_at,completed_at
+                FROM bot_broadcast_campaigns
+                ORDER BY created_at DESC
+                LIMIT %s
+            """, (limit,))
+            rows = cur.fetchall()
+        return [
+            {
+                "id": r[0], "title": r[1], "platform": r[2], "audience": r[3],
+                "status": r[4], "total": r[5], "sent": r[6], "failed": r[7],
+                "skipped": r[8], "created_at": r[9].isoformat() if r[9] else "",
+                "completed_at": r[10].isoformat() if r[10] else "",
+            }
+            for r in rows
+        ]
+    except Exception:
+        logger.exception("db: failed to list broadcast campaigns")
+        return []
+
+
+def broadcast_recent_deliveries(campaign_id: int, limit: int = 20) -> list[dict]:
+    if not _DATABASE_URL:
+        return []
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT user_id,platform,status,error_text,sent_at
+                FROM bot_broadcast_deliveries
+                WHERE campaign_id=%s
+                ORDER BY id DESC
+                LIMIT %s
+            """, (campaign_id, limit))
+            rows = cur.fetchall()
+        return [
+            {
+                "user_id": r[0], "platform": r[1], "status": r[2],
+                "error_text": r[3], "sent_at": r[4].isoformat() if r[4] else "",
+            }
+            for r in rows
+        ]
+    except Exception:
+        logger.exception("db: failed to list broadcast deliveries")
+        return []
 
 
 # ── Autopub ────────────────────────────────────────────────────────────────────

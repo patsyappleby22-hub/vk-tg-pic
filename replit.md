@@ -13,6 +13,7 @@ An asynchronous multi-platform bot (Telegram + VK) for AI image generation using
 - **Payment (Pally)**: `bot/services/payment_service.py` — Pally.info API for Telegram
 - **Web pages**: `web/templates/` — landing (index.html), success.html, fail.html (+ fallback in code)
 - **Webhooks**: `bot/web_server.py` — FreeKassa + Pally webhook handlers with signature verification, idempotency
+- **Admin broadcasts**: `/admin/broadcast` in `bot/web_admin.py` — Telegram/VK mass messaging with targeting, previews, test send, inline/open-link button, progress and DB history
 - **Config**: `bot/config.py` — pydantic-settings from environment variables
 - **Database**: `bot/db.py` — PostgreSQL persistence (users, API keys, payments)
 
@@ -41,6 +42,7 @@ An asynchronous multi-platform bot (Telegram + VK) for AI image generation using
 - Port: 5000 (dev, from PORT env var), 8080 (Northflank default)
 - Bots start automatically if their respective tokens are set
 - Admin panel: `/adminmrxgyt` command in Telegram
+- Web admin broadcasts: `/admin/broadcast`
 
 ## Web Endpoints
 - `GET /` — Landing page (PicGenAI)
@@ -78,6 +80,8 @@ An asynchronous multi-platform bot (Telegram + VK) for AI image generation using
 - `bot_user_settings` — user_id BIGINT PK, data TEXT
 - `bot_api_keys` — id SERIAL PK, key TEXT UNIQUE
 - `bot_payments` — order_id TEXT PK, payment_id, user_id, pack_key, amount, status, timestamps
+- `bot_broadcast_campaigns` — admin broadcast campaigns, filters, progress counters, status, timestamps
+- `bot_broadcast_deliveries` — per-user Telegram/VK broadcast delivery logs with error text
 
 ## Bot Links
 - Telegram: https://t.me/PicGenAI_26_bot
