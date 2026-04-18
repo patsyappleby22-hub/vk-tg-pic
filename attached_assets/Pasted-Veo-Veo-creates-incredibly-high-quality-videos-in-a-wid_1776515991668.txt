@@ -1,0 +1,26 @@
+Veo
+Veo creates incredibly high-quality videos in a wide range of subjects and styles, bringing an improved understanding of real-world physics and the nuances of human movement and expression.
+
+Model	Feature	Description	Input	Output	Output Resolution	Price
+Veo 3.1	Video + Audio generation	Generate high-quality videos with synchronized speech/sound effects from a text prompt or reference image	Text/Image prompt	Video + Audio	720p, 1080p	$0.40/second
+4k	$0.60/second
+Video generation	Generate high-quality videos from a text prompt or reference image	Text/Image prompt	Video	720p, 1080p	$0.20/second
+4k	$0.40/second
+Veo 3.1 Fast	Video + Audio generation	Generate videos with synchronized speech/sound effects from a text prompt or reference image faster	Text/Image prompt	Video + Audio	720p	$0.10/second
+1080p	$0.12/second
+4k	$0.30/second
+Video generation	Generate videos from a text prompt or reference image faster	Text/Image prompt	Video	720p	$0.08/second
+1080p	$0.10/second
+4k	$0.25/second
+Veo 3.1 Lite	Video + Audio generation	Generate videos with synchronized speech/sound effects from a text prompt or reference image the fastest	Text/Image prompt	Video + Audio	720p	$0.05/second
+1080p	$0.08/second
+Video generation	Generate videos from a text prompt or reference image the fastest	Text/Image prompt	Video	720p	$0.03/second
+1080p	$0.05/second
+Veo 3	Video + Audio generation	Generate high-quality videos with synchronized speech/sound effects from a text prompt or reference image	Text/Image prompt	Video + Audio	720p, 1080p	$0.40/second
+Video generation	Generate high-quality videos from a text prompt or reference image	Text/Image prompt	Video	720p, 1080p	$0.20/second
+Veo 3 Fast	Video + Audio generation	Generate videos with synchronized speech/sound effects from a text prompt or reference image faster	Text/Image prompt	Video + Audio	720p	$0.10/second
+1080p	$0.12/second
+Video generation	Generate videos from a text prompt or reference image faster	Text/Image prompt	Video	720p	$0.08/second
+1080p	$0.10/second
+Veo 2	Video generation	Generate videos from a text prompt or reference image	Text/Image prompt	Video	720p	$0.50/second
+Advanced Controls	Generate videos through start and end frame interpolation, extend generated videos, and apply camera controls	Text/Image/Video prompt
