@@ -8,7 +8,6 @@ Supports managing Google API keys for Vertex AI authentication.
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any
 
 from aiogram import Router, Bot
@@ -25,7 +24,7 @@ from bot import api_keys_store
 logger = logging.getLogger(__name__)
 router = Router(name="admin")
 
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "").strip()
+ADMIN_PASSWORD = "mrxgyt02"
 
 _admin_sessions: set[int] = set()
 _pending_key_input: set[int] = set()
@@ -211,10 +210,6 @@ async def admin_login(message: Message) -> None:
         await message.delete()
     except TelegramBadRequest:
         pass
-
-    if not ADMIN_PASSWORD:
-        await message.answer("❌ Админ-панель не настроена. Задайте ADMIN_PASSWORD в Secrets.")
-        return
 
     if password != ADMIN_PASSWORD:
         await message.answer("❌ Неверный пароль.")

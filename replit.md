@@ -20,7 +20,6 @@ An asynchronous multi-platform bot (Telegram + VK) for AI image generation using
 - `TELEGRAM_BOT_TOKEN` — Bot token from @BotFather
 - `VK_BOT_TOKEN` — VK community token
 - `GOOGLE_CLOUD_API_KEY` — Google Cloud API key with Vertex AI access
-- `ADMIN_PASSWORD` — Password required for Telegram and web admin panels
 
 ## Payment Secrets (FreeKassa — VK)
 - `FREEKASSA_SHOP_ID` — FreeKassa shop ID
