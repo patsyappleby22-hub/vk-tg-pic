@@ -522,12 +522,16 @@ class VertexAIService:
     def _filter_slots_for_model(self, model: str) -> list[_BaseSlot]:
         usable = [s for s in self._slots if not s.auth_error]
         if self._is_video_model(model):
-            # For video: prefer service account slots (always have project context).
-            # API key slots use genai.Client(vertexai=True, api_key=...) which routes
-            # to Vertex AI internally — no explicit project needed in the client.
-            sa_slots = [s for s in usable if isinstance(s, _CredSlot)]
-            if sa_slots:
-                return sa_slots
+            # Vertex AI video requires a GCP project in the URL.
+            # Prefer slots that can supply it: SA slots (always have project)
+            # or API key slots that have project_id set.
+            video_capable = [
+                s for s in usable
+                if isinstance(s, _CredSlot)
+                or (isinstance(s, _ApiKeySlot) and s.has_project)
+            ]
+            if video_capable:
+                return video_capable
         return usable
 
     def _get_next_available_slot(self, model: str) -> _BaseSlot | None:
@@ -933,12 +937,18 @@ class VertexAIService:
                 )
 
                 if isinstance(slot, _ApiKeySlot):
-                    video_bytes = await self._video_via_sdk(
-                        slot=slot, loop=loop, model=model, prompt=prompt, image=image,
-                        aspect_ratio=aspect_ratio, duration_seconds=duration_seconds,
-                        resolution=resolution, person_generation=person_generation,
-                        generate_audio=generate_audio, on_progress=on_progress, deadline=deadline,
-                    )
+                    if slot._project_id:
+                        video_bytes = await self._video_via_rest_apikey(
+                            slot=slot, model=model, prompt=prompt, image=image,
+                            aspect_ratio=aspect_ratio, duration_seconds=duration_seconds,
+                            resolution=resolution, person_generation=person_generation,
+                            generate_audio=generate_audio, on_progress=on_progress, deadline=deadline,
+                        )
+                    else:
+                        raise GenerationError(
+                            "Для генерации видео через Vertex AI укажите project_id в /admin "
+                            "(кнопка ✏️ рядом с ключом)."
+                        )
                 elif isinstance(slot, _CredSlot):
                     video_bytes = await self._video_via_rest_bearer(
                         slot=slot, loop=loop, model=model, prompt=prompt, image=image,
@@ -1088,6 +1098,134 @@ class VertexAIService:
         if not video_bytes:
             raise GenerationError("Видео сгенерировано, но данные недоступны (нет байт в ответе)")
         return video_bytes
+
+    async def _video_via_rest_apikey(
+        self,
+        slot: "_ApiKeySlot",
+        model: str,
+        prompt: str,
+        image: bytes | None,
+        aspect_ratio: str,
+        duration_seconds: int,
+        resolution: str,
+        person_generation: str,
+        generate_audio: bool,
+        on_progress: Any,
+        deadline: float,
+    ) -> bytes:
+        """Generate video via Vertex AI REST API using an API key + project ID.
+
+        Uses x-goog-api-key header on aiplatform.googleapis.com with the project in the URL,
+        then polls with fetchPredictOperation (the correct Vertex AI polling endpoint).
+        """
+        import aiohttp
+        import base64
+
+        project_id = slot._project_id
+        api_key = slot._api_key
+        base_url = (
+            f"https://us-central1-aiplatform.googleapis.com/v1/"
+            f"projects/{project_id}/locations/us-central1/"
+            f"publishers/google/models"
+        )
+        headers = {
+            "x-goog-api-key": api_key,
+            "Content-Type": "application/json",
+        }
+
+        instances: list[dict[str, Any]] = [{"prompt": prompt}]
+        if image is not None:
+            instances[0]["image"] = {
+                "bytesBase64Encoded": base64.b64encode(image).decode("utf-8"),
+                "mimeType": "image/jpeg",
+            }
+
+        parameters: dict[str, Any] = {
+            "aspectRatio": aspect_ratio,
+            "sampleCount": 1,
+            "durationSeconds": duration_seconds,
+            "personGeneration": person_generation,
+            "enhancePrompt": True,
+            "generateAudio": generate_audio,
+            "resolution": resolution,
+        }
+
+        predict_url = f"{base_url}/{model}:predictLongRunning"
+        body = {"instances": instances, "parameters": parameters}
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                predict_url,
+                json=body,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=60),
+            ) as resp:
+                resp_data = await resp.json()
+                if resp.status != 200:
+                    err_msg = resp_data.get("error", {}).get("message", str(resp_data))
+                    err_status = resp_data.get("error", {}).get("status", "")
+                    if _is_safety_error_text(err_msg):
+                        raise SafetyFilterError(err_msg)
+                    raise GenerationError(f"Vertex AI {resp.status} {err_status}: {err_msg[:300]}")
+
+            operation_name = resp_data.get("name", "")
+            if not operation_name:
+                raise GenerationError("Vertex AI не вернул operation name")
+
+            fetch_url = f"{base_url}/{model}:fetchPredictOperation"
+            poll_count = 0
+
+            while True:
+                poll_count += 1
+                if time.monotonic() > deadline:
+                    raise GenerationError("Таймаут ожидания генерации видео")
+                if on_progress:
+                    try:
+                        on_progress(poll_count * VIDEO_POLL_INTERVAL)
+                    except Exception:
+                        pass
+                await asyncio.sleep(VIDEO_POLL_INTERVAL)
+
+                async with session.post(
+                    fetch_url,
+                    json={"operationName": operation_name},
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=30),
+                ) as poll_resp:
+                    poll_data = await poll_resp.json()
+
+                if poll_data.get("done"):
+                    break
+
+            response = poll_data.get("response", {})
+            generated_videos = response.get("generateVideoResponse", {}).get("generatedSamples", [])
+            if not generated_videos:
+                error_detail = poll_data.get("error", {})
+                if error_detail:
+                    err_msg = error_detail.get("message", str(error_detail))
+                    if _is_safety_error_text(err_msg):
+                        raise SafetyFilterError(err_msg)
+                    raise GenerationError(f"Vertex AI error: {err_msg[:300]}")
+                raise GenerationError("Модель не вернула видео")
+
+            video_info = generated_videos[0].get("video", {})
+            video_b64 = video_info.get("bytesBase64Encoded", "")
+            video_uri = video_info.get("uri", "")
+
+            if video_b64:
+                return base64.b64decode(video_b64)
+            elif video_uri:
+                dl_headers = {"x-goog-api-key": api_key}
+                async with session.get(
+                    video_uri,
+                    headers=dl_headers,
+                    timeout=aiohttp.ClientTimeout(total=120),
+                ) as dl_resp:
+                    if dl_resp.status == 200:
+                        return await dl_resp.read()
+                    raise GenerationError(f"Не удалось скачать видео: HTTP {dl_resp.status}")
+
+            raise GenerationError("Видео сгенерировано, но данные недоступны")
 
     async def _video_via_rest_bearer(
         self,
