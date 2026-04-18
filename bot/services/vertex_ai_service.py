@@ -282,7 +282,7 @@ class _BaseSlot:
 
 
 class _ApiKeySlot(_BaseSlot):
-    """Slot that authenticates via a Google API key with Vertex AI backend."""
+    """Slot that authenticates via a Google API key."""
 
     def __init__(self, api_key: str, index: int, project_id: str | None = None) -> None:
         super().__init__(index)
@@ -308,6 +308,13 @@ class _ApiKeySlot(_BaseSlot):
             proj_info = f", project={self._project_id}" if self._project_id else ""
             logger.info("Initialised genai client for '%s' (Vertex AI + API key mode%s)", self.label, proj_info)
         return self.client
+
+    def get_video_client(self) -> Any:
+        if self._video_client is None:
+            import google.genai as genai
+            self._video_client = genai.Client(api_key=self._api_key)
+            logger.info("Initialised video client for '%s' (Gemini API key mode)", self.label)
+        return self._video_client
 
     def get_video_base_url(self) -> str | None:
         if not self._project_id:
@@ -507,7 +514,7 @@ class VertexAIService:
         After each use the pointer advances so every key gets equal traffic.
         'Ready' means: past cooldown_until AND has_capacity for this specific model
         AND no permanent auth error.
-        For video models (veo-*): prefers slots with project_id set.
+        Video models (veo-*) use the Gemini Developer API for API-key slots.
         """
         usable = self._filter_slots_for_model(model)
         if not usable:
@@ -875,9 +882,6 @@ class VertexAIService:
         on_progress: Any,
         image: bytes | None = None,
     ) -> bytes:
-        import aiohttp
-        import base64
-
         deadline = time.monotonic() + VIDEO_POLL_TIMEOUT
         _t0 = time.monotonic()
 
@@ -900,12 +904,9 @@ class VertexAIService:
 
             try:
                 if isinstance(slot, _ApiKeySlot):
-                    base_url = slot.get_video_base_url()
-                    api_key = slot.get_video_api_key()
-                    if not base_url:
-                        raise GenerationError("API-ключу не назначен project_id — видео недоступно")
+                    pass
                 else:
-                    raise GenerationError("Видео пока поддерживается только с API-ключами с project_id")
+                    raise GenerationError("Видео пока поддерживается только с API-ключами")
 
                 _mode = "image→video" if image else "text→video"
                 logger.info(
@@ -913,95 +914,20 @@ class VertexAIService:
                     _mode, slot.label, model, prompt[:60],
                 )
 
-                instances: list[dict[str, Any]] = [{"prompt": prompt}]
-                if image is not None:
-                    instances[0]["image"] = {
-                        "bytesBase64Encoded": base64.b64encode(image).decode("utf-8"),
-                        "mimeType": "image/jpeg",
-                    }
-
-                parameters: dict[str, Any] = {
-                    "aspectRatio": aspect_ratio,
-                    "sampleCount": 1,
-                    "durationSeconds": duration_seconds,
-                    "personGeneration": person_generation,
-                    "enhancePrompt": True,
-                    "generateAudio": generate_audio,
-                    "resolution": resolution,
-                }
-
-                predict_url = f"{base_url}/{model}:predictLongRunning?key={api_key}"
-                body = {"instances": instances, "parameters": parameters}
-
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(
-                        predict_url,
-                        json=body,
-                        timeout=aiohttp.ClientTimeout(total=60),
-                    ) as resp:
-                        resp_data = await resp.json()
-                        if resp.status != 200:
-                            err_msg = resp_data.get("error", {}).get("message", str(resp_data))
-                            err_status = resp_data.get("error", {}).get("status", "")
-                            if _is_safety_error_text(err_msg):
-                                raise SafetyFilterError(err_msg)
-                            raise GenerationError(f"Vertex AI {resp.status} {err_status}: {err_msg[:300]}")
-
-                    operation_name = resp_data.get("name", "")
-                    if not operation_name:
-                        raise GenerationError("Vertex AI не вернул operation name")
-
-                    poll_url = f"https://us-central1-aiplatform.googleapis.com/v1beta1/{operation_name}?key={api_key}"
-                    poll_count = 0
-
-                    while True:
-                        poll_count += 1
-                        if time.monotonic() > deadline:
-                            raise GenerationError("Таймаут ожидания генерации видео")
-                        if on_progress:
-                            try:
-                                on_progress(poll_count * VIDEO_POLL_INTERVAL)
-                            except Exception:
-                                pass
-                        await asyncio.sleep(VIDEO_POLL_INTERVAL)
-
-                        async with session.get(
-                            poll_url,
-                            timeout=aiohttp.ClientTimeout(total=30),
-                        ) as poll_resp:
-                            poll_data = await poll_resp.json()
-
-                        if poll_data.get("done"):
-                            break
-
-                    response = poll_data.get("response", {})
-                    generated_videos = response.get("generateVideoResponse", {}).get("generatedSamples", [])
-                    if not generated_videos:
-                        error_detail = poll_data.get("error", {})
-                        if error_detail:
-                            err_msg = error_detail.get("message", str(error_detail))
-                            if _is_safety_error_text(err_msg):
-                                raise SafetyFilterError(err_msg)
-                            raise GenerationError(f"Vertex AI error: {err_msg[:300]}")
-                        raise GenerationError("Модель не вернула видео")
-
-                    video_info = generated_videos[0].get("video", {})
-                    video_uri = video_info.get("uri", "")
-                    video_b64 = video_info.get("bytesBase64Encoded", "")
-
-                    video_bytes: bytes | None = None
-                    if video_b64:
-                        video_bytes = base64.b64decode(video_b64)
-                    elif video_uri:
-                        dl_url = f"{video_uri}?key={api_key}" if "key=" not in video_uri else video_uri
-                        async with session.get(
-                            dl_url,
-                            timeout=aiohttp.ClientTimeout(total=120),
-                        ) as dl_resp:
-                            if dl_resp.status == 200:
-                                video_bytes = await dl_resp.read()
-                            else:
-                                raise GenerationError(f"Не удалось скачать видео: HTTP {dl_resp.status}")
+                video_bytes = await asyncio.to_thread(
+                    self._generate_video_with_gemini_api,
+                    slot,
+                    prompt,
+                    model,
+                    aspect_ratio,
+                    duration_seconds,
+                    resolution,
+                    person_generation,
+                    generate_audio,
+                    deadline,
+                    on_progress,
+                    image,
+                )
 
                 if not video_bytes:
                     raise GenerationError("Видео сгенерировано, но данные недоступны")
@@ -1070,6 +996,88 @@ class VertexAIService:
         logger.error("Video deadline reached — all slots busy for model %s", model)
         self._alert_quota_exhausted(model)
         raise QuotaExceededError()
+
+    def _generate_video_with_gemini_api(
+        self,
+        slot: _ApiKeySlot,
+        prompt: str,
+        model: str,
+        aspect_ratio: str,
+        duration_seconds: int,
+        resolution: str,
+        person_generation: str,
+        generate_audio: bool,
+        deadline: float,
+        on_progress: Any,
+        image: bytes | None,
+    ) -> bytes:
+        from google.genai import types as genai_types
+
+        client = slot.get_video_client()
+        api_resolution = "1080p" if resolution == "4k" else resolution
+        api_person_generation = person_generation
+        if api_person_generation not in ("dont_allow", "allow_adult"):
+            api_person_generation = "allow_adult"
+        config = genai_types.GenerateVideosConfig(
+            number_of_videos=1,
+            duration_seconds=duration_seconds,
+            aspect_ratio=aspect_ratio,
+            resolution=api_resolution,
+            person_generation=api_person_generation,
+            enhance_prompt=True,
+            generate_audio=generate_audio,
+        )
+        input_image = (
+            genai_types.Image(image_bytes=image, mime_type="image/jpeg")
+            if image is not None
+            else None
+        )
+
+        operation = client.models.generate_videos(
+            model=model,
+            prompt=prompt,
+            image=input_image,
+            config=config,
+        )
+
+        poll_count = 0
+        while not operation.done:
+            if time.monotonic() > deadline:
+                raise GenerationError("Таймаут ожидания генерации видео")
+            poll_count += 1
+            if on_progress:
+                try:
+                    on_progress(poll_count * VIDEO_POLL_INTERVAL)
+                except Exception:
+                    pass
+            time.sleep(VIDEO_POLL_INTERVAL)
+            operation = client.operations.get(operation=operation)
+
+        if operation.error:
+            err_msg = operation.error.get("message", str(operation.error))
+            if _is_safety_error_text(err_msg):
+                raise SafetyFilterError(err_msg)
+            raise GenerationError(f"Gemini Video API error: {err_msg[:300]}")
+
+        result = operation.result or operation.response
+        generated_videos = result.generated_videos if result else None
+        if not generated_videos:
+            reasons = []
+            if result:
+                reasons = result.rai_media_filtered_reasons or []
+            if reasons:
+                msg = "; ".join(reasons)
+                if _is_safety_error_text(msg):
+                    raise SafetyFilterError(msg)
+                raise GenerationError(f"Gemini Video API filtered response: {msg[:300]}")
+            raise GenerationError("Модель не вернула видео")
+
+        generated_video = generated_videos[0]
+        video = generated_video.video
+        if video and video.video_bytes:
+            return video.video_bytes
+
+        return client.files.download(file=generated_video)
 
     CHAT_MODEL = "gemini-3.1-pro-preview"
     SEARCH_MODEL = "gemini-3.1-flash-lite-preview"
