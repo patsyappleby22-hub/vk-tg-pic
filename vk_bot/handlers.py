@@ -1120,7 +1120,7 @@ async def _generate_and_send(
         try:
             await bot.api.messages.edit(
                 peer_id=peer_id, message_id=processing_id,
-                message=f"🚫 Запрос заблокирован фильтрами безопасности\n\n{exc.user_message}",
+                message=exc.user_message,
             )
         except Exception:
             pass
@@ -1158,7 +1158,7 @@ async def _generate_and_send(
         try:
             await bot.api.messages.edit(
                 peer_id=peer_id, message_id=processing_id,
-                message=f"Не удалось сгенерировать {gen_type}.\nПопробуйте ещё раз.",
+                message=f"❌ Не удалось сгенерировать {gen_type}.\nПопробуйте ещё раз.",
                 keyboard=get_switch_model_keyboard(user_model),
             )
         except Exception:

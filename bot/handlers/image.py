@@ -331,11 +331,8 @@ async def handle_photo_prompt(
         except SafetyFilterError as exc:
             await animator.stop()
             clear_active_task(uid)
-            await processing_msg.edit_text(
-                f"🚫 <b>Запрос заблокирован фильтрами безопасности</b>\n\n{exc.user_message}",
-                parse_mode="HTML",
-            )
-        except QuotaExceededError:
+            await processing_msg.edit_text(exc.user_message, parse_mode="HTML")
+        except QuotaExceededError as exc:
             await animator.stop()
             clear_active_task(uid)
             current_name = AVAILABLE_MODELS.get(user_model, {}).get("label", user_model)
@@ -344,12 +341,21 @@ async def handle_photo_prompt(
                 parse_mode="HTML",
                 reply_markup=_suggest_switch_keyboard(user_model),
             )
+        except BotError as exc:
+            await animator.stop()
+            clear_active_task(uid)
+            logger.error("Error image→video '%s': %s", caption[:60], exc)
+            await processing_msg.edit_text(
+                exc.user_message,
+                parse_mode="HTML",
+                reply_markup=_suggest_switch_keyboard(user_model),
+            )
         except Exception as exc:
             await animator.stop()
             clear_active_task(uid)
             logger.exception("Error image→video '%s': %s", caption[:60], exc)
             await processing_msg.edit_text(
-                "Не удалось сгенерировать видео по фото 😔\n\nПопробуйте ещё раз.",
+                "❌ <b>Не удалось сгенерировать видео по фото</b>\n\nПопробуйте ещё раз.",
                 parse_mode="HTML",
                 reply_markup=_suggest_switch_keyboard(user_model),
             )
@@ -724,11 +730,7 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
         await animator.stop()
         clear_active_task(uid)
         logger.warning("Safety filter blocked prompt '%s': %s", prompt[:60], exc)
-        await processing_msg.edit_text(
-            "🚫 <b>Запрос заблокирован фильтрами безопасности</b>\n\n"
-            f"{exc.user_message}",
-            parse_mode="HTML",
-        )
+        await processing_msg.edit_text(exc.user_message, parse_mode="HTML")
     except QuotaExceededError:
         await animator.stop()
         clear_active_task(uid)
@@ -747,7 +749,7 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
         clear_active_task(uid)
         logger.error("Bot error for prompt '%s': %s", prompt[:60], exc)
         await processing_msg.edit_text(
-            f"{exc.user_message}",
+            exc.user_message,
             parse_mode="HTML",
             reply_markup=_suggest_switch_keyboard(user_model),
         )
@@ -756,7 +758,7 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
         clear_active_task(uid)
         logger.exception("Unexpected error for prompt '%s': %s", prompt[:60], exc)
         await processing_msg.edit_text(
-            f"Не удалось сгенерировать {gen_type} 😔\n\n"
+            f"❌ <b>Не удалось сгенерировать {gen_type}</b>\n\n"
             "Попробуйте ещё раз или переключитесь на другую модель.",
             parse_mode="HTML",
             reply_markup=_suggest_switch_keyboard(user_model),

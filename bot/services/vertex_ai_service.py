@@ -28,6 +28,7 @@ from core.exceptions import (
     GenerationError,
     QuotaExceededError,
     SafetyFilterError,
+    VideoGenerationError,
 )
 
 logger = logging.getLogger(__name__)
@@ -945,9 +946,13 @@ class VertexAIService:
                             generate_audio=generate_audio, on_progress=on_progress, deadline=deadline,
                         )
                     else:
-                        raise GenerationError(
-                            "Для генерации видео через Vertex AI укажите project_id в /admin "
-                            "(кнопка ✏️ рядом с ключом)."
+                        raise VideoGenerationError(
+                            detail="no project_id",
+                            user_message=(
+                                "⚙️ <b>Не указан project_id</b>\n\n"
+                                "Для генерации видео через Vertex AI нужно указать <b>project_id</b> "
+                                "в /admin (кнопка ✏️ рядом с ключом)."
+                            ),
                         )
                 elif isinstance(slot, _CredSlot):
                     video_bytes = await self._video_via_rest_bearer(
@@ -957,10 +962,10 @@ class VertexAIService:
                         generate_audio=generate_audio, on_progress=on_progress, deadline=deadline,
                     )
                 else:
-                    raise GenerationError("Неизвестный тип слота для генерации видео")
+                    raise VideoGenerationError("неизвестный тип слота")
 
                 if not video_bytes:
-                    raise GenerationError("Видео сгенерировано, но данные недоступны")
+                    raise VideoGenerationError.no_video("данные недоступны")
 
                 _dur = int((time.monotonic() - _t0) * 1000)
                 slot.total_ok += 1
@@ -974,7 +979,7 @@ class VertexAIService:
                 )
                 return video_bytes
 
-            except (SafetyFilterError, GenerationError):
+            except (SafetyFilterError, GenerationError, VideoGenerationError):
                 raise
             except Exception as exc:
                 slot.total_err += 1
@@ -1019,11 +1024,14 @@ class VertexAIService:
                         model=model, status="error", error=str(exc)[:200],
                         duration_ms=_dur,
                     )
-                    raise GenerationError(str(exc))
+                    raise VideoGenerationError(str(exc))
             finally:
                 slot.active_requests = max(0, slot.active_requests - 1)
 
         logger.error("Video deadline reached — all slots busy for model %s", model)
+        # If every slot has an auth error, the real problem is auth — not quota
+        if self._slots and all(getattr(s, "auth_error", False) for s in self._slots):
+            raise VideoGenerationError.auth_error()
         self._alert_quota_exhausted(model)
         raise QuotaExceededError()
 
@@ -1077,7 +1085,7 @@ class VertexAIService:
         poll_count = 0
         while not operation.done:
             if time.monotonic() > deadline:
-                raise GenerationError("Таймаут ожидания генерации видео")
+                raise VideoGenerationError.timeout()
             poll_count += 1
             if on_progress:
                 try:
@@ -1091,12 +1099,12 @@ class VertexAIService:
             rai_reasons = getattr(operation.result, "rai_media_filtered_reasons", None) or []
             if rai_reasons:
                 raise SafetyFilterError("; ".join(rai_reasons))
-            raise GenerationError("Модель не вернула видео")
+            raise VideoGenerationError.no_video()
 
         gen_video = operation.result.generated_videos[0]
         video_bytes = gen_video.video.video_bytes
         if not video_bytes:
-            raise GenerationError("Видео сгенерировано, но данные недоступны (нет байт в ответе)")
+            raise VideoGenerationError.no_video("нет байт в ответе")
         return video_bytes
 
     async def _video_via_rest_apikey(
@@ -1166,11 +1174,11 @@ class VertexAIService:
                     err_status = resp_data.get("error", {}).get("status", "")
                     if _is_safety_error_text(err_msg):
                         raise SafetyFilterError(err_msg)
-                    raise GenerationError(f"Vertex AI {resp.status} {err_status}: {err_msg[:300]}")
+                    raise VideoGenerationError.from_http(resp.status, err_status, err_msg)
 
             operation_name = resp_data.get("name", "")
             if not operation_name:
-                raise GenerationError("Vertex AI не вернул operation name")
+                raise VideoGenerationError("Vertex AI не вернул operation name")
 
             fetch_url = f"{base_url}/{model}:fetchPredictOperation"
             poll_count = 0
@@ -1178,7 +1186,7 @@ class VertexAIService:
             while True:
                 poll_count += 1
                 if time.monotonic() > deadline:
-                    raise GenerationError("Таймаут ожидания генерации видео")
+                    raise VideoGenerationError.timeout()
                 if on_progress:
                     try:
                         on_progress(poll_count * VIDEO_POLL_INTERVAL)
@@ -1205,7 +1213,7 @@ class VertexAIService:
                 err_msg = error_detail.get("message", str(error_detail))
                 if _is_safety_error_text(err_msg):
                     raise SafetyFilterError(err_msg)
-                raise GenerationError(f"Vertex AI error: {err_msg[:300]}")
+                raise VideoGenerationError.from_poll_error(err_msg)
 
             # Primary format: response.videos[]
             videos_list = response.get("videos", [])
@@ -1223,7 +1231,7 @@ class VertexAIService:
                     ) as dl_resp:
                         if dl_resp.status == 200:
                             return await dl_resp.read()
-                        raise GenerationError(f"Не удалось скачать видео: HTTP {dl_resp.status}")
+                        raise VideoGenerationError(f"не удалось скачать видео: HTTP {dl_resp.status}")
 
             # Fallback: generateVideoResponse.generatedSamples[]
             generated_videos = (
@@ -1244,14 +1252,14 @@ class VertexAIService:
                     ) as dl_resp:
                         if dl_resp.status == 200:
                             return await dl_resp.read()
-                        raise GenerationError(f"Не удалось скачать видео: HTTP {dl_resp.status}")
+                        raise VideoGenerationError(f"не удалось скачать видео: HTTP {dl_resp.status}")
 
             import json as _json
             logger.error(
                 "Video REST apikey: unrecognised poll_data structure: %s",
                 _json.dumps(poll_data, ensure_ascii=False)[:800],
             )
-            raise GenerationError("Модель не вернула видео")
+            raise VideoGenerationError.no_video()
 
     async def _video_via_rest_bearer(
         self,
@@ -1278,7 +1286,13 @@ class VertexAIService:
 
         base_url = slot.get_video_base_url()
         if not base_url:
-            raise GenerationError("Не удалось определить project_id для сервисного аккаунта")
+            raise VideoGenerationError(
+                detail="no project_id in service account",
+                user_message=(
+                    "⚙️ <b>Не удалось определить project_id</b>\n\n"
+                    "Укажите project_id для сервисного аккаунта в /admin."
+                ),
+            )
 
         bearer_token = await loop.run_in_executor(None, slot.get_video_bearer_token)
         headers = {
@@ -1319,11 +1333,11 @@ class VertexAIService:
                     err_status = resp_data.get("error", {}).get("status", "")
                     if _is_safety_error_text(err_msg):
                         raise SafetyFilterError(err_msg)
-                    raise GenerationError(f"Vertex AI {resp.status} {err_status}: {err_msg[:300]}")
+                    raise VideoGenerationError.from_http(resp.status, err_status, err_msg)
 
             operation_name = resp_data.get("name", "")
             if not operation_name:
-                raise GenerationError("Vertex AI не вернул operation name")
+                raise VideoGenerationError("Vertex AI не вернул operation name")
 
             fetch_url = f"{base_url}/{model}:fetchPredictOperation"
             poll_count = 0
@@ -1331,7 +1345,7 @@ class VertexAIService:
             while True:
                 poll_count += 1
                 if time.monotonic() > deadline:
-                    raise GenerationError("Таймаут ожидания генерации видео")
+                    raise VideoGenerationError.timeout()
                 if on_progress:
                     try:
                         on_progress(poll_count * VIDEO_POLL_INTERVAL)
@@ -1358,8 +1372,8 @@ class VertexAIService:
                     err_msg = error_detail.get("message", str(error_detail))
                     if _is_safety_error_text(err_msg):
                         raise SafetyFilterError(err_msg)
-                    raise GenerationError(f"Vertex AI error: {err_msg[:300]}")
-                raise GenerationError("Модель не вернула видео")
+                    raise VideoGenerationError.from_poll_error(err_msg)
+                raise VideoGenerationError.no_video()
 
             video_info = generated_videos[0].get("video", {})
             video_b64 = video_info.get("bytesBase64Encoded", "")
@@ -1376,9 +1390,9 @@ class VertexAIService:
                 ) as dl_resp:
                     if dl_resp.status == 200:
                         return await dl_resp.read()
-                    raise GenerationError(f"Не удалось скачать видео: HTTP {dl_resp.status}")
+                    raise VideoGenerationError(f"не удалось скачать видео: HTTP {dl_resp.status}")
 
-            raise GenerationError("Видео сгенерировано, но данные недоступны")
+            raise VideoGenerationError.no_video("данные отсутствуют в ответе")
 
     CHAT_MODEL = "gemini-3.1-pro-preview"
     SEARCH_MODEL = "gemini-3.1-flash-lite-preview"
