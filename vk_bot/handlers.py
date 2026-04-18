@@ -276,7 +276,6 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
             return "⚙️ Настройки\n\nВыберите что изменить:"
         mi = AVAILABLE_MODELS.get(mid, {})
         ml = mi.get("label", mid)
-        cr = mi.get("credits", 3)
         has_audio = _vsa(mid)
         has_image = _vsi(mid)
         al = _VA.get(s.get("video_aspect_ratio", "16:9"), "16:9")
@@ -287,6 +286,7 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
             res = "1080p"
         rl = _VR.get(res, {}).get("label", res)
         au = s.get("video_audio", True)
+        cr = get_video_credits_cost(mid, duration=d, resolution=res)
         input_type = "текст + фото" if has_image else "только текст"
         lines = [
             f"⚙️ Настройки — {ml}",
@@ -957,7 +957,9 @@ async def _generate_and_send(
             return
 
     if _is_video:
-        credits_cost = get_video_credits_cost(user_model)
+        _vid_dur = settings.get("video_duration", 8)
+        _vid_res = settings.get("video_resolution", "720p")
+        credits_cost = get_video_credits_cost(user_model, duration=_vid_dur, resolution=_vid_res)
     else:
         credits_cost = 2 if settings.get("resolution") == "4k" else 1
 

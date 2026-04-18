@@ -249,7 +249,9 @@ async def handle_photo_prompt(
             )
             return
 
-        credits_cost = _vcc(user_model)
+        video_duration_i2v = settings.get("video_duration", 8)
+        video_resolution_i2v = settings.get("video_resolution", "720p")
+        credits_cost = _vcc(user_model, duration=video_duration_i2v, resolution=video_resolution_i2v)
         if not has_credits(uid, credits_cost):
             await message.reply(
                 "💳 <b>Недостаточно кредитов</b>\n\n"
@@ -263,12 +265,12 @@ async def handle_photo_prompt(
         await _dismiss_menu(bot_obj, uid)
         model_label = AVAILABLE_MODELS.get(user_model, {}).get("label", user_model)
         video_aspect = settings.get("video_aspect_ratio", "16:9")
-        video_resolution = settings.get("video_resolution", "720p")
+        video_resolution = video_resolution_i2v
 
         base_text = (
             f"🎬 <b>Генерирую видео по фото…</b>\n"
             f"🤖 {model_label}\n"
-            f"📐 {video_aspect} • 8 сек • {video_resolution}\n"
+            f"📐 {video_aspect} • {video_duration_i2v} сек • {video_resolution}\n"
             f"<i>{caption[:100]}{'…' if len(caption) > 100 else ''}</i>"
         )
         processing_msg = await message.reply(
@@ -555,7 +557,9 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
     _is_video = is_video_model(user_model)
 
     if _is_video:
-        credits_cost = get_video_credits_cost(user_model)
+        _vid_dur = settings.get("video_duration", 8)
+        _vid_res = settings.get("video_resolution", "720p")
+        credits_cost = get_video_credits_cost(user_model, duration=_vid_dur, resolution=_vid_res)
     else:
         credits_cost = 2 if settings.get("resolution") == "4k" else 1
 

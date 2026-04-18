@@ -68,7 +68,6 @@ AVAILABLE_MODELS: dict[str, dict[str, Any]] = {
         "label": "🎬 Veo 3.1 (Видео)",
         "desc": "Высокое качество, текст+фото, 4K",
         "type": "video",
-        "credits": 5,
         "supports_audio": False,
         "supports_image": True,
         "supports_4k": True,
@@ -77,7 +76,6 @@ AVAILABLE_MODELS: dict[str, dict[str, Any]] = {
         "label": "⚡ Veo 3.1 Fast (Видео)",
         "desc": "Быстрая генерация, текст+фото, 4K",
         "type": "video",
-        "credits": 3,
         "supports_audio": False,
         "supports_image": True,
         "supports_4k": True,
@@ -86,10 +84,31 @@ AVAILABLE_MODELS: dict[str, dict[str, Any]] = {
         "label": "💡 Veo 3.1 Lite (Видео)",
         "desc": "Экономичная, аудио, только текст",
         "type": "video",
-        "credits": 2,
         "supports_audio": True,
         "supports_image": False,
         "supports_4k": False,
+    },
+}
+
+# Credit cost rates per second for each video model and resolution.
+# Pricing = Google official / 3, converted to credits (1 credit ≈ $0.0467).
+# Veo 3.1:       Google $0.20/s (720p/1080p), $0.40/s (4K)  → /3 → 1.43 cr/s, 2.86 cr/s
+# Veo 3.1 Fast:  Google $0.08/s (720p), $0.10/s (1080p), $0.25/s (4K) → /3 → 0.57, 0.71, 1.79 cr/s
+# Veo 3.1 Lite:  Google $0.03/s (720p), $0.05/s (1080p) → /3 → 0.21, 0.36 cr/s (audio included)
+VIDEO_CREDIT_RATES: dict[str, dict[str, float]] = {
+    "veo-3.1-generate-001": {
+        "720p": 1.5,
+        "1080p": 1.5,
+        "4k": 3.0,
+    },
+    "veo-3.1-fast-generate-001": {
+        "720p": 0.5,
+        "1080p": 0.75,
+        "4k": 2.0,
+    },
+    "veo-3.1-lite-generate-001": {
+        "720p": 0.25,
+        "1080p": 0.5,
     },
 }
 
@@ -170,9 +189,11 @@ def is_video_model(model_id: str) -> bool:
     return info.get("type") == "video"
 
 
-def get_video_credits_cost(model_id: str) -> int:
-    info = AVAILABLE_MODELS.get(model_id, {})
-    return info.get("credits", 3)
+def get_video_credits_cost(model_id: str, duration: int = 8, resolution: str = "720p") -> int:
+    import math
+    rates = VIDEO_CREDIT_RATES.get(model_id, {})
+    rate = rates.get(resolution, rates.get("720p", 1.0))
+    return max(1, math.ceil(duration * rate))
 
 
 def video_supports_audio(model_id: str) -> bool:

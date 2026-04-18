@@ -168,7 +168,6 @@ def get_video_panel_text(user_id: int) -> str:
     model_id = settings.get("model", "veo-3.1-generate-001")
     model_info = AVAILABLE_MODELS.get(model_id, {})
     model_label = model_info.get("label", model_id)
-    credits = model_info.get("credits", 3)
     has_audio = video_supports_audio(model_id)
 
     task_id = settings.get("video_task", "text-to-video")
@@ -188,6 +187,7 @@ def get_video_panel_text(user_id: int) -> str:
     res_info = VIDEO_RESOLUTIONS.get(res, {})
     res_label = res_info.get("label", res)
     audio = settings.get("video_audio", True)
+    credits = get_video_credits_cost(model_id, duration=dur, resolution=res)
 
     lines = [
         f"⚙️ Настройки — {model_label}",

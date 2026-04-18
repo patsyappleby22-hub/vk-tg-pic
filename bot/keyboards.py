@@ -77,10 +77,10 @@ def get_model_keyboard(user_id: int) -> InlineKeyboardMarkup:
     rows.append([InlineKeyboardButton(text="── 🎬 Видео ──", callback_data="noop")])
     for model_id, info in video_models.items():
         label = info["label"]
-        credits = info.get("credits", 3)
+        credits_8s = get_video_credits_cost(model_id, duration=8, resolution="720p")
         if model_id == current:
             label = "✅ " + label
-        label += f" ({credits} кр.)"
+        label += f" (от {credits_8s} кр./8с)"
         rows.append([
             InlineKeyboardButton(text=label, callback_data=f"model_{model_id}")
         ])
@@ -142,7 +142,6 @@ def get_video_panel_text(user_id: int) -> str:
     model_id = settings.get("model", "veo-3.1-generate-001")
     model_info = AVAILABLE_MODELS.get(model_id, {})
     model_label = model_info.get("label", model_id)
-    credits = model_info.get("credits", 3)
     has_audio = video_supports_audio(model_id)
 
     task_id = settings.get("video_task", "text-to-video")
@@ -162,6 +161,7 @@ def get_video_panel_text(user_id: int) -> str:
     res_info = VIDEO_RESOLUTIONS.get(res, {})
     res_label = res_info.get("label", res)
     audio = settings.get("video_audio", True)
+    credits = get_video_credits_cost(model_id, duration=dur, resolution=res)
 
     lines = [
         f"⚙️ <b>Настройки — {model_label}</b>",
