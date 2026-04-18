@@ -1565,7 +1565,7 @@ async def handle_api_keys(request: web.Request) -> web.Response:
         else:
             masked = _key_store.mask_key(entry["key"])
             proj = entry.get("project_id") or ""
-        proj_badge = f'<span class="badge badge-green" style="font-size:.75em">📂 {proj}</span>' if proj else '<span class="badge" style="font-size:.75em;opacity:.7;background:rgba(99,102,241,.12);color:#a5b4fc;border:1px solid rgba(99,102,241,.2)">Gemini API</span>'
+        proj_badge = f'<span class="badge badge-green" style="font-size:.75em">📂 {proj}</span>' if proj else '<span class="badge badge-yellow" style="font-size:.75em;opacity:.7" title="Без project_id видеогенерация (Veo) недоступна">⚠ нет проекта</span>'
         key_rows += f"""<tr id="key-row-{i}">
   <td style="font-weight:600;color:var(--muted);width:36px">{i+1}</td>
   <td><code style="font-size:.88em;color:var(--accent)">{masked}</code><br>{proj_badge}</td>
@@ -1638,7 +1638,7 @@ async def handle_api_keys(request: web.Request) -> web.Response:
   </div>
   <p style="color:var(--muted);font-size:.78em;margin-top:10px">
     Ключ хранится в БД и применяется <b>немедленно</b> без перезапуска сервиса.<br>
-    📂 <b>ID проекта</b> — нужен только при использовании сервисного аккаунта (Vertex AI). Для API-ключей <b>не нужен</b> — видео генерируется через Gemini Developer API напрямую.
+    📂 <b>ID проекта</b> — обязателен для генерации видео (Veo) через Vertex AI. Для изображений и чата — не нужен. Укажите GCP project ID в поле рядом с ключом.
   </p>
   <p style="color:var(--muted);font-size:.78em;margin-top:6px;line-height:1.6">
     ⚡ <b>В работе</b> — прямо сейчас обрабатывает запрос(ы)<br>

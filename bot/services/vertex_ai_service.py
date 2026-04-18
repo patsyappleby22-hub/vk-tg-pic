@@ -310,11 +310,27 @@ class _ApiKeySlot(_BaseSlot):
         return self.client
 
     def get_video_client(self) -> Any:
-        """Return a Gemini Developer API client (not Vertex) for video generation via API key."""
+        """Return a Vertex AI client scoped to us-central1 for video generation.
+
+        Requires project_id — Vertex AI video (Veo) is only available via a GCP project.
+        """
+        if not self._project_id:
+            raise GenerationError(
+                "Для генерации видео через Vertex AI необходим Project ID. "
+                "Добавьте project_id к API-ключу через /admin."
+            )
         if self._video_client is None:
             import google.genai as genai
-            self._video_client = genai.Client(api_key=self._api_key)
-            logger.info("Initialised video genai client for '%s' (Gemini Developer API mode)", self.label)
+            self._video_client = genai.Client(
+                vertexai=True,
+                api_key=self._api_key,
+                project=self._project_id,
+                location="us-central1",
+            )
+            logger.info(
+                "Initialised Vertex AI video client for '%s' (project=%s, us-central1)",
+                self.label, self._project_id,
+            )
         return self._video_client
 
     def get_video_base_url(self) -> str | None:
@@ -521,14 +537,16 @@ class VertexAIService:
     def _filter_slots_for_model(self, model: str) -> list[_BaseSlot]:
         usable = [s for s in self._slots if not s.auth_error]
         if self._is_video_model(model):
-            # API keys go through Gemini Developer API (no project needed).
-            # Service accounts go through Vertex AI REST (need project_id).
-            # Both paths now work — prefer service accounts with project_id if available,
-            # but fall back to API key slots otherwise.
-            sa_slots = [s for s in usable if isinstance(s, _CredSlot) and s._project_id]
-            if sa_slots:
-                return sa_slots
-            return usable
+            # Vertex AI video (Veo) requires a GCP project.
+            # • API key slots: must have project_id set.
+            # • Service account slots: project_id is read from the JSON file.
+            video_capable = [
+                s for s in usable
+                if (isinstance(s, _ApiKeySlot) and s.has_project)
+                or isinstance(s, _CredSlot)
+            ]
+            if video_capable:
+                return video_capable
         return usable
 
     def _get_next_available_slot(self, model: str) -> _BaseSlot | None:
@@ -1033,10 +1051,12 @@ class VertexAIService:
         on_progress: Any,
         deadline: float,
     ) -> bytes:
-        """Generate video using the Gemini Developer API (API key, no project needed).
+        """Generate video via Vertex AI using the google-genai SDK with an API key.
 
-        Uses the google-genai SDK which routes through generativelanguage.googleapis.com
-        and returns video bytes directly — no GCS bucket required.
+        The slot must have project_id set — get_video_client() creates a proper
+        Vertex AI client (vertexai=True, project=..., location=us-central1)
+        so the SDK routes through aiplatform.googleapis.com correctly.
+        Video bytes are returned directly (no GCS bucket needed).
         """
         from google.genai import types as genai_types
 
