@@ -310,28 +310,13 @@ class _ApiKeySlot(_BaseSlot):
         return self.client
 
     def get_video_client(self) -> Any:
-        """Return a Vertex AI client scoped to us-central1 for video generation.
+        """Return the Vertex AI SDK client for video generation.
 
-        Requires project_id — Vertex AI video (Veo) is only available via a GCP project.
+        Reuses the same genai.Client(vertexai=True, api_key=...) that already works
+        for image generation — the SDK handles project routing internally via the API key.
+        Passing project + api_key simultaneously is prohibited by the SDK.
         """
-        if not self._project_id:
-            raise GenerationError(
-                "Для генерации видео через Vertex AI необходим Project ID. "
-                "Добавьте project_id к API-ключу через /admin."
-            )
-        if self._video_client is None:
-            import google.genai as genai
-            self._video_client = genai.Client(
-                vertexai=True,
-                api_key=self._api_key,
-                project=self._project_id,
-                location="us-central1",
-            )
-            logger.info(
-                "Initialised Vertex AI video client for '%s' (project=%s, us-central1)",
-                self.label, self._project_id,
-            )
-        return self._video_client
+        return self.get_client()
 
     def get_video_base_url(self) -> str | None:
         if not self._project_id:
@@ -537,16 +522,12 @@ class VertexAIService:
     def _filter_slots_for_model(self, model: str) -> list[_BaseSlot]:
         usable = [s for s in self._slots if not s.auth_error]
         if self._is_video_model(model):
-            # Vertex AI video (Veo) requires a GCP project.
-            # • API key slots: must have project_id set.
-            # • Service account slots: project_id is read from the JSON file.
-            video_capable = [
-                s for s in usable
-                if (isinstance(s, _ApiKeySlot) and s.has_project)
-                or isinstance(s, _CredSlot)
-            ]
-            if video_capable:
-                return video_capable
+            # For video: prefer service account slots (always have project context).
+            # API key slots use genai.Client(vertexai=True, api_key=...) which routes
+            # to Vertex AI internally — no explicit project needed in the client.
+            sa_slots = [s for s in usable if isinstance(s, _CredSlot)]
+            if sa_slots:
+                return sa_slots
         return usable
 
     def _get_next_available_slot(self, model: str) -> _BaseSlot | None:
