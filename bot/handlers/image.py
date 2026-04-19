@@ -27,6 +27,7 @@ from bot.user_settings import (
     AVAILABLE_MODELS, SEND_MODES, RESOLUTIONS,
     is_blocked, has_credits, is_video_model, get_video_credits_cost,
     is_music_model, get_music_credits_cost,
+    video_supports_video_extension,
 )
 from bot.keyboards import BTN_MENU, BTN_STOP, BTN_SETTINGS, BTN_CHAT
 from bot.log_channel import log_generation
@@ -166,6 +167,7 @@ async def _dismiss_menu(bot: Bot, user_id: int) -> None:
 
 
 _IMAGE_MIME_PREFIXES = ("image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp")
+_VIDEO_MIME_PREFIXES = ("video/mp4", "video/quicktime", "video/x-msvideo", "video/mpeg", "video/webm", "video/")
 
 
 def _is_image_document(msg: Message) -> bool:
@@ -173,6 +175,28 @@ def _is_image_document(msg: Message) -> bool:
         return False
     mime = (msg.document.mime_type or "").lower()
     return any(mime.startswith(p) for p in _IMAGE_MIME_PREFIXES)
+
+
+def _is_video_document(msg: Message) -> bool:
+    if not msg.document:
+        return False
+    mime = (msg.document.mime_type or "").lower()
+    return any(mime.startswith(p) for p in _VIDEO_MIME_PREFIXES)
+
+
+def _has_video(msg: Message) -> bool:
+    return bool(msg.video) or _is_video_document(msg)
+
+
+async def _download_video(bot: Bot, message: Message) -> bytes:
+    if message.video:
+        file = await bot.get_file(message.video.file_id)
+    elif _is_video_document(message):
+        file = await bot.get_file(message.document.file_id)
+    else:
+        raise ValueError("No video in message")
+    video_io = await bot.download_file(file.file_path)
+    return video_io.read()
 
 
 def _has_image(msg: Message) -> bool:
@@ -623,6 +647,158 @@ async def handle_document_photo(
     await handle_photo_prompt(message, vertex_service, album)
 
 
+@router.message(lambda m: _has_video(m))
+async def handle_video_extension(
+    message: Message,
+    vertex_service: VertexAIService,
+) -> None:
+    uid = message.from_user.id
+
+    if is_blocked(uid):
+        await message.reply("⛔ Ваш аккаунт заблокирован. Обратитесь к администратору.")
+        return
+
+    settings = get_user_settings(uid)
+    user_model = settings.get("model", "gemini-3.1-flash-image-preview")
+
+    if not is_video_model(user_model):
+        await message.reply(
+            "🎬 Отправка видео поддерживается только в видео-режиме.\n\n"
+            "Переключите модель на <b>Veo 3.1 Lite</b> и выберите задачу "
+            "<b>🔄 Video extension</b> в настройках.",
+            parse_mode="HTML",
+        )
+        return
+
+    video_task = settings.get("video_task", "text-to-video")
+    if video_task != "video-extension":
+        model_label = AVAILABLE_MODELS.get(user_model, {}).get("label", user_model)
+        if not video_supports_video_extension(user_model):
+            await message.reply(
+                f"🎬 Модель <b>{model_label}</b> не поддерживает расширение видео.",
+                parse_mode="HTML",
+            )
+        else:
+            await message.reply(
+                f"🎬 Видео получено! Для расширения видео переключите задачу на "
+                f"<b>🔄 Video extension</b> в настройках видео.\n\n"
+                f"Текущая задача: <b>{video_task}</b>",
+                parse_mode="HTML",
+            )
+        return
+
+    if not video_supports_video_extension(user_model):
+        model_label = AVAILABLE_MODELS.get(user_model, {}).get("label", user_model)
+        await message.reply(
+            f"🎬 Модель <b>{model_label}</b> не поддерживает расширение видео.\n\n"
+            "Используйте <b>Veo 3.1 Lite</b> для этой задачи.",
+            parse_mode="HTML",
+        )
+        return
+
+    credits_cost = get_video_credits_cost(user_model)
+    if not has_credits(uid, credits_cost):
+        await message.reply(
+            "💳 <b>Недостаточно кредитов</b>\n\n"
+            f"Расширение видео стоит <b>{credits_cost} кредитов</b>.\n"
+            "Пополните баланс для продолжения.",
+            parse_mode="HTML",
+        )
+        return
+
+    caption = (message.caption or "").strip()
+    bot_obj: Bot = message.bot  # type: ignore[assignment]
+    await _dismiss_menu(bot_obj, uid)
+
+    model_label = AVAILABLE_MODELS.get(user_model, {}).get("label", user_model)
+    video_aspect = settings.get("video_aspect_ratio", "16:9")
+    video_resolution = settings.get("video_resolution", "720p")
+    from bot.user_settings import video_supports_audio
+    video_audio = settings.get("video_audio", True) and video_supports_audio(user_model)
+
+    prompt_display = caption[:100] if caption else "без дополнительного описания"
+    base_text = (
+        f"🔄 <b>Расширяю видео…</b>\n"
+        f"🤖 {model_label}\n"
+        f"📐 {video_aspect} • 8 сек • {video_resolution}\n"
+        f"<i>{prompt_display}{'…' if len(caption) > 100 else ''}</i>"
+    )
+    processing_msg = await message.reply(
+        f"{base_text}\n\n◐ <b>Обработка — 0 сек.</b>",
+        parse_mode="HTML",
+    )
+    animator = ProgressAnimator(processing_msg, base_text)
+    animator.start()
+
+    _uname = message.from_user.username or message.from_user.first_name or ""
+
+    async def _do_video_ext() -> bytes:
+        video_bytes = await _download_video(bot_obj, message)
+        return await vertex_service.generate_video(
+            prompt=caption or "Continue the video naturally",
+            model=user_model,
+            aspect_ratio=video_aspect,
+            duration_seconds=8,
+            resolution=video_resolution,
+            generate_audio=video_audio,
+            user_id=uid,
+            username=_uname,
+            video=video_bytes,
+        )
+
+    gen_task = asyncio.create_task(_do_video_ext())
+    set_active_task(uid, gen_task)
+
+    try:
+        result_bytes = await gen_task
+        await animator.stop()
+        clear_active_task(uid)
+
+        vid_doc = BufferedInputFile(file=result_bytes, filename="extended_video.mp4")
+        await message.reply_video(
+            video=vid_doc,
+            caption=f"✅ Видео расширено!\n<i>{caption[:200] if caption else 'Без описания'}</i>",
+            parse_mode="HTML",
+        )
+        increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost)
+        try:
+            await bot_obj.delete_message(chat_id=message.chat.id, message_id=processing_msg.message_id)
+        except Exception:
+            pass
+
+    except asyncio.CancelledError:
+        await animator.stop()
+        clear_active_task(uid)
+        try:
+            await processing_msg.edit_text("⛔ <b>Генерация отменена.</b>", parse_mode="HTML")
+        except Exception:
+            pass
+    except SafetyFilterError as exc:
+        await animator.stop()
+        clear_active_task(uid)
+        await processing_msg.edit_text(
+            f"🚫 <b>Запрос заблокирован фильтрами безопасности</b>\n\n{exc.user_message}",
+            parse_mode="HTML",
+        )
+    except QuotaExceededError:
+        await animator.stop()
+        clear_active_task(uid)
+        await processing_msg.edit_text(
+            f"Модель <b>{model_label}</b> сейчас перегружена 😔\n\nПопробуйте через пару минут.",
+            parse_mode="HTML",
+            reply_markup=_suggest_switch_keyboard(user_model),
+        )
+    except Exception as exc:
+        await animator.stop()
+        clear_active_task(uid)
+        logger.exception("Error video-extension: %s", exc)
+        await processing_msg.edit_text(
+            "Не удалось расширить видео 😔\n\nПопробуйте ещё раз.",
+            parse_mode="HTML",
+            reply_markup=_suggest_switch_keyboard(user_model),
+        )
+
+
 RESERVED_TEXTS = {BTN_MENU, BTN_STOP, BTN_SETTINGS, BTN_CHAT}
 
 
@@ -655,6 +831,26 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
 
     if _is_video:
         credits_cost = get_video_credits_cost(user_model)
+        video_task = settings.get("video_task", "text-to-video")
+        if video_task == "image-to-video":
+            from bot.user_settings import video_supports_image
+            if video_supports_image(user_model):
+                await message.reply(
+                    "🖼 <b>Режим Image-to-video</b>\n\n"
+                    "Отправьте изображение с подписью (описанием) — что должно происходить в видео.\n\n"
+                    "Например: <i>Камера медленно облетает этот объект</i>",
+                    parse_mode="HTML",
+                )
+                return
+        elif video_task == "video-extension":
+            if video_supports_video_extension(user_model):
+                await message.reply(
+                    "🔄 <b>Режим Video extension</b>\n\n"
+                    "Отправьте видео (можно с подписью — как продолжить видео).\n\n"
+                    "Например: <i>Camera slowly zooms out</i>",
+                    parse_mode="HTML",
+                )
+                return
     elif _is_music:
         credits_cost = get_music_credits_cost(user_model)
     else:

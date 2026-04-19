@@ -84,11 +84,12 @@ AVAILABLE_MODELS: dict[str, dict[str, Any]] = {
     },
     "veo-3.1-lite-generate-001": {
         "label": "💡 Veo 3.1 Lite (Видео)",
-        "desc": "Экономичная, аудио, только текст",
+        "desc": "Экономичная, аудио, фото→видео, расширение",
         "type": "video",
         "credits": 2,
         "supports_audio": True,
-        "supports_image": False,
+        "supports_image": True,
+        "supports_video_extension": True,
         "supports_4k": False,
     },
     "lyria-3-pro-preview": {
@@ -144,7 +145,7 @@ VIDEO_TASKS: dict[str, dict[str, Any]] = {
         "label": "🔄 Video extension",
         "desc": "Продление существующего видео",
         "input": "video",
-        "coming_soon": True,
+        "requires_video_extension_support": True,
     },
     "ref-subject": {
         "label": "👤 Reference-to-video (Subject)",
@@ -173,11 +174,19 @@ VIDEO_TASKS: dict[str, dict[str, Any]] = {
 }
 
 
+def video_supports_video_extension(model_id: str) -> bool:
+    info = AVAILABLE_MODELS.get(model_id, {})
+    return bool(info.get("supports_video_extension", False))
+
+
 def get_available_tasks_for_model(model_id: str) -> dict[str, dict[str, Any]]:
     has_image = video_supports_image(model_id)
+    has_ext = video_supports_video_extension(model_id)
     result = {}
     for tid, tinfo in VIDEO_TASKS.items():
         if tinfo.get("requires_image_support") and not has_image:
+            continue
+        if tinfo.get("requires_video_extension_support") and not has_ext:
             continue
         result[tid] = tinfo
     return result

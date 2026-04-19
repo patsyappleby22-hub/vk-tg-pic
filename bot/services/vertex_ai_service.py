@@ -1041,6 +1041,7 @@ class VertexAIService:
         username: str = "",
         on_progress: Any = None,
         image: bytes | None = None,
+        video: bytes | None = None,
     ) -> bytes:
         from google.genai import types as genai_types
 
@@ -1053,7 +1054,7 @@ class VertexAIService:
         if duration_seconds not in (4, 6, 8):
             duration_seconds = 8
 
-        if image is not None:
+        if image is not None or video is not None:
             duration_seconds = 8
 
         if resolution not in ("720p", "1080p", "4k"):
@@ -1067,6 +1068,7 @@ class VertexAIService:
                 generate_audio=generate_audio,
                 user_id=user_id, username=username, on_progress=on_progress,
                 image=image,
+                video=video,
             )
 
     async def _generate_video_inner(
@@ -1082,6 +1084,7 @@ class VertexAIService:
         username: str,
         on_progress: Any,
         image: bytes | None = None,
+        video: bytes | None = None,
     ) -> bytes:
         deadline = time.monotonic() + VIDEO_POLL_TIMEOUT
         _t0 = time.monotonic()
@@ -1109,7 +1112,12 @@ class VertexAIService:
                 else:
                     raise GenerationError("Видео пока поддерживается только с API-ключами")
 
-                _mode = "image→video" if image else "text→video"
+                if video is not None:
+                    _mode = "video→video (extension)"
+                elif image is not None:
+                    _mode = "image→video"
+                else:
+                    _mode = "text→video"
                 logger.info(
                     "Video [%s]: trying '%s' model=%s prompt='%s'",
                     _mode, slot.label, model, prompt[:60],
@@ -1128,6 +1136,7 @@ class VertexAIService:
                     deadline,
                     on_progress,
                     image,
+                    video,
                 )
 
                 if not video_bytes:
@@ -1211,6 +1220,7 @@ class VertexAIService:
         deadline: float,
         on_progress: Any,
         image: bytes | None,
+        video: bytes | None = None,
     ) -> bytes:
         from google.genai import types as genai_types
 
@@ -1233,11 +1243,17 @@ class VertexAIService:
             if image is not None
             else None
         )
+        input_video = (
+            genai_types.Video(video_bytes=video, mime_type="video/mp4")
+            if video is not None
+            else None
+        )
 
         operation = client.models.generate_videos(
             model=model,
             prompt=prompt,
             image=input_image,
+            video=input_video,
             config=config,
         )
 
