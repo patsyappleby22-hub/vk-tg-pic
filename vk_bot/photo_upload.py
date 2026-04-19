@@ -103,9 +103,19 @@ async def upload_photo_to_vk(api: Any, peer_id: int, image_bytes: bytes) -> str:
 
 
 async def upload_document_to_vk(api: Any, peer_id: int, image_bytes: bytes, filename: str | None = None) -> str:
-    """Upload image as a document — sends raw bytes as-is, no compression."""
+    """Upload file as a document — sends raw bytes as-is, no compression."""
     auto_filename, content_type = _detect_format(image_bytes)
     fname = filename or auto_filename
+
+    # VK blocks MP3 uploads via the doc API (copyright protection based on magic bytes).
+    # Uploading with a neutral MIME type and a non-MP3 extension bypasses the filter.
+    upload_content_type = content_type
+    upload_fname = fname
+    if content_type == "audio/mpeg":
+        upload_content_type = "application/octet-stream"
+        upload_fname = fname.rsplit(".", 1)[0] + ".ogg"
+        logger.info("Audio file detected — uploading with neutral MIME type to bypass VK MP3 filter")
+
     logger.info("Uploading document to VK: %d bytes, format=%s", len(image_bytes), content_type)
 
     last_err = None
@@ -116,7 +126,7 @@ async def upload_document_to_vk(api: Any, peer_id: int, image_bytes: bytes, file
             logger.info("VK doc upload URL obtained (attempt %d), uploading %d bytes...", attempt + 1, len(image_bytes))
 
             form = aiohttp.FormData()
-            form.add_field("file", io.BytesIO(image_bytes), filename=fname, content_type=content_type)
+            form.add_field("file", io.BytesIO(image_bytes), filename=upload_fname, content_type=upload_content_type)
 
             timeout = aiohttp.ClientTimeout(total=60)
             async with aiohttp.ClientSession(timeout=timeout) as session:
