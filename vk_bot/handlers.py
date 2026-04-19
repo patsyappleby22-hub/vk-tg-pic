@@ -285,7 +285,6 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
                 "┌─────────────────────",
                 f"│ 🎵 Длительность: {mi.get('duration_label', 'аудио')}",
                 f"│ 💰 Стоимость: {mi.get('credits', 2)} кр.",
-                f"│ 💵 Google: ${mi.get('google_price_usd', 0):.2f}",
                 "│ 📥 Вход: текст или фото",
                 "│ 📤 Выход: MP3",
                 "└─────────────────────",
@@ -379,8 +378,14 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
         lines.append("└─────────────────────")
         lines.append("")
         lines.append("📋 Стоимость генерации:")
-        lines.append("▫️ Фото 2К, Full HD и ниже — 1 кредит")
-        lines.append("▫️ Фото 4K — 2 кредита")
+        lines.append("🖼 Фото:")
+        lines.append("▫️ 2К, Full HD и ниже — 1 кредит")
+        lines.append("▫️ 4K — 2 кредита")
+        lines.append("🎬 Видео:")
+        lines.append("▫️ Veo 3.1 — 5 кредитов")
+        lines.append("▫️ Veo 3.1 Fast — 3 кредита")
+        lines.append("▫️ Veo 3.1 Lite — 2 кредита")
+        lines.append("🎵 Музыка:")
         lines.append("▫️ Lyria 3 Pro (полная песня) — 4 кредита")
         lines.append("▫️ Lyria 3 (30 сек.) — 2 кредита")
         lines.append("")
