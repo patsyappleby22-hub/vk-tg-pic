@@ -130,26 +130,25 @@ async def web_server():
     from aiohttp import web
     from bot.web_server import create_web_app
 
-    app = create_web_app()
-    runner = web.AppRunner(app)
-    await runner.setup()
     port = int(os.environ.get("PORT", 8080))
-    site = web.TCPSite(runner, '0.0.0.0', port)
     logger.info("Web server starting on port %d (landing + payment webhooks)", port)
     for attempt in range(10):
+        app = create_web_app()
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, '0.0.0.0', port)
         try:
             await site.start()
             break
         except OSError as exc:
+            await runner.cleanup()
             if exc.errno != errno.EADDRINUSE:
-                await runner.cleanup()
                 raise
             if attempt == 9:
                 logger.error(
                     "Port %d is already in use after retries; keeping bots running without starting another web server",
                     port,
                 )
-                await runner.cleanup()
                 while True:
                     await asyncio.sleep(3600)
             logger.warning("Port %d is already in use; retrying web server start in 3 seconds", port)
