@@ -54,3 +54,14 @@ python-dotenv>=1.0
 tenacity>=9.0
 vkbottle>=4.8,<5
 google-genai>=1.52
+aiofiles
+aiogram
+aiohttp
+google-genai
+Pillow
+psycopg2-binary
+pydantic
+pydantic-settings
+python-dotenv
+tenacity
+vkbottle
