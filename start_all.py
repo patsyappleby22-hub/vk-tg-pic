@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import errno
 import logging
 import os
 import sys
@@ -135,7 +136,24 @@ async def web_server():
     port = int(os.environ.get("PORT", 8080))
     site = web.TCPSite(runner, '0.0.0.0', port)
     logger.info("Web server starting on port %d (landing + payment webhooks)", port)
-    await site.start()
+    for attempt in range(10):
+        try:
+            await site.start()
+            break
+        except OSError as exc:
+            if exc.errno != errno.EADDRINUSE:
+                await runner.cleanup()
+                raise
+            if attempt == 9:
+                logger.error(
+                    "Port %d is already in use after retries; keeping bots running without starting another web server",
+                    port,
+                )
+                await runner.cleanup()
+                while True:
+                    await asyncio.sleep(3600)
+            logger.warning("Port %d is already in use; retrying web server start in 3 seconds", port)
+            await asyncio.sleep(3)
     while True:
         await asyncio.sleep(3600)
 
