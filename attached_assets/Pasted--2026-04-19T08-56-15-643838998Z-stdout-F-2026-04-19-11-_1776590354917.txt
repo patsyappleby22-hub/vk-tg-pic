@@ -1,0 +1,36 @@
+
+2026-04-19T08:56:15.643838998Z stdout F 2026-04-19 11:56:15 [INFO] bot.autopub.scheduler — [autopub] scheduler tick #6  enabled=False  time=11:56 MSK
+2026-04-19T08:55:33.035313418Z stdout F ValueError: VK doc upload returned empty file field: {'error': 'wrong_mp3_file', 'error_descr': 'wrong_mp3_file', 'error_is_logged': False}
+2026-04-19T08:55:33.035310584Z stdout F     raise ValueError(f"VK doc upload returned empty file field: {result}")
+2026-04-19T08:55:33.035308198Z stdout F   File "/app/vk_bot/photo_upload.py", line 137, in upload_document_to_vk
+2026-04-19T08:55:33.035305549Z stdout F     raise last_err
+2026-04-19T08:55:33.035302652Z stdout F   File "/app/vk_bot/photo_upload.py", line 157, in upload_document_to_vk
+2026-04-19T08:55:33.035299841Z stdout F     ^
+2026-04-19T08:55:33.03529728Z stdout F     )
+2026-04-19T08:55:33.035294552Z stdout F     ...<4 lines>...
+2026-04-19T08:55:33.03529184Z stdout F                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-19T08:55:33.03528951Z stdout F     attachment = await upload_document_to_vk(
+2026-04-19T08:55:33.035286907Z stdout F   File "/app/vk_bot/handlers.py", line 1109, in _generate_and_send
+2026-04-19T08:55:33.035282848Z stdout F Traceback (most recent call last):
+2026-04-19T08:55:33.0352585Z stdout F 2026-04-19 11:55:33 [ERROR] vk_bot.handlers — VK generation error: VK doc upload returned empty file field: {'error': 'wrong_mp3_file', 'error_descr': 'wrong_mp3_file', 'error_is_logged': False}
+2026-04-19T08:55:33.030864143Z stdout F 2026-04-19 11:55:33 [WARNING] vk_bot.photo_upload — VK doc upload attempt 5/5 failed: VK doc upload returned empty file field: {'error': 'wrong_mp3_file', 'error_descr': 'wrong_mp3_file', 'error_is_logged': False}
+2026-04-19T08:55:33.030134806Z stdout F 2026-04-19 11:55:33 [INFO] vk_bot.photo_upload — VK doc upload response (attempt 5): status=200, body={"error":"wrong_mp3_file","error_descr":"wrong_mp3_file","error_is_logged":false}
+2026-04-19T08:55:32.170697523Z stdout F 2026-04-19 11:55:32 [INFO] vk_bot.photo_upload — VK doc upload URL obtained (attempt 5), uploading 3573049 bytes...
+2026-04-19T08:55:30.057191436Z stdout F 2026-04-19 11:55:30 [WARNING] vk_bot.photo_upload — VK doc upload attempt 4/5 failed: VK doc upload returned empty file field: {'error': 'wrong_mp3_file', 'error_descr': 'wrong_mp3_file', 'error_is_logged': False}
+2026-04-19T08:55:30.056732297Z stdout F 2026-04-19 11:55:30 [INFO] vk_bot.photo_upload — VK doc upload response (attempt 4): status=200, body={"error":"wrong_mp3_file","error_descr":"wrong_mp3_file","error_is_logged":false}
+2026-04-19T08:55:29.268746202Z stdout F 2026-04-19 11:55:29 [INFO] vk_bot.photo_upload — VK doc upload URL obtained (attempt 4), uploading 3573049 bytes...
+2026-04-19T08:55:27.158761253Z stdout F 2026-04-19 11:55:27 [WARNING] vk_bot.photo_upload — VK doc upload attempt 3/5 failed: VK doc upload returned empty file field: {'error': 'wrong_mp3_file', 'error_descr': 'wrong_mp3_file', 'error_is_logged': False}
+2026-04-19T08:55:27.158061067Z stdout F 2026-04-19 11:55:27 [INFO] vk_bot.photo_upload — VK doc upload response (attempt 3): status=200, body={"error":"wrong_mp3_file","error_descr":"wrong_mp3_file","error_is_logged":false}
+2026-04-19T08:55:26.46231175Z stdout F 2026-04-19 11:55:26 [INFO] vk_bot.photo_upload — VK doc upload URL obtained (attempt 3), uploading 3573049 bytes...
+2026-04-19T08:55:24.366442988Z stdout F 2026-04-19 11:55:24 [WARNING] vk_bot.photo_upload — VK doc upload attempt 2/5 failed: VK doc upload returned empty file field: {'error': 'wrong_mp3_file', 'error_descr': 'wrong_mp3_file', 'error_is_logged': False}
+2026-04-19T08:55:24.365897466Z stdout F 2026-04-19 11:55:24 [INFO] vk_bot.photo_upload — VK doc upload response (attempt 2): status=200, body={"error":"wrong_mp3_file","error_descr":"wrong_mp3_file","error_is_logged":false}
+2026-04-19T08:55:23.597734866Z stdout F 2026-04-19 11:55:23 [INFO] vk_bot.photo_upload — VK doc upload URL obtained (attempt 2), uploading 3573049 bytes...
+2026-04-19T08:55:21.418044916Z stdout F 2026-04-19 11:55:21 [WARNING] vk_bot.photo_upload — VK doc upload attempt 1/5 failed: VK doc upload returned empty file field: {'error': 'wrong_mp3_file', 'error_descr': 'wrong_mp3_file', 'error_is_logged': False}
+2026-04-19T08:55:21.417439414Z stdout F 2026-04-19 11:55:21 [INFO] vk_bot.photo_upload — VK doc upload response (attempt 1): status=200, body={"error":"wrong_mp3_file","error_descr":"wrong_mp3_file","error_is_logged":false}
+2026-04-19T08:55:20.609851746Z stdout F 2026-04-19 11:55:20 [INFO] vk_bot.photo_upload — VK doc upload URL obtained (attempt 1), uploading 3573049 bytes...
+2026-04-19T08:55:20.415093938Z stdout F 2026-04-19 11:55:20 [INFO] vk_bot.photo_upload — Uploading document to VK: 3573049 bytes, format=audio/mpeg
+2026-04-19T08:55:20.415067704Z stdout F 2026-04-19 11:55:20 [INFO] bot.services.vertex_ai_service — Music OK: slot='api_key_1' model=lyria-3-pro-preview duration=63.2s size=3489.3 KB
+2026-04-19T08:55:19.698007516Z stdout F 2026-04-19 11:55:19 [INFO] httpx — HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/lyria-3-pro-preview:generateContent "HTTP/1.1 200 OK"
+2026-04-19T08:54:22.312971323Z stdout F 2026-04-19 11:54:22 [INFO] bot.services.vertex_ai_service — Initialised video client for 'api_key_1' (Gemini API key mode)
+2026-04-19T08:54:17.247489568Z stdout F 2026-04-19 11:54:17 [INFO] bot.services.vertex_ai_service — Music [image→music]: trying 'api_key_1' model=lyria-3-pro-preview prompt='Про машину'
+2026-04-19T08:52:20.670434252Z stdout F 2026-04-19 11:52:20 [INFO] bot.middlewares.logging_middleware — ← [callback_query] user_id=6014789391 username=@gayrath02 — 14.3 ms
