@@ -1,0 +1,157 @@
+Create new
+
+Docs
+
+Support
+
+MK
+Marvel Kinoolami
+Project navigation
+Dashboard
+Services
+Jobs
+Volumes
+Addons
+Secrets
+Environments
+Templates
+Project template
+Project settings
+vk-tg
+
+Service ID:
+vk-tg
+
+Add a description
+
+
+Add tags
+vk-tg-picgenai.ru
+
+View 3 additional domains
+Europe - West
+Northflank
+patsyappleby22-hub/vk-tg-pic
+main
+8300c8e
+8300c8ec5bb31f2deaecac793873d4b2494bda8f
+
+Running
+0.2 vCPU / 512 MB
+1 / 1
+CI
+
+CD
+
+
+
+
+
+Service navigation
+Overview
+
+Observability
+Deployments
+
+Run
+Resources
+
+Networking
+
+Environment
+
+Health checks
+
+CMD override
+
+Volumes
+
+Code
+Builds
+
+Build options
+
+Build arguments
+
+Commits
+
+Billing
+
+vk-tg /
+Instances /
+vk-tg-556d79d7cf
+
+
+
+
+Logs
+
+Metrics
+Connection
+Live tailing
+
+Search logs
+Search logs
+==
+!=
+ABC
+(.*)
+
+Returned 366 lines
+
+Direction
+2026-04-19T08:42:05.408409405Z stdout F vkbottle.exception_factory.base_exceptions.VKAPIError_911: Keyboard format is invalid: buttons contain too much rows
+2026-04-19T08:42:05.408406534Z stdout F     raise VKAPIError[code](**error)
+2026-04-19T08:42:05.408404074Z stdout F   File "/usr/local/lib/python3.13/site-packages/vkbottle/api/response_validator/vk_api_error_validator.py", line 51, in validate
+2026-04-19T08:42:05.408401403Z stdout F                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-19T08:42:05.408398937Z stdout F     response = await validator.validate(method, data, response, self)  # type: ignore
+2026-04-19T08:42:05.40839637Z stdout F   File "/usr/local/lib/python3.13/site-packages/vkbottle/api/api.py", line 107, in validate_response
+2026-04-19T08:42:05.408392426Z stdout F            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-19T08:42:05.408347246Z stdout F     return await self.validate_response(method, data, response)  # type: ignore
+2026-04-19T08:42:05.408344717Z stdout F   File "/usr/local/lib/python3.13/site-packages/vkbottle/api/api.py", line 79, in request
+2026-04-19T08:42:05.408342297Z stdout F                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-19T08:42:05.408339476Z stdout F     response = await self.api.request("messages.edit", params)
+2026-04-19T08:42:05.408332488Z stdout F   File "/usr/local/lib/python3.13/site-packages/vkbottle_types/codegen/methods/messages.py", line 219, in edit
+2026-04-19T08:42:05.408329882Z stdout F     await api.messages.edit(**kwargs)
+2026-04-19T08:42:05.408327721Z stdout F   File "/app/vk_bot/handlers.py", line 47, in _vk_safe_edit
+2026-04-19T08:42:05.408325406Z stdout F     await _vk_safe_edit(bot.api, **kwargs)
+2026-04-19T08:42:05.408323251Z stdout F   File "/app/vk_bot/handlers.py", line 443, in edit_msg
+2026-04-19T08:42:05.408321002Z stdout F     await edit_msg("\n".join(lines), get_model_keyboard(uid))
+2026-04-19T08:42:05.408318747Z stdout F   File "/app/vk_bot/handlers.py", line 453, in handle_callback
+2026-04-19T08:42:05.408316519Z stdout F            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-19T08:42:05.408313842Z stdout F     return await self.handler(event, **magic_bundle(self.handler, context))
+2026-04-19T08:42:05.408311231Z stdout F   File "/usr/local/lib/python3.13/site-packages/vkbottle/dispatch/handlers/from_func_handler.py", line 43, in handle
+2026-04-19T08:42:05.408308698Z stdout F     ^
+2026-04-19T08:42:05.408306Z stdout F     )
+2026-04-19T08:42:05.408303072Z stdout F     ...<2 lines>...
+2026-04-19T08:42:05.408300823Z stdout F                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-19T08:42:05.40817582Z stdout F     handler_response = await handler_basement.handler.handle(
+2026-04-19T08:42:05.408294324Z stderr F vkbottle.exception_factory.base_exceptions.VKAPIError_911: Keyboard format is invalid: buttons contain too much rows
+2026-04-19T08:42:05.408291929Z stderr F     raise VKAPIError[code](**error)
+2026-04-19T08:42:05.408289544Z stderr F   File "/usr/local/lib/python3.13/site-packages/vkbottle/api/response_validator/vk_api_error_validator.py", line 51, in validate
+2026-04-19T08:42:05.408287202Z stderr F                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-19T08:42:05.408284639Z stderr F     response = await validator.validate(method, data, response, self)  # type: ignore
+2026-04-19T08:42:05.408273785Z stderr F   File "/usr/local/lib/python3.13/site-packages/vkbottle/api/api.py", line 107, in validate_response
+2026-04-19T08:42:05.408269705Z stderr F            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-19T08:42:05.408265837Z stderr F     return await self.validate_response(method, data, response)  # type: ignore
+2026-04-19T08:42:05.408262018Z stderr F   File "/usr/local/lib/python3.13/site-packages/vkbottle/api/api.py", line 79, in request
+2026-04-19T08:42:05.408258239Z stderr F                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-19T08:42:05.408254591Z stderr F     response = await self.api.request("messages.edit", params)
+2026-04-19T08:42:05.408251Z stderr F   File "/usr/local/lib/python3.13/site-packages/vkbottle_types/codegen/methods/messages.py", line 219, in edit
+2026-04-19T08:42:05.408247377Z stderr F     await api.messages.edit(**kwargs)
+2026-04-19T08:42:05.408243367Z stderr F   File "/app/vk_bot/handlers.py", line 47, in _vk_safe_edit
+2026-04-19T08:42:05.40824017Z stderr F     await _vk_safe_edit(bot.api, **kwargs)
+2026-04-19T08:42:05.408236621Z stderr F   File "/app/vk_bot/handlers.py", line 443, in edit_msg
+2026-04-19T08:42:05.408232908Z stderr F     await edit_msg("\n".join(lines), get_model_keyboard(uid))
+2026-04-19T08:42:05.408229227Z stderr F   File "/app/vk_bot/handlers.py", line 453, in handle_callback
+2026-04-19T08:42:05.408225729Z stderr F            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-19T08:42:05.408221688Z stderr F     return await self.handler(event, **magic_bundle(self.handler, context))
+2026-04-19T08:42:05.408217583Z stderr F   File "/usr/local/lib/python3.13/site-packages/vkbottle/dispatch/handlers/from_func_handler.py", line 43, in handle
+2026-04-19T08:42:05.408213551Z stderr F     ^
+2026-04-19T08:42:05.408210213Z stderr F     )
+2026-04-19T08:42:05.408207066Z stderr F     ...<2 lines>...
+2026-04-19T08:42:05.408203109Z stderr F                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-19T08:42:05.408200053Z stderr F     handler_response = await handler_basement.handler.handle(
+2026-04-19T08:42:05.408195922Z stderr F   File "/usr/local/lib/python3.13/site-packages/vkbottle/dispatch/views/abc/raw.py", line 79, in handle_event
+2026-04-19T08:42:05.408190812Z stderr F Traceback (most recent call last):
+2026-04-19T08:42:05.408171763Z stderr F ERROR    | 2026-04-19 08:42:05,403 | vkbottle.exception_factory.error_handler.error_handler:handle:51 > Keyboard format is invalid: buttons contain too much rows

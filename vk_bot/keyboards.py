@@ -114,8 +114,6 @@ def get_model_keyboard(user_id: int) -> str:
             kb.row()
 
     if video_models:
-        kb.add(Callback("── 🎬 Видео ──", payload={"cmd": "noop"}))
-        kb.row()
         for i, (model_id, info) in enumerate(video_models):
             label = info["label"]
             if model_id == current:
@@ -125,8 +123,6 @@ def get_model_keyboard(user_id: int) -> str:
                 kb.row()
 
     if music_models:
-        kb.add(Callback("── 🎵 Музыка ──", payload={"cmd": "noop"}))
-        kb.row()
         for i, (model_id, info) in enumerate(music_models):
             credits = info.get("credits", 2)
             label = f"{info['label']} ({credits} кр.)"

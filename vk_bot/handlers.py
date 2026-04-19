@@ -448,8 +448,14 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
         elif cmd == "choose_model":
             from vk_bot.keyboards import get_model_keyboard
             lines = ["🤖 Выберите модель:\n"]
+            sections = {"image": "🖼 Изображения", "video": "🎬 Видео", "music": "🎵 Музыка"}
+            current_section = None
             for model_id, info in AVAILABLE_MODELS.items():
-                lines.append(f"  {info['label']}\n  {info['desc']}\n")
+                section = info.get("type", "image")
+                if section != current_section:
+                    current_section = section
+                    lines.append(f"\n{sections.get(section, section)}:")
+                lines.append(f"  {info['label']} — {info['desc']}")
             await edit_msg("\n".join(lines), get_model_keyboard(uid))
 
         elif cmd == "set_model":
