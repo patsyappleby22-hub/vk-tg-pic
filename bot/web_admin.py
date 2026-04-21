@@ -987,6 +987,7 @@ async def handle_user_detail(request: web.Request) -> web.Response:
         img_offset = (img_page - 1) * _IMG_PAGE_SIZE
         image_logs = _db.get_user_image_logs(uid, limit=_IMG_PAGE_SIZE, offset=img_offset)
         image_total = _db.count_user_image_logs(uid)
+        credit_logs = _db.get_user_credit_logs(uid, limit=100)
     except web.HTTPNotFound:
         raise
     except Exception as exc:
@@ -1042,6 +1043,32 @@ async def handle_user_detail(request: web.Request) -> web.Response:
         </tr>"""
     if not pay_rows:
         pay_rows = '<tr><td colspan="5" style="color:#8888a8;text-align:center;padding:16px">Нет платежей</td></tr>'
+
+    _CTYPE_LABELS = {"spend": "💸 Трата", "topup": "➕ Пополнение", "set": "✏️ Установка"}
+    _GTYPE_LABELS = {"image": "🖼 Изображение", "video": "🎬 Видео", "music": "🎵 Музыка", "video_ext": "🔄 Расшир. видео"}
+    credit_rows = ""
+    for cl in credit_logs:
+        change = cl["credits_change"]
+        ctype = cl["change_type"]
+        ctype_label = _CTYPE_LABELS.get(ctype, ctype)
+        gtype_label = _GTYPE_LABELS.get(cl["gen_type"], cl["gen_type"]) if cl["gen_type"] else "—"
+        change_color = "var(--red)" if change < 0 else "var(--green)"
+        change_str = f'<span style="color:{change_color};font-weight:600">{change:+d}</span>'
+        balance = cl["balance_after"]
+        model_str = cl["model"] or cl["note"] or "—"
+        prompt_str = cl["prompt"][:60] + ("…" if len(cl["prompt"]) > 60 else "") if cl["prompt"] else "—"
+        dt = _msk(cl["created_at"]) if cl["created_at"] else "—"
+        credit_rows += f"""<tr>
+          <td style="color:var(--muted);font-size:.82em">{dt}</td>
+          <td>{ctype_label}</td>
+          <td>{gtype_label}</td>
+          <td style="font-family:monospace;font-size:.82em">{model_str[:30]}</td>
+          <td>{change_str}</td>
+          <td style="color:var(--muted)">{balance}</td>
+          <td style="font-size:.82em;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{cl['prompt']}">{prompt_str}</td>
+        </tr>"""
+    if not credit_rows:
+        credit_rows = '<tr><td colspan="7" style="color:#8888a8;text-align:center;padding:16px">История пуста — данные будут накапливаться с момента обновления</td></tr>'
 
     block_btn_class = "btn-success" if blocked else "btn-danger"
     block_btn_text = "Разблокировать" if blocked else "Заблокировать"
@@ -1106,6 +1133,16 @@ async def handle_user_detail(request: web.Request) -> web.Response:
     <th>Order ID</th><th>Пакет</th><th>Сумма</th><th>Статус</th><th>Дата</th>
   </tr></thead>
   <tbody>{pay_rows}</tbody>
+</table>
+</div>
+
+<div class="section-heading" style="margin-top:24px">История кредитов ({len(credit_logs)})</div>
+<div class="table-wrap">
+<table>
+  <thead><tr>
+    <th>Дата</th><th>Тип</th><th>Контент</th><th>Модель / Примечание</th><th>Изменение</th><th>Баланс</th><th>Промпт</th>
+  </tr></thead>
+  <tbody>{credit_rows}</tbody>
 </table>
 </div>
 

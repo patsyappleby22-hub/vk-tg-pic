@@ -316,7 +316,7 @@ async def handle_photo_prompt(
                 caption=f"✅ Музыка по фото готова!\n<i>{caption[:200]}</i>",
                 parse_mode="HTML",
             )
-            increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost)
+            increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost, prompt=caption, model=user_model, gen_type="music")
             asyncio.create_task(log_generation_audio(
                 audio_bytes=audio_bytes, prompt=caption, user_id=uid,
                 user_name=message.from_user.first_name or str(uid),
@@ -441,7 +441,7 @@ async def handle_photo_prompt(
                 caption=f"✅ Видео по фото готово!\n<i>{caption[:200]}</i>",
                 parse_mode="HTML",
             )
-            increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost)
+            increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost, prompt=caption, model=user_model, gen_type="video")
             asyncio.create_task(log_generation_video(
                 video_bytes=video_bytes, prompt=caption, user_id=uid,
                 user_name=message.from_user.first_name or str(uid),
@@ -575,7 +575,7 @@ async def handle_photo_prompt(
                 parse_mode="HTML",
             )
 
-        increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost)
+        increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost, prompt=caption, model=user_model, gen_type="image")
         asyncio.create_task(log_generation(
             image_bytes=image_bytes,
             prompt=caption,
@@ -771,7 +771,7 @@ async def handle_video_extension(
             caption=f"✅ Видео расширено!\n<i>{caption[:200] if caption else 'Без описания'}</i>",
             parse_mode="HTML",
         )
-        increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost)
+        increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost, prompt=caption, model=user_model, gen_type="video_ext")
         try:
             await bot_obj.delete_message(chat_id=message.chat.id, message_id=processing_msg.message_id)
         except Exception:
@@ -1017,7 +1017,8 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
                     parse_mode="HTML",
                 )
 
-        increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost)
+        _log_gen_type = "video" if _is_video else "music" if _is_music else "image"
+        increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost, prompt=prompt, model=user_model, gen_type=_log_gen_type)
         _uname_log = message.from_user.first_name or str(uid)
         if _is_video:
             asyncio.create_task(log_generation_video(

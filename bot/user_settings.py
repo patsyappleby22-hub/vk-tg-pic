@@ -474,16 +474,34 @@ def increment_generations(
     first_name: str = "",
     platform: str = "",
     credits_cost: int = 1,
+    prompt: str = "",
+    model: str = "",
+    gen_type: str = "",
 ) -> int:
     s = get_user_settings(user_id)
     s["generations_count"] = s.get("generations_count", 0) + 1
     current_credits = s.get("credits", FREE_CREDITS)
-    s["credits"] = max(0, current_credits - credits_cost)
+    new_credits = max(0, current_credits - credits_cost)
+    s["credits"] = new_credits
     if first_name:
         s["first_name"] = first_name
     if platform and not s.get("platform"):
         s["platform"] = platform
     _save_user(user_id)
+    try:
+        import bot.db as _db
+        _db.save_credit_log(
+            user_id=user_id,
+            change_type="spend",
+            credits_change=-credits_cost,
+            balance_after=new_credits,
+            model=model,
+            gen_type=gen_type,
+            prompt=prompt,
+            platform=platform or s.get("platform", ""),
+        )
+    except Exception:
+        pass
     return s["generations_count"]
 
 
@@ -495,17 +513,41 @@ def has_credits(user_id: int, required: int = 1) -> bool:
     return get_user_settings(user_id).get("credits", FREE_CREDITS) >= required
 
 
-def add_credits(user_id: int, amount: int) -> int:
+def add_credits(user_id: int, amount: int, note: str = "admin") -> int:
     s = get_user_settings(user_id)
-    s["credits"] = s.get("credits", 0) + amount
+    old = s.get("credits", 0)
+    s["credits"] = old + amount
     _save_user(user_id)
+    try:
+        import bot.db as _db
+        _db.save_credit_log(
+            user_id=user_id,
+            change_type="topup",
+            credits_change=amount,
+            balance_after=s["credits"],
+            note=note,
+        )
+    except Exception:
+        pass
     return s["credits"]
 
 
-def set_credits(user_id: int, amount: int) -> int:
+def set_credits(user_id: int, amount: int, note: str = "admin") -> int:
     s = get_user_settings(user_id)
+    old = s.get("credits", 0)
     s["credits"] = max(0, int(amount))
     _save_user(user_id)
+    try:
+        import bot.db as _db
+        _db.save_credit_log(
+            user_id=user_id,
+            change_type="set",
+            credits_change=s["credits"] - old,
+            balance_after=s["credits"],
+            note=note,
+        )
+    except Exception:
+        pass
     return s["credits"]
 
 

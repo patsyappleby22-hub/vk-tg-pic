@@ -138,6 +138,25 @@ def init_tables() -> None:
                 )
             """)
             cur.execute("""
+                CREATE TABLE IF NOT EXISTS bot_credit_history (
+                    id              SERIAL PRIMARY KEY,
+                    user_id         BIGINT NOT NULL,
+                    change_type     TEXT NOT NULL DEFAULT 'spend',
+                    credits_change  INT NOT NULL,
+                    balance_after   INT NOT NULL DEFAULT 0,
+                    model           TEXT NOT NULL DEFAULT '',
+                    gen_type        TEXT NOT NULL DEFAULT '',
+                    prompt          TEXT NOT NULL DEFAULT '',
+                    platform        TEXT NOT NULL DEFAULT '',
+                    note            TEXT NOT NULL DEFAULT '',
+                    created_at      TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_credit_history_user
+                ON bot_credit_history (user_id, created_at DESC)
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS bot_key_history (
                     id          SERIAL PRIMARY KEY,
                     slot_index  INT NOT NULL,
@@ -633,7 +652,83 @@ def api_keys_table_has_rows() -> bool:
         return False
 
 
-# ── Key history ────────────────────────────────────────────────────────────────
+# ── Credit history ─────────────────────────────────────────────────────────────
+
+def save_credit_log(
+    user_id: int,
+    change_type: str,
+    credits_change: int,
+    balance_after: int,
+    model: str = "",
+    gen_type: str = "",
+    prompt: str = "",
+    platform: str = "",
+    note: str = "",
+) -> None:
+    """Log a credit change (spend or top-up)."""
+    if not _DATABASE_URL:
+        return
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO bot_credit_history
+                    (user_id, change_type, credits_change, balance_after,
+                     model, gen_type, prompt, platform, note)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (user_id, change_type, credits_change, balance_after,
+                  model, gen_type, prompt[:300], platform, note[:200]))
+    except Exception:
+        logger.debug("db: failed to save credit log for user %d", user_id)
+
+
+def get_user_credit_logs(user_id: int, limit: int = 100, offset: int = 0) -> list[dict]:
+    """Return credit history for a user, newest first."""
+    if not _DATABASE_URL:
+        return []
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT change_type, credits_change, balance_after,
+                       model, gen_type, prompt, platform, note, created_at
+                FROM bot_credit_history
+                WHERE user_id = %s
+                ORDER BY created_at DESC
+                LIMIT %s OFFSET %s
+            """, (user_id, limit, offset))
+            return [
+                {
+                    "change_type": r[0],
+                    "credits_change": r[1],
+                    "balance_after": r[2],
+                    "model": r[3],
+                    "gen_type": r[4],
+                    "prompt": r[5],
+                    "platform": r[6],
+                    "note": r[7],
+                    "created_at": r[8].isoformat() if r[8] else "",
+                }
+                for r in cur.fetchall()
+            ]
+    except Exception:
+        logger.debug("db: failed to get credit logs for user %d", user_id)
+        return []
+
+
+def count_user_credit_logs(user_id: int) -> int:
+    if not _DATABASE_URL:
+        return 0
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM bot_credit_history WHERE user_id = %s", (user_id,))
+            return cur.fetchone()[0]
+    except Exception:
+        return 0
+
+
+# ── Key history ─────────────────────────────────────────────────────────────────
 
 def save_key_history_entry(
     slot_index: int,
