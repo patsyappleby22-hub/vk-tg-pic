@@ -1543,7 +1543,8 @@ async def handle_api_keys(request: web.Request) -> web.Response:
     msg = request.rel_url.query.get("msg", "")
 
     stored_keys = _key_store.get_all_keys()
-    total = len(stored_keys)
+    sa_files = _key_store.list_sa_files()
+    total = len(stored_keys) + len(sa_files)
 
     msg_html = ""
     if msg == "added":
@@ -1580,6 +1581,31 @@ async def handle_api_keys(request: web.Request) -> web.Response:
       onclick="showHistory({i})">📋</button>
     <button class="btn btn-sm" style="background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.2)"
       onclick="deleteKey({i})">🗑</button>
+  </td>
+</tr>
+"""
+
+    sa_base = len(stored_keys)
+    for j, sa in enumerate(sa_files):
+        i = sa_base + j
+        name = sa.get("name", "")
+        proj = sa.get("project_id") or ""
+        email = sa.get("client_email") or ""
+        proj_badge = f'<span class="badge badge-green" style="font-size:.75em">📂 {proj}</span>' if proj else '<span class="badge badge-yellow" style="font-size:.75em;opacity:.6">нет проекта</span>'
+        sa_badge = '<span class="badge badge-blue" style="font-size:.7em;margin-right:4px">🔐 SA</span>'
+        email_html = f'<br><span style="color:var(--muted);font-size:.72em">{email}</span>' if email else ''
+        key_rows += f"""<tr id="key-row-{i}">
+  <td style="font-weight:600;color:var(--muted);width:36px">{i+1}</td>
+  <td>{sa_badge}<code style="font-size:.85em;color:var(--accent)">{name}</code><br>{proj_badge}{email_html}</td>
+  <td id="st-{i}"><span class="badge badge-yellow" style="opacity:.5">…</span></td>
+  <td id="act-{i}" style="font-size:.82em;color:var(--muted)">—</td>
+  <td id="load-{i}" style="font-size:.82em;color:var(--muted)">—</td>
+  <td id="stat-{i}" style="font-size:.82em;color:var(--muted)">—</td>
+  <td style="white-space:nowrap">
+    <button class="btn btn-sm" style="background:rgba(139,92,246,.12);color:var(--accent);border:1px solid rgba(139,92,246,.2);margin-right:4px"
+      onclick="showHistory({i})">📋</button>
+    <button class="btn btn-sm" style="background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.2)"
+      onclick="deleteSAFile('{name}')">🗑</button>
   </td>
 </tr>
 """
@@ -1661,45 +1687,13 @@ async def handle_api_keys(request: web.Request) -> web.Response:
              border-radius:8px;color:var(--text);font-size:.85em">
     <button class="btn btn-primary" onclick="uploadSA()" style="white-space:nowrap">Загрузить JSON</button>
   </div>
-  <div id="sa-list" style="margin-top:8px"></div>
+  <p style="color:var(--muted);font-size:.78em;margin-top:4px;line-height:1.5">
+    После загрузки SA-файл появится в общей таблице выше — со статусом, нагрузкой и историей,
+    как обычный API-ключ.
+  </p>
 </div>
 
 <script>
-async function loadSAList() {{
-  try {{
-    const r = await fetch('/admin/api/keys/sa/list');
-    const d = await r.json();
-    const list = d.items || [];
-    const box = document.getElementById('sa-list');
-    if (!list.length) {{
-      box.innerHTML = '<p style="color:var(--muted);font-size:.82em;margin:0">— ни одного service account не загружено —</p>';
-      return;
-    }}
-    let html = '<table style="width:100%;font-size:.85em"><thead><tr>'
-      + '<th style="text-align:left;color:var(--muted);font-weight:500;padding:6px 4px">Файл</th>'
-      + '<th style="text-align:left;color:var(--muted);font-weight:500;padding:6px 4px">Project ID</th>'
-      + '<th style="text-align:left;color:var(--muted);font-weight:500;padding:6px 4px">Service email</th>'
-      + '<th></th></tr></thead><tbody>';
-    for (const it of list) {{
-      const proj = it.project_id ? `<code style="color:var(--accent)">${{esc(it.project_id)}}</code>`
-                                  : '<span style="color:var(--red)">— нет —</span>';
-      const email = it.client_email ? `<span style="color:var(--muted);font-size:.85em">${{esc(it.client_email)}}</span>` : '—';
-      html += `<tr>
-        <td style="padding:6px 4px"><code>${{esc(it.name)}}</code></td>
-        <td style="padding:6px 4px">${{proj}}</td>
-        <td style="padding:6px 4px">${{email}}</td>
-        <td style="padding:6px 4px;text-align:right">
-          <button class="btn btn-sm" style="background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.2)"
-            onclick="deleteSA('${{esc(it.name)}}')">🗑</button>
-        </td></tr>`;
-    }}
-    html += '</tbody></table>';
-    box.innerHTML = html;
-  }} catch(e) {{
-    document.getElementById('sa-list').innerHTML = '<p style="color:var(--red);font-size:.82em">Ошибка загрузки: '+e+'</p>';
-  }}
-}}
-
 async function uploadSA() {{
   const inp = document.getElementById('sa-file-input');
   if (!inp.files || !inp.files[0]) {{ alert('Выберите JSON файл'); return; }}
@@ -1711,8 +1705,7 @@ async function uploadSA() {{
   const d = await r.json();
   if (d.ok) {{
     inp.value = '';
-    alert('✅ Загружен: ' + d.name + '\\nДоступен сразу — Veo и Lyria теперь смогут жечь $300 пробник.');
-    loadSAList();
+    location.href = '/admin/api-keys?msg=added';
   }} else {{
     const errs = {{
       'invalid_json': 'Не валидный JSON',
@@ -1726,18 +1719,15 @@ async function uploadSA() {{
   }}
 }}
 
-async function deleteSA(name) {{
-  if (!confirm('Удалить ' + name + '?')) return;
+async function deleteSAFile(name) {{
+  if (!confirm('Удалить ' + name + '? Изменение применится немедленно.')) return;
   const r = await fetch('/admin/api/keys/sa/delete', {{
     method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{name}})
   }});
   const d = await r.json();
-  if (d.ok) loadSAList();
+  if (d.ok) location.href = '/admin/api-keys?msg=deleted';
   else alert('Ошибка: ' + (d.error || 'неизвестная'));
 }}
-
-loadSAList();
-setInterval(loadSAList, 10000);
 </script>
 
 <script>
