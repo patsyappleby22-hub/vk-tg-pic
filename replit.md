@@ -60,8 +60,9 @@ An asynchronous multi-platform bot (Telegram + VK) for AI image, video, and musi
 
 ## Video Generation (Veo 3.1)
 - Models: veo-3.1-generate-001, veo-3.1-fast-generate-001, veo-3.1-lite-generate-001
-- Settings: duration (4/6/8 sec), resolution (720p/1080p), aspect ratio (16:9, 9:16), audio (on/off)
-- Video models only accept text prompts — photo input is rejected with a message
+- All three models support: text→video, image→video, video extension, audio
+- Settings: duration (4/6/8 sec), resolution (720p/1080p/4K — Lite up to 1080p), aspect ratio (16:9, 9:16), audio (on/off)
+- For image→video and extension, duration is forced to 8 sec (Google API limitation)
 - Implementation: `VertexAIService.generate_video()` uses Gemini Developer API for API-key slots with polling (10s interval, 600s timeout)
 - Supported on both Telegram (reply_video) and VK (document upload as .mp4)
 - User settings: video_duration, video_resolution, video_aspect_ratio, video_audio (persisted)
