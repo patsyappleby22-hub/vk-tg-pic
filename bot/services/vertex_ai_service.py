@@ -121,6 +121,8 @@ def _is_safety_error_text(msg: str) -> bool:
     safety_keywords = (
         "safety", "blocked", "harm", "policy", "prohibited",
         "content_filter", "safetyfiltererror", "finish_reason: safety",
+        "usage guidelines", "violate", "could not be submitted",
+        "violates", "guidelines", "inappropriate", "explicit",
     )
     return any(kw in msg for kw in safety_keywords)
 
@@ -657,7 +659,23 @@ class VertexAIService:
                 )
                 return music_bytes
 
-            except (SafetyFilterError, GenerationError):
+            except SafetyFilterError as exc:
+                slot.total_err += 1
+                duration_ms = int((time.monotonic() - started_at) * 1000)
+                slot.record_history(
+                    user_id=user_id, username=username, prompt=prompt,
+                    model=model, status="safety", error=str(exc)[:500],
+                    duration_ms=duration_ms,
+                )
+                raise
+            except GenerationError as exc:
+                slot.total_err += 1
+                duration_ms = int((time.monotonic() - started_at) * 1000)
+                slot.record_history(
+                    user_id=user_id, username=username, prompt=prompt,
+                    model=model, status="error", error=str(exc)[:500],
+                    duration_ms=duration_ms,
+                )
                 raise
             except Exception as exc:
                 slot.total_err += 1
@@ -667,7 +685,7 @@ class VertexAIService:
                 if _is_safety_error(exc):
                     slot.record_history(
                         user_id=user_id, username=username, prompt=prompt,
-                        model=model, status="safety", error=str(exc)[:200],
+                        model=model, status="safety", error=str(exc)[:500],
                         duration_ms=duration_ms,
                     )
                     raise SafetyFilterError(str(exc))
@@ -1206,7 +1224,23 @@ class VertexAIService:
                 )
                 return video_bytes
 
-            except (SafetyFilterError, GenerationError):
+            except SafetyFilterError as exc:
+                slot.total_err += 1
+                _dur = int((time.monotonic() - _t0) * 1000)
+                slot.record_history(
+                    user_id=user_id, username=username, prompt=prompt,
+                    model=model, status="safety", error=str(exc)[:500],
+                    duration_ms=_dur,
+                )
+                raise
+            except GenerationError as exc:
+                slot.total_err += 1
+                _dur = int((time.monotonic() - _t0) * 1000)
+                slot.record_history(
+                    user_id=user_id, username=username, prompt=prompt,
+                    model=model, status="error", error=str(exc)[:500],
+                    duration_ms=_dur,
+                )
                 raise
             except Exception as exc:
                 slot.total_err += 1
