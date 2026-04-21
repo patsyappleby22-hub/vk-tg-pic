@@ -1,0 +1,35 @@
+66Z stdout F 2026-04-21 16:46:56 [INFO] bot.middlewares.logging_middleware — ← [message] user_id=6014789391 username=@gayrath02 — 103.1 ms
+2026-04-21T13:46:56.505775505Z stdout F aiogram.exceptions.TelegramBadRequest: Telegram server says - Bad Request: file is too big
+2026-04-21T13:46:56.505771572Z stdout F     raise TelegramBadRequest(method=method, message=description)
+2026-04-21T13:46:56.505768067Z stdout F   File "/usr/local/lib/python3.13/site-packages/aiogram/client/session/base.py", line 121, in check_response
+2026-04-21T13:46:56.505763569Z stdout F     )
+2026-04-21T13:46:56.505756376Z stdout F         content=raw_result,
+2026-04-21T13:46:56.505752437Z stdout F     ...<2 lines>...
+2026-04-21T13:46:56.505748413Z stdout F         bot=bot,
+2026-04-21T13:46:56.505744453Z stdout F     response = self.check_response(
+2026-04-21T13:46:56.505739322Z stdout F   File "/usr/local/lib/python3.13/site-packages/aiogram/client/session/aiohttp.py", line 177, in make_request
+2026-04-21T13:46:56.505735584Z stdout F                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-21T13:46:56.505731357Z stdout F     return cast(TelegramType, await middleware(bot, method))
+2026-04-21T13:46:56.50572801Z stdout F   File "/usr/local/lib/python3.13/site-packages/aiogram/client/session/base.py", line 259, in __call__
+2026-04-21T13:46:56.50572284Z stdout F            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-21T13:46:56.505718808Z stdout F     return await self.session(self, method, timeout=request_timeout)
+2026-04-21T13:46:56.505715432Z stdout F   File "/usr/local/lib/python3.13/site-packages/aiogram/client/bot.py", line 493, in __call__
+2026-04-21T13:46:56.505712127Z stdout F            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-21T13:46:56.505708959Z stdout F     return await self(call, request_timeout=request_timeout)
+2026-04-21T13:46:56.505705872Z stdout F   File "/usr/local/lib/python3.13/site-packages/aiogram/client/bot.py", line 1740, in get_file
+2026-04-21T13:46:56.505701193Z stdout F            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-21T13:46:56.505698188Z stdout F     file = await bot.get_file(message.video.file_id)
+2026-04-21T13:46:56.505694756Z stdout F   File "/app/bot/handlers/image.py", line 193, in _download_video
+2026-04-21T13:46:56.505691301Z stdout F                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-21T13:46:56.505687795Z stdout F     video_bytes = await _download_video(bot_obj, message)
+2026-04-21T13:46:56.505684874Z stdout F   File "/app/bot/handlers/image.py", line 742, in _do_video_ext
+2026-04-21T13:46:56.505680637Z stdout F                    ^^^^^^^^^^^^^^
+2026-04-21T13:46:56.505677422Z stdout F     result_bytes = await gen_task
+2026-04-21T13:46:56.505674017Z stdout F   File "/app/bot/handlers/image.py", line 759, in handle_video_extension
+2026-04-21T13:46:56.505668585Z stdout F Traceback (most recent call last):
+2026-04-21T13:46:56.505628155Z stdout F 2026-04-21 16:46:56 [ERROR] bot.handlers.image — Error video-extension: Telegram server says - Bad Request: file is too big
+2026-04-21T13:46:56.42767334Z stdout F 2026-04-21 16:46:56 [INFO] bot.middlewares.logging_middleware — → [message] user_id=6014789391 username=@gayrath02
+2026-04-21T13:46:47.554353033Z stdout F 2026-04-21 16:46:47 [INFO] bot.middlewares.logging_middleware — ← [callback_query] user_id=6014789391 username=@gayrath02 — 53.7 ms
+2026-04-21T13:46:47.500667094Z stdout F 2026-04-21 16:46:47 [INFO] bot.middlewares.logging_middleware — → [callback_query] user_id=6014789391 username=@gayrath02
+2026-04-21T13:46:46.443552363Z stdout F 2026-04-21 16:46:46 [INFO] bot.middlewares.logging_middleware — ← [callback_query] user_id=6014789391 username=@gayrath02 — 58.9 ms
+2026-04-21T13:46:46.38476771Z stdout F 2026-04-21 16:46:46
