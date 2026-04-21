@@ -535,14 +535,12 @@ class VertexAIService:
 
     def _filter_slots_for_model(self, model: str) -> list[_BaseSlot]:
         usable = [s for s in self._slots if not s.auth_error]
-        if self._is_video_model(model):
-            with_project = [s for s in usable if (isinstance(s, _ApiKeySlot) and s.has_project) or isinstance(s, _CredSlot)]
-            if with_project:
-                return with_project
-        if self._is_music_model(model):
-            music_slots = [s for s in usable if isinstance(s, _ApiKeySlot) or isinstance(s, _CredSlot)]
-            if music_slots:
-                return music_slots
+        # Veo and Lyria are routed exclusively through Vertex AI service-account
+        # slots so that Google's $300 trial credit can cover them. If no SA is
+        # available the request fails with QuotaExceededError → user sees the
+        # standard "model is overloaded" message.
+        if self._is_video_model(model) or self._is_music_model(model):
+            return [s for s in usable if isinstance(s, _CredSlot)]
         return usable
 
     async def generate_music(

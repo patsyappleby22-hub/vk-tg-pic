@@ -86,6 +86,9 @@ An asynchronous multi-platform bot (Telegram + VK) for AI image, video, and musi
   - `_ApiKeySlot` — Google API key (Vertex Express) for Imagen/Gemini text/chat. Veo & Lyria fall back to Gemini Developer API endpoint with the same key.
   - `_CredSlot` — service-account JSON loaded from `data/service_accounts/`. Supports image, chat, **video (Veo)**, and **music (Lyria)** all through Vertex AI — required to spend Google's $300 trial credit on Veo/Lyria.
 - Both slot types are loaded together; rotation cycles all of them. 429 → 60s cooldown.
+- **Routing policy** (`_filter_slots_for_model`):
+  - Image / chat → any slot (API key OR service account).
+  - **Video (Veo)** and **Music (Lyria)** → **only** `_CredSlot` (Vertex AI / service account). If no SA available, request raises `QuotaExceededError` → user sees the standard "модель сейчас перегружена 😔" message. This guarantees Google's $300 trial credit is the funding source for Veo/Lyria.
 - Admin panel `/admin/api-keys`:
   - Add/edit/delete API keys (with optional project ID for Veo via API key).
   - Upload service-account JSON via file picker → endpoint `POST /admin/api/keys/sa/upload` (multipart) → validated (`type=service_account`, `project_id`, `private_key`, `client_email`) → stored in `data/service_accounts/` (chmod 600) → `vertex_service.reload_keys()` applies it instantly.
