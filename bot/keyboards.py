@@ -79,10 +79,8 @@ def get_model_keyboard(user_id: int) -> InlineKeyboardMarkup:
     rows.append([InlineKeyboardButton(text="── 🎬 Видео ──", callback_data="noop")])
     for model_id, info in video_models.items():
         label = info["label"]
-        credits = info.get("credits", 3)
         if model_id == current:
             label = "✅ " + label
-        label += f" ({credits} кр.)"
         rows.append([
             InlineKeyboardButton(text=label, callback_data=f"model_{model_id}")
         ])
@@ -90,10 +88,8 @@ def get_model_keyboard(user_id: int) -> InlineKeyboardMarkup:
     rows.append([InlineKeyboardButton(text="── 🎵 Музыка ──", callback_data="noop")])
     for model_id, info in music_models.items():
         label = info["label"]
-        credits = info.get("credits", 2)
         if model_id == current:
             label = "✅ " + label
-        label += f" ({credits} кр.)"
         rows.append([
             InlineKeyboardButton(text=label, callback_data=f"model_{model_id}")
         ])

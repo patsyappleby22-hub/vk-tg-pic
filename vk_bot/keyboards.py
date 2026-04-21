@@ -124,8 +124,7 @@ def get_model_keyboard(user_id: int) -> str:
 
     if music_models:
         for i, (model_id, info) in enumerate(music_models):
-            credits = info.get("credits", 2)
-            label = f"{info['label']} ({credits} кр.)"
+            label = info["label"]
             if model_id == current:
                 label = "✅ " + label
             kb.add(Callback(label, payload={"cmd": "set_model", "id": model_id}))
