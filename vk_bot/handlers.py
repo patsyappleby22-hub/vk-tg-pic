@@ -189,6 +189,46 @@ async def _download_url(url: str) -> bytes:
             return await resp.read()
 
 
+_VIDEO_DOC_EXTS = {"mp4", "mov", "avi", "mpeg", "mpg", "webm", "mkv", "m4v", "3gp", "qt"}
+_IMAGE_DOC_EXTS = {"jpg", "jpeg", "png", "webp", "heic", "heif", "gif", "bmp"}
+_MAX_VIDEO_BYTES = 200 * 1024 * 1024  # 200 MB safety cap for video processing
+
+
+async def _download_vk_video_attachment(api: Any, video: Any) -> bytes:
+    """Resolve a VK video attachment to a downloadable mp4 URL and fetch it."""
+    owner_id = getattr(video, "owner_id", None)
+    video_id = getattr(video, "id", None)
+    access_key = getattr(video, "access_key", None)
+    if owner_id is None or video_id is None:
+        raise ValueError("Не удалось определить идентификатор видео.")
+
+    vid_str = f"{owner_id}_{video_id}"
+    if access_key:
+        vid_str += f"_{access_key}"
+
+    resp = await api.video.get(videos=vid_str)
+    items = getattr(resp, "items", None) or []
+    if not items:
+        raise ValueError("Видео недоступно — возможно удалено или скрыто настройками приватности.")
+
+    files = getattr(items[0], "files", None)
+    if not files:
+        raise ValueError("Не удалось получить ссылку на скачивание видео.")
+
+    if getattr(files, "external", None):
+        raise ValueError("Это внешнее видео (например, YouTube). Прикрепите файл напрямую.")
+
+    for attr in (
+        "mp4_2160", "mp4_1440", "mp4_1080", "mp4_720",
+        "mp4_480", "mp4_360", "mp4_240", "mp4_144",
+    ):
+        url = getattr(files, attr, None)
+        if url:
+            return await _download_url(url)
+
+    raise ValueError("Не удалось получить ссылку на mp4-файл видео.")
+
+
 def _build_chat_api_contents(history: list[dict[str, Any]]) -> list[Any]:
     from google.genai import types as genai_types
     contents = []
@@ -698,24 +738,117 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
             return
 
         if message.attachments:
+            photos: list[bytes] = []
+            videos: list[bytes] = []
+            video_errors: list[str] = []
+
             for att in message.attachments:
-                if att.photo:
-                    caption = text or ""
-                    if not caption:
-                        await message.answer(
-                            "📷 Фото получено! Добавьте описание — что нужно сделать с изображением."
+                try:
+                    if att.photo:
+                        photos.append(await download_vk_photo(bot.api, att.photo.sizes))
+                    elif att.video:
+                        try:
+                            videos.append(await _download_vk_video_attachment(bot.api, att.video))
+                        except Exception as ve:
+                            video_errors.append(str(ve))
+                            logger.warning("VK video download failed: %s", ve)
+                    elif att.doc:
+                        doc = att.doc
+                        ext = (getattr(doc, "ext", "") or "").lower()
+                        size = getattr(doc, "size", 0) or 0
+                        url = getattr(doc, "url", None)
+                        if not url:
+                            continue
+                        if ext in _IMAGE_DOC_EXTS:
+                            photos.append(await _download_url(url))
+                        elif ext in _VIDEO_DOC_EXTS:
+                            if size and size > _MAX_VIDEO_BYTES:
+                                video_errors.append(
+                                    f"Видео слишком большое ({size // (1024*1024)} МБ). "
+                                    f"Максимум — {_MAX_VIDEO_BYTES // (1024*1024)} МБ."
+                                )
+                                continue
+                            videos.append(await _download_url(url))
+                except Exception as e:
+                    logger.warning("VK attachment processing failed: %s", e)
+
+            if videos:
+                await _handle_vk_video_extension(
+                    bot, vertex_service, uid, peer_id, message,
+                    video_bytes=videos[0], caption=text or "",
+                )
+                return
+
+            if video_errors and not photos:
+                await message.answer("⚠️ " + video_errors[0])
+                return
+
+            if photos:
+                if not text:
+                    settings_now = get_user_settings(uid)
+                    model_now = settings_now.get("model", "gemini-3.1-flash-image-preview")
+                    if is_video_model(model_now):
+                        from bot.user_settings import video_supports_image as _vsi_hint
+                        if _vsi_hint(model_now):
+                            hint = (
+                                "📷 Фото получено! Добавьте подпись — "
+                                "что должно происходить в видео.\n\n"
+                                "Например: «Камера медленно облетает этот объект»"
+                            )
+                        else:
+                            model_label = AVAILABLE_MODELS.get(model_now, {}).get("label", model_now)
+                            hint = (
+                                f"🎬 Модель {model_label} принимает только текстовые запросы.\n\n"
+                                "Переключите модель на Veo 3.1 / Veo 3.1 Fast для генерации видео по фото."
+                            )
+                    elif is_music_model(model_now):
+                        hint = (
+                            "📷 Фото получено! Добавьте описание музыки в подписи к фото.\n\n"
+                            "Например: «Атмосферный синтвейв по настроению этого изображения»"
                         )
-                        return
-                    photo_bytes = await download_vk_photo(bot.api, att.photo.sizes)
-                    await _generate_and_send(
-                        bot, vertex_service, uid, peer_id, caption,
-                        images=[photo_bytes],
-                    )
+                    else:
+                        hint = (
+                            f"📷 Фото получено ({len(photos)} шт.)! Добавьте описание — "
+                            "что нужно сделать с изображением.\n\n"
+                            "Например: «Сделай фон ярче» или «Добавь закат на задний план»"
+                        )
+                    await message.answer(hint)
                     return
 
+                await _generate_and_send(
+                    bot, vertex_service, uid, peer_id, text,
+                    images=photos,
+                )
+                return
+
         if not text:
-            await message.answer("Отправьте текстовое описание изображения.")
+            await message.answer("Отправьте текстовое описание изображения или прикрепите фото/видео.")
             return
+
+        # Hint when user sends text but is in image-to-video / video-extension mode
+        settings_now = get_user_settings(uid)
+        model_now = settings_now.get("model", "gemini-3.1-flash-image-preview")
+        if is_video_model(model_now):
+            from bot.user_settings import (
+                video_supports_image as _vsi_hint,
+                video_supports_video_extension as _vse_hint,
+            )
+            video_task_now = settings_now.get("video_task", "text-to-video")
+            if video_task_now == "image-to-video" and _vsi_hint(model_now):
+                await message.answer(
+                    "🖼 Режим Image-to-video\n\n"
+                    "Прикрепите изображение с подписью (описанием) — "
+                    "что должно происходить в видео.\n\n"
+                    "Например: «Камера медленно облетает этот объект»"
+                )
+                return
+            if video_task_now == "video-extension" and _vse_hint(model_now):
+                await message.answer(
+                    "🔄 Режим Video extension\n\n"
+                    "Прикрепите видео (можно с подписью — как продолжить видео).\n\n"
+                    "Например: «Camera slowly zooms out»"
+                )
+                return
 
         await _generate_and_send(bot, vertex_service, uid, peer_id, text)
 
@@ -870,7 +1003,44 @@ async def _handle_vk_chat_message(
                         logger.warning("VK doc download failed: %s", e)
                         parts.append({"type": "text", "text": f"[документ {fname} — не удалось загрузить]"})
                 else:
-                    parts.append({"type": "text", "text": f"[прикреплён файл: {fname} — формат не поддерживается]"})
+                    if ext in _VIDEO_DOC_EXTS and url:
+                        try:
+                            video_bytes = await _download_url(url)
+                            parts.append({"type": "media", "data": video_bytes, "mime_type": "video/mp4"})
+                            if not text:
+                                parts.insert(0, {"type": "text", "text": f"[видео: {fname}]"})
+                        except Exception as e:
+                            logger.warning("VK video-doc download in chat failed: %s", e)
+                            parts.append({"type": "text", "text": f"[видео {fname} — не удалось загрузить]"})
+                    elif ext in _IMAGE_DOC_EXTS and url:
+                        try:
+                            img_bytes = await _download_url(url)
+                            parts.append({"type": "media", "data": img_bytes, "mime_type": "image/jpeg"})
+                        except Exception as e:
+                            logger.warning("VK image-doc download in chat failed: %s", e)
+                            parts.append({"type": "text", "text": f"[изображение {fname} — не удалось загрузить]"})
+                    else:
+                        parts.append({"type": "text", "text": f"[прикреплён файл: {fname} — формат не поддерживается]"})
+            elif getattr(att, "video", None):
+                try:
+                    video_bytes = await _download_vk_video_attachment(bot.api, att.video)
+                    parts.append({"type": "media", "data": video_bytes, "mime_type": "video/mp4"})
+                except Exception as e:
+                    logger.warning("VK video download in chat failed: %s", e)
+                    parts.append({"type": "text", "text": "[видео — не удалось загрузить]"})
+            elif getattr(att, "audio", None):
+                au = att.audio
+                url = getattr(au, "url", None)
+                if url:
+                    try:
+                        audio_bytes = await _download_url(url)
+                        title = getattr(au, "title", None) or "аудио"
+                        parts.append({"type": "media", "data": audio_bytes, "mime_type": "audio/mpeg"})
+                        if not text:
+                            parts.insert(0, {"type": "text", "text": f"[аудио: {title}]"})
+                    except Exception as e:
+                        logger.warning("VK audio download in chat failed: %s", e)
+                        parts.append({"type": "text", "text": "[аудио — не удалось загрузить]"})
 
     if not parts:
         await bot.api.messages.send(
@@ -959,6 +1129,204 @@ async def _handle_vk_chat_message(
                 )
             except Exception:
                 pass
+
+
+async def _handle_vk_video_extension(
+    bot: Bot, vertex_service: VertexAIService,
+    uid: int, peer_id: int, message: Any,
+    video_bytes: bytes, caption: str,
+) -> None:
+    """Recreate Telegram's handle_video_extension for VK attachments."""
+    from bot.user_settings import (
+        video_supports_audio, calc_video_credits,
+        video_supports_video_extension,
+    )
+
+    if is_blocked(uid):
+        await message.answer("⛔ Ваш аккаунт заблокирован. Обратитесь к администратору.")
+        return
+
+    settings = get_user_settings(uid)
+    user_model = settings.get("model", "gemini-3.1-flash-image-preview")
+    model_label = AVAILABLE_MODELS.get(user_model, {}).get("label", user_model)
+
+    if not is_video_model(user_model):
+        await message.answer(
+            "🎬 Видео получено, но сейчас выбран не видео-режим.\n\n"
+            "Переключите модель на Veo 3.1 Lite и выберите задачу "
+            "«🔄 Video extension» в настройках."
+        )
+        return
+
+    video_task = settings.get("video_task", "text-to-video")
+    if video_task != "video-extension":
+        if not video_supports_video_extension(user_model):
+            await message.answer(
+                f"🎬 Модель {model_label} не поддерживает расширение видео.\n\n"
+                "Используйте Veo 3.1 Lite для этой задачи."
+            )
+        else:
+            await message.answer(
+                "🎬 Видео получено! Чтобы расширить его, "
+                "переключите задачу на «🔄 Video extension» в настройках видео.\n\n"
+                f"Текущая задача: {video_task}"
+            )
+        return
+
+    if not video_supports_video_extension(user_model):
+        await message.answer(
+            f"🎬 Модель {model_label} не поддерживает расширение видео.\n\n"
+            "Используйте Veo 3.1 Lite для этой задачи."
+        )
+        return
+
+    video_audio = settings.get("video_audio", True) and video_supports_audio(user_model)
+    credits_cost = calc_video_credits(user_model, duration_seconds=8, audio=video_audio)
+    if not has_credits(uid, credits_cost):
+        await message.answer(
+            "💳 Недостаточно кредитов\n\n"
+            f"Расширение видео стоит {credits_cost} кредитов.\n"
+            "Пополните баланс для продолжения."
+        )
+        return
+
+    video_aspect = settings.get("video_aspect_ratio", "16:9")
+    video_resolution = settings.get("video_resolution", "720p")
+    prompt_display = caption[:100] if caption else "без дополнительного описания"
+
+    base_text = (
+        f"🔄 Расширяю видео…\n"
+        f"🤖 {model_label}\n"
+        f"📐 {video_aspect} • 8 сек • {video_resolution}\n"
+        f"{prompt_display}{'…' if len(caption) > 100 else ''}"
+    )
+    processing_id = await bot.api.messages.send(
+        peer_id=peer_id, random_id=0,
+        message=f"{base_text}\n\n◐ Обработка — 0 сек.",
+    )
+    animator = VKProgressAnimator(bot, peer_id, processing_id, base_text)
+    animator.start()
+    start_time = time.monotonic()
+
+    async def _do_video_ext() -> bytes:
+        return await vertex_service.generate_video(
+            prompt=caption or "Continue the video naturally",
+            model=user_model,
+            aspect_ratio=video_aspect,
+            duration_seconds=8,
+            resolution=video_resolution,
+            generate_audio=video_audio,
+            user_id=uid,
+            username=f"vk:{uid}",
+            video=video_bytes,
+        )
+
+    gen_task = asyncio.create_task(_do_video_ext())
+    active_tasks[uid] = gen_task
+
+    try:
+        result_bytes = await gen_task
+        await animator.stop()
+        active_tasks.pop(uid, None)
+        elapsed = int(time.monotonic() - start_time)
+
+        upload_base = (
+            f"🔄 Расширяю видео…\n🤖 {model_label}\n\n"
+            f"✅ Готово за {elapsed} сек."
+        )
+        upload_animator = VKProgressAnimator(
+            bot, peer_id, processing_id, upload_base,
+            action_text="📤 Загрузка видео",
+        )
+        upload_animator.start()
+        try:
+            attachment = await upload_document_to_vk(
+                bot.api, peer_id, result_bytes, filename="extended_video.mp4",
+            )
+        finally:
+            await upload_animator.stop()
+
+        result_caption = (
+            f"✅ Видео расширено! ({elapsed} сек.)\n"
+            f"{caption[:200] if caption else 'Без описания'}"
+        )
+        await bot.api.messages.send(
+            peer_id=peer_id, random_id=0,
+            message=result_caption,
+            attachment=attachment,
+            keyboard=get_persistent_keyboard(),
+        )
+        try:
+            first_name = settings.get("first_name", "")
+            increment_generations(uid, first_name, platform="vk", credits_cost=credits_cost)
+        except Exception:
+            pass
+        try:
+            await bot.api.messages.delete(message_ids=[processing_id], delete_for_all=True)
+        except Exception:
+            pass
+
+    except asyncio.CancelledError:
+        await animator.stop()
+        active_tasks.pop(uid, None)
+        try:
+            await bot.api.messages.edit(
+                peer_id=peer_id, message_id=processing_id,
+                message="⛔ Генерация отменена.",
+            )
+        except Exception:
+            pass
+
+    except SafetyFilterError as exc:
+        await animator.stop()
+        active_tasks.pop(uid, None)
+        try:
+            await bot.api.messages.edit(
+                peer_id=peer_id, message_id=processing_id,
+                message=f"🚫 Запрос заблокирован фильтрами безопасности\n\n{exc.user_message}",
+            )
+        except Exception:
+            pass
+
+    except QuotaExceededError:
+        await animator.stop()
+        active_tasks.pop(uid, None)
+        try:
+            await bot.api.messages.edit(
+                peer_id=peer_id, message_id=processing_id,
+                message=(
+                    f"Модель {model_label} сейчас перегружена.\n\n"
+                    "Попробуйте через пару минут или переключите модель."
+                ),
+                keyboard=get_switch_model_keyboard(user_model),
+            )
+        except Exception:
+            pass
+
+    except BotError as exc:
+        await animator.stop()
+        active_tasks.pop(uid, None)
+        try:
+            await bot.api.messages.edit(
+                peer_id=peer_id, message_id=processing_id,
+                message=exc.user_message,
+                keyboard=get_switch_model_keyboard(user_model),
+            )
+        except Exception:
+            pass
+
+    except Exception as exc:
+        await animator.stop()
+        active_tasks.pop(uid, None)
+        logger.exception("VK video extension error: %s", exc)
+        try:
+            await bot.api.messages.edit(
+                peer_id=peer_id, message_id=processing_id,
+                message="Не удалось расширить видео. Попробуйте ещё раз.",
+                keyboard=get_switch_model_keyboard(user_model),
+            )
+        except Exception:
+            pass
 
 
 async def _generate_and_send(
