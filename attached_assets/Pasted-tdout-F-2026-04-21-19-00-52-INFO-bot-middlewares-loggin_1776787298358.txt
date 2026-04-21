@@ -1,0 +1,38 @@
+tdout F 2026-04-21 19:00:52 [INFO] bot.middlewares.logging_middleware — ← [message] user_id=6014789391 username=@gayrath02 — 17658.2 ms
+2026-04-21T16:00:52.786585726Z stdout F core.exceptions.GenerationError: Image generation failed: Gemini Video API error: Unsupported output video duration 8 seconds, supported durations are [7] for feature video_extension.
+2026-04-21T16:00:52.786582487Z stdout F     raise GenerationError(f"Gemini Video API error: {err_msg[:300]}")
+2026-04-21T16:00:52.786579393Z stdout F   File "/app/bot/services/vertex_ai_service.py", line 1363, in _generate_video_with_gemini_api
+2026-04-21T16:00:52.78657684Z stdout F     result = self.fn(*self.args, **self.kwargs)
+2026-04-21T16:00:52.786574569Z stdout F   File "/usr/local/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+2026-04-21T16:00:52.786571989Z stdout F            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-21T16:00:52.786551869Z stdout F     return await loop.run_in_executor(None, func_call)
+2026-04-21T16:00:52.786548829Z stdout F   File "/usr/local/lib/python3.13/asyncio/threads.py", line 25, in to_thread
+2026-04-21T16:00:52.786545898Z stdout F     ^
+2026-04-21T16:00:52.786542953Z stdout F     )
+2026-04-21T16:00:52.786539841Z stdout F     ...<13 lines>...
+2026-04-21T16:00:52.786536435Z stdout F                   ^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-21T16:00:52.786533424Z stdout F     video_bytes = await asyncio.to_thread(
+2026-04-21T16:00:52.786529987Z stdout F   File "/app/bot/services/vertex_ai_service.py", line 1196, in _generate_video_inner
+2026-04-21T16:00:52.786526458Z stdout F     ^
+2026-04-21T16:00:52.786523252Z stdout F     )
+2026-04-21T16:00:52.786519492Z stdout F     ...<7 lines>...
+2026-04-21T16:00:52.786516535Z stdout F            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-21T16:00:52.78651279Z stdout F     return await self._generate_video_inner(
+2026-04-21T16:00:52.786510037Z stdout F   File "/app/bot/services/vertex_ai_service.py", line 1139, in generate_video
+2026-04-21T16:00:52.78650624Z stdout F     ^
+2026-04-21T16:00:52.786502771Z stdout F     )
+2026-04-21T16:00:52.786499258Z stdout F     ...<9 lines>...
+2026-04-21T16:00:52.786495483Z stdout F            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-04-21T16:00:52.786491429Z stdout F     return await vertex_service.generate_video(
+2026-04-21T16:00:52.786458251Z stdout F   File "/app/bot/handlers/image.py", line 748, in _do_video_ext
+2026-04-21T16:00:52.786454535Z stdout F                    ^^^^^^^^^^^^^^
+2026-04-21T16:00:52.786451683Z stdout F     result_bytes = await gen_task
+2026-04-21T16:00:52.786448447Z stdout F   File "/app/bot/handlers/image.py", line 764, in handle_video_extension
+2026-04-21T16:00:52.786442947Z stdout F Traceback (most recent call last):
+2026-04-21T16:00:52.786414061Z stdout F 2026-04-21 19:00:52 [ERROR] bot.handlers.image — Error video-extension: Image generation failed: Gemini Video API error: Unsupported output video duration 8 seconds, supported durations are [7] for feature video_extension.
+2026-04-21T16:00:52.770900901Z stdout F 2026-04-21 19:00:52 [INFO] httpx — HTTP Request: POST https://us-central1-aiplatform.googleapis.com/v1beta1/projects/first-vision-491914-r4/locations/us-central1/publishers/google/models/veo-3.1-lite-generate-001:fetchPredictOperation "HTTP/1.1 200 OK"
+2026-04-21T16:00:42.040224488Z stdout F 2026-04-21 19:00:42 [INFO] httpx — HTTP Request: POST https://us-central1-aiplatform.googleapis.com/v1beta1/projects/first-vision-491914-r4/locations/us-central1/publishers/google/models/veo-3.1-lite-generate-001:predictLongRunning "HTTP/1.1 200 OK"
+2026-04-21T16:00:36.552328534Z stdout F Пусть девушка танцует танец токсика '
+2026-04-21T16:00:36.552296318Z stdout F 2026-04-21 19:00:36 [INFO] bot.services.vertex_ai_service — Video [video→video (extension)]: trying 'first-vision-491914-r4-04dc11021c1a' model=veo-3.1-lite-generate-001 prompt='✅ Видео по фото готово!
+2026-04-21T16:00:35.185616103Z stdout F 2026-04-21 19:00:35 [INFO] bot.middlewares.logging_middleware — → [message] user_id=6014789391 username=@gayrath02
+2026-04-21T16:00:25.361556057Z stdout F 2026-04-21 19:00:

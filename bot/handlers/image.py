@@ -709,7 +709,7 @@ async def handle_video_extension(
 
     from bot.user_settings import video_supports_audio, calc_video_credits
     video_audio = settings.get("video_audio", True) and video_supports_audio(user_model)
-    credits_cost = calc_video_credits(user_model, duration_seconds=8, audio=video_audio)
+    credits_cost = calc_video_credits(user_model, duration_seconds=7, audio=video_audio)
     if not has_credits(uid, credits_cost):
         await message.reply(
             "💳 <b>Недостаточно кредитов</b>\n\n"
@@ -731,7 +731,7 @@ async def handle_video_extension(
     base_text = (
         f"🔄 <b>Расширяю видео…</b>\n"
         f"🤖 {model_label}\n"
-        f"📐 {video_aspect} • 8 сек • {video_resolution}\n"
+        f"📐 {video_aspect} • 7 сек • {video_resolution}\n"
         f"<i>{prompt_display}{'…' if len(caption) > 100 else ''}</i>"
     )
     processing_msg = await message.reply(
@@ -749,7 +749,7 @@ async def handle_video_extension(
             prompt=caption or "Continue the video naturally",
             model=user_model,
             aspect_ratio=video_aspect,
-            duration_seconds=8,
+            duration_seconds=7,
             resolution=video_resolution,
             generate_audio=video_audio,
             user_id=uid,
