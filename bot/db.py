@@ -129,6 +129,15 @@ def init_tables() -> None:
             cur.execute("ALTER TABLE autopub_posts ADD COLUMN IF NOT EXISTS admin_comment TEXT DEFAULT ''")
             cur.execute("ALTER TABLE autopub_posts ADD COLUMN IF NOT EXISTS extra_file_ids TEXT DEFAULT ''")
             cur.execute("""
+                CREATE TABLE IF NOT EXISTS bot_sa_files (
+                    id          SERIAL PRIMARY KEY,
+                    name        TEXT UNIQUE NOT NULL,
+                    content     TEXT NOT NULL,
+                    project_id  TEXT,
+                    client_email TEXT
+                )
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS autopub_settings (
                     id              INT PRIMARY KEY DEFAULT 1,
                     enabled         BOOLEAN NOT NULL DEFAULT FALSE,
@@ -601,6 +610,60 @@ def api_keys_table_has_rows() -> bool:
             cur.execute("SELECT 1 FROM bot_api_keys LIMIT 1")
             return cur.fetchone() is not None
     except Exception:
+        return False
+
+
+# ── Service Account JSON files ──────────────────────────────────────────────────
+
+def load_sa_files() -> list[dict]:
+    """Return list of SA files as [{name, content, project_id, client_email}]."""
+    if not _DATABASE_URL:
+        return []
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT name, content, project_id, client_email FROM bot_sa_files ORDER BY id")
+            return [
+                {"name": r[0], "content": r[1], "project_id": r[2], "client_email": r[3]}
+                for r in cur.fetchall()
+            ]
+    except Exception:
+        logger.exception("db: failed to load sa files")
+        return []
+
+
+def save_sa_file(name: str, content: str, project_id: str | None, client_email: str | None) -> bool:
+    """Insert or replace a SA file record. Returns True on success."""
+    if not _DATABASE_URL:
+        return False
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO bot_sa_files (name, content, project_id, client_email)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (name) DO UPDATE
+                    SET content = EXCLUDED.content,
+                        project_id = EXCLUDED.project_id,
+                        client_email = EXCLUDED.client_email
+            """, (name, content, project_id, client_email))
+        return True
+    except Exception:
+        logger.exception("db: failed to save sa file %s", name)
+        return False
+
+
+def delete_sa_file(name: str) -> bool:
+    """Delete a SA file record by name. Returns True if a row was deleted."""
+    if not _DATABASE_URL:
+        return False
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM bot_sa_files WHERE name = %s", (name,))
+            return cur.rowcount > 0
+    except Exception:
+        logger.exception("db: failed to delete sa file %s", name)
         return False
 
 

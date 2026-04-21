@@ -146,6 +146,10 @@ def _safe_filename(name: str) -> str:
 
 def list_sa_files() -> list[dict]:
     """Return list of saved service-account JSONs as [{name, project_id, client_email}]."""
+    if _db.is_available():
+        rows = _db.load_sa_files()
+        return [{"name": r["name"], "project_id": r["project_id"], "client_email": r["client_email"]} for r in rows]
+    # Filesystem fallback
     if not _SA_DIR.exists():
         return []
     out: list[dict] = []
@@ -159,6 +163,44 @@ def list_sa_files() -> list[dict]:
             pass
         out.append(info)
     return out
+
+
+def get_sa_file_content(name: str) -> str | None:
+    """Return raw JSON content of a SA file by name, or None if not found."""
+    if _db.is_available():
+        rows = _db.load_sa_files()
+        for r in rows:
+            if r["name"] == name:
+                return r["content"]
+        return None
+    safe_name = _safe_filename(name)
+    target = _SA_DIR / safe_name
+    if target.exists():
+        return target.read_text(encoding="utf-8")
+    return None
+
+
+def list_sa_file_paths() -> list[Path]:
+    """Return SA credentials as a list of Paths (writing DB entries to temp files if needed)."""
+    if _db.is_available():
+        rows = _db.load_sa_files()
+        if not rows:
+            return []
+        _SA_DIR.mkdir(parents=True, exist_ok=True)
+        paths: list[Path] = []
+        for r in rows:
+            target = _SA_DIR / r["name"]
+            try:
+                target.write_text(r["content"], encoding="utf-8")
+                os.chmod(target, 0o600)
+            except Exception:
+                pass
+            paths.append(target)
+        return paths
+    # Filesystem fallback
+    if not _SA_DIR.exists():
+        return []
+    return sorted(_SA_DIR.glob("*.json"))
 
 
 def add_sa_file(filename: str, content: str) -> tuple[bool, str]:
@@ -175,16 +217,40 @@ def add_sa_file(filename: str, content: str) -> tuple[bool, str]:
         return False, "missing_fields"
 
     safe_name = _safe_filename(filename)
+    canonical = json.dumps(data, ensure_ascii=False, indent=2)
+
+    if _db.is_available():
+        # Ensure unique name in DB
+        existing = {r["name"] for r in _db.load_sa_files()}
+        if safe_name in existing:
+            base, ext = os.path.splitext(safe_name)
+            i = 2
+            while f"{base}_{i}{ext}" in existing:
+                i += 1
+            safe_name = f"{base}_{i}{ext}"
+        ok = _db.save_sa_file(safe_name, canonical, data.get("project_id"), data.get("client_email"))
+        if not ok:
+            return False, "db_error"
+        # Also write to disk so vertex_ai_service can read the path
+        _SA_DIR.mkdir(parents=True, exist_ok=True)
+        target = _SA_DIR / safe_name
+        try:
+            target.write_text(canonical, encoding="utf-8")
+            os.chmod(target, 0o600)
+        except Exception:
+            pass
+        return True, safe_name
+
+    # Filesystem fallback
     _SA_DIR.mkdir(parents=True, exist_ok=True)
     target = _SA_DIR / safe_name
-
     base, ext = os.path.splitext(safe_name)
     i = 1
     while target.exists():
         i += 1
         target = _SA_DIR / f"{base}_{i}{ext}"
 
-    target.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    target.write_text(canonical, encoding="utf-8")
     try:
         os.chmod(target, 0o600)
     except Exception:
@@ -194,11 +260,15 @@ def add_sa_file(filename: str, content: str) -> tuple[bool, str]:
 
 def remove_sa_file(name: str) -> bool:
     safe_name = _safe_filename(name)
+    deleted = False
+    if _db.is_available():
+        deleted = _db.delete_sa_file(safe_name)
+    # Always try to remove from disk too
     target = _SA_DIR / safe_name
-    if not target.exists() or not target.is_file():
-        return False
-    try:
-        target.unlink()
-        return True
-    except Exception:
-        return False
+    if target.exists() and target.is_file():
+        try:
+            target.unlink()
+            deleted = True
+        except Exception:
+            pass
+    return deleted

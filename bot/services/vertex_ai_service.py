@@ -170,6 +170,13 @@ def _build_config_for_model(
 
 
 def _load_sa_files() -> list[Path]:
+    try:
+        from bot.api_keys_store import list_sa_file_paths
+        files = list_sa_file_paths()
+        return [f for f in files if f.exists() and f.stat().st_size > 10]
+    except Exception:
+        pass
+    # Direct filesystem fallback
     if not SA_DIR.exists():
         SA_DIR.mkdir(parents=True, exist_ok=True)
     files = sorted(SA_DIR.glob("*.json"))
