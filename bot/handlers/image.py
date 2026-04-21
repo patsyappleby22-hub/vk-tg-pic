@@ -30,7 +30,7 @@ from bot.user_settings import (
     video_supports_video_extension,
 )
 from bot.keyboards import BTN_MENU, BTN_STOP, BTN_SETTINGS, BTN_CHAT
-from bot.log_channel import log_generation
+from bot.log_channel import log_generation, log_generation_video, log_generation_audio
 from core.exceptions import (
     BotError,
     QuotaExceededError,
@@ -317,6 +317,11 @@ async def handle_photo_prompt(
                 parse_mode="HTML",
             )
             increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost)
+            asyncio.create_task(log_generation_audio(
+                audio_bytes=audio_bytes, prompt=caption, user_id=uid,
+                user_name=message.from_user.first_name or str(uid),
+                platform="tg", model=user_model,
+            ))
             try:
                 await bot_obj.delete_message(chat_id=message.chat.id, message_id=processing_msg.message_id)
             except Exception:
@@ -437,8 +442,8 @@ async def handle_photo_prompt(
                 parse_mode="HTML",
             )
             increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost)
-            asyncio.create_task(log_generation(
-                image_bytes=video_bytes, prompt=caption, user_id=uid,
+            asyncio.create_task(log_generation_video(
+                video_bytes=video_bytes, prompt=caption, user_id=uid,
                 user_name=message.from_user.first_name or str(uid),
                 platform="tg", model=user_model,
             ))
@@ -1013,14 +1018,21 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
                 )
 
         increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost)
-        if not _is_video and not _is_music:
+        _uname_log = message.from_user.first_name or str(uid)
+        if _is_video:
+            asyncio.create_task(log_generation_video(
+                video_bytes=result_bytes, prompt=prompt, user_id=uid,
+                user_name=_uname_log, platform="tg", model=user_model,
+            ))
+        elif _is_music:
+            asyncio.create_task(log_generation_audio(
+                audio_bytes=result_bytes, prompt=prompt, user_id=uid,
+                user_name=_uname_log, platform="tg", model=user_model,
+            ))
+        else:
             asyncio.create_task(log_generation(
-                image_bytes=result_bytes,
-                prompt=prompt,
-                user_id=uid,
-                user_name=message.from_user.first_name or str(uid),
-                platform="tg",
-                model=user_model,
+                image_bytes=result_bytes, prompt=prompt, user_id=uid,
+                user_name=_uname_log, platform="tg", model=user_model,
             ))
 
         try:

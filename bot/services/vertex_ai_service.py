@@ -213,16 +213,34 @@ class _BaseSlot:
         error: str = "",
         duration_ms: int = 0,
     ) -> None:
-        self.history.appendleft({
-            "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        entry = {
+            "ts": ts,
             "user_id": user_id,
             "username": username,
-            "prompt": prompt[:120],
+            "prompt": prompt[:300],
             "model": model,
             "status": status,
-            "error": error[:200] if error else "",
+            "error": error[:500] if error else "",
             "duration_ms": duration_ms,
-        })
+        }
+        self.history.appendleft(entry)
+        try:
+            import bot.db as _db
+            _db.save_key_history_entry(
+                slot_index=self.index,
+                slot_label=self.label,
+                ts=ts,
+                user_id=user_id,
+                username=username,
+                prompt=prompt,
+                model=model,
+                status=status,
+                error=error,
+                duration_ms=duration_ms,
+            )
+        except Exception:
+            pass
 
     @property
     def label(self) -> str:
@@ -531,7 +549,19 @@ class VertexAIService:
 
     def get_slot_history(self, slot_index: int) -> list[dict]:
         if 0 <= slot_index < len(self._slots):
-            return list(self._slots[slot_index].history)
+            slot = self._slots[slot_index]
+            if slot.history:
+                return list(slot.history)
+            # Fall back to DB if in-memory history is empty (e.g. after restart)
+            try:
+                import bot.db as _db
+                db_history = _db.load_key_history(slot_index)
+                if db_history:
+                    for entry in reversed(db_history):
+                        slot.history.appendleft(entry)
+                    return list(slot.history)
+            except Exception:
+                pass
         return []
 
     def _is_video_model(self, model: str) -> bool:

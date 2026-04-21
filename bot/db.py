@@ -138,6 +138,26 @@ def init_tables() -> None:
                 )
             """)
             cur.execute("""
+                CREATE TABLE IF NOT EXISTS bot_key_history (
+                    id          SERIAL PRIMARY KEY,
+                    slot_index  INT NOT NULL,
+                    slot_label  TEXT NOT NULL DEFAULT '',
+                    ts          TEXT NOT NULL,
+                    user_id     BIGINT,
+                    username    TEXT NOT NULL DEFAULT '',
+                    prompt      TEXT NOT NULL DEFAULT '',
+                    model       TEXT NOT NULL DEFAULT '',
+                    status      TEXT NOT NULL DEFAULT '',
+                    error       TEXT NOT NULL DEFAULT '',
+                    duration_ms INT NOT NULL DEFAULT 0,
+                    created_at  TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_key_history_slot
+                ON bot_key_history (slot_index, created_at DESC)
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS autopub_settings (
                     id              INT PRIMARY KEY DEFAULT 1,
                     enabled         BOOLEAN NOT NULL DEFAULT FALSE,
@@ -611,6 +631,73 @@ def api_keys_table_has_rows() -> bool:
             return cur.fetchone() is not None
     except Exception:
         return False
+
+
+# ── Key history ────────────────────────────────────────────────────────────────
+
+def save_key_history_entry(
+    slot_index: int,
+    slot_label: str,
+    ts: str,
+    user_id: int | None,
+    username: str,
+    prompt: str,
+    model: str,
+    status: str,
+    error: str,
+    duration_ms: int,
+) -> None:
+    """Insert one history entry and prune old entries (keep last 200 per slot)."""
+    if not _DATABASE_URL:
+        return
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO bot_key_history
+                    (slot_index, slot_label, ts, user_id, username, prompt, model, status, error, duration_ms)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (slot_index, slot_label, ts, user_id, username, prompt[:300], model, status, error[:500], duration_ms))
+            # Keep only last 200 rows per slot
+            cur.execute("""
+                DELETE FROM bot_key_history
+                WHERE slot_index = %s
+                  AND id NOT IN (
+                      SELECT id FROM bot_key_history
+                      WHERE slot_index = %s
+                      ORDER BY created_at DESC
+                      LIMIT 200
+                  )
+            """, (slot_index, slot_index))
+    except Exception:
+        logger.debug("db: failed to save key history for slot %d", slot_index)
+
+
+def load_key_history(slot_index: int, limit: int = 200) -> list[dict]:
+    """Return history entries for a slot, newest first."""
+    if not _DATABASE_URL:
+        return []
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT ts, user_id, username, prompt, model, status, error, duration_ms
+                FROM bot_key_history
+                WHERE slot_index = %s
+                ORDER BY created_at DESC
+                LIMIT %s
+            """, (slot_index, limit))
+            return [
+                {
+                    "ts": r[0], "user_id": r[1], "username": r[2],
+                    "prompt": r[3], "model": r[4], "status": r[5],
+                    "error": r[6], "duration_ms": r[7],
+                }
+                for r in cur.fetchall()
+            ]
+    except Exception:
+        logger.debug("db: failed to load key history for slot %d", slot_index)
+        return []
 
 
 # ── Service Account JSON files ──────────────────────────────────────────────────

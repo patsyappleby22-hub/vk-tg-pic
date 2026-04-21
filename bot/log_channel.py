@@ -73,6 +73,80 @@ async def log_generation(
         logger.warning("log_channel (tg path) failed [channel=%s]: %s", LOG_CHANNEL_ID, exc)
 
 
+async def log_generation_video(
+    video_bytes: bytes,
+    prompt: str,
+    user_id: int,
+    user_name: str,
+    platform: str = "tg",
+    model: str = "",
+) -> None:
+    """Send generated video to the log channel."""
+    from bot.notify import _tg_bot
+    if _tg_bot is None:
+        return
+    try:
+        from aiogram.types import BufferedInputFile
+        caption = _caption(prompt, user_id, user_name, platform, model)
+        msg = await _tg_bot.send_video(
+            chat_id=LOG_CHANNEL_ID,
+            video=BufferedInputFile(file=video_bytes, filename="gen.mp4"),
+            caption=caption,
+            parse_mode="HTML",
+        )
+        logger.info("log_channel: видео отправлено в канал %s", LOG_CHANNEL_ID)
+        if msg.video:
+            from bot import db
+            db.save_image_log(
+                user_id=user_id,
+                user_name=user_name,
+                platform=platform,
+                prompt=prompt,
+                model=model,
+                file_id=msg.video.file_id,
+                file_unique_id=msg.video.file_unique_id,
+            )
+    except Exception as exc:
+        logger.warning("log_channel video failed [channel=%s]: %s", LOG_CHANNEL_ID, exc)
+
+
+async def log_generation_audio(
+    audio_bytes: bytes,
+    prompt: str,
+    user_id: int,
+    user_name: str,
+    platform: str = "tg",
+    model: str = "",
+) -> None:
+    """Send generated audio/music to the log channel."""
+    from bot.notify import _tg_bot
+    if _tg_bot is None:
+        return
+    try:
+        from aiogram.types import BufferedInputFile
+        caption = _caption(prompt, user_id, user_name, platform, model)
+        msg = await _tg_bot.send_audio(
+            chat_id=LOG_CHANNEL_ID,
+            audio=BufferedInputFile(file=audio_bytes, filename="gen.mp3"),
+            caption=caption,
+            parse_mode="HTML",
+        )
+        logger.info("log_channel: аудио отправлено в канал %s", LOG_CHANNEL_ID)
+        if msg.audio:
+            from bot import db
+            db.save_image_log(
+                user_id=user_id,
+                user_name=user_name,
+                platform=platform,
+                prompt=prompt,
+                model=model,
+                file_id=msg.audio.file_id,
+                file_unique_id=msg.audio.file_unique_id,
+            )
+    except Exception as exc:
+        logger.warning("log_channel audio failed [channel=%s]: %s", LOG_CHANNEL_ID, exc)
+
+
 async def log_generation_vk(
     image_bytes: bytes,
     prompt: str,
