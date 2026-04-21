@@ -1648,6 +1648,98 @@ async def handle_api_keys(request: web.Request) -> web.Response:
   </p>
 </div>
 
+<div class="card" style="max-width:600px;margin-top:20px">
+  <h3 style="margin-bottom:14px;font-size:1em;color:var(--text)">📂 Service Account JSON (для Veo / Lyria)</h3>
+  <p style="color:var(--muted);font-size:.82em;margin-bottom:12px;line-height:1.5">
+    Загрузите JSON-файл сервисного аккаунта Google Cloud — он автоматически добавится в ротацию и сможет
+    обслуживать <b>видео (Veo)</b> и <b>музыку (Lyria)</b> через Vertex AI, что позволяет
+    использовать $300 пробный кредит Google. Файлы хранятся в <code>data/service_accounts/</code>.
+  </p>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+    <input type="file" id="sa-file-input" accept=".json,application/json"
+      style="flex:1;min-width:200px;padding:8px;background:var(--bg);border:1px solid var(--border);
+             border-radius:8px;color:var(--text);font-size:.85em">
+    <button class="btn btn-primary" onclick="uploadSA()" style="white-space:nowrap">Загрузить JSON</button>
+  </div>
+  <div id="sa-list" style="margin-top:8px"></div>
+</div>
+
+<script>
+async function loadSAList() {{
+  try {{
+    const r = await fetch('/admin/api/keys/sa/list');
+    const d = await r.json();
+    const list = d.items || [];
+    const box = document.getElementById('sa-list');
+    if (!list.length) {{
+      box.innerHTML = '<p style="color:var(--muted);font-size:.82em;margin:0">— ни одного service account не загружено —</p>';
+      return;
+    }}
+    let html = '<table style="width:100%;font-size:.85em"><thead><tr>'
+      + '<th style="text-align:left;color:var(--muted);font-weight:500;padding:6px 4px">Файл</th>'
+      + '<th style="text-align:left;color:var(--muted);font-weight:500;padding:6px 4px">Project ID</th>'
+      + '<th style="text-align:left;color:var(--muted);font-weight:500;padding:6px 4px">Service email</th>'
+      + '<th></th></tr></thead><tbody>';
+    for (const it of list) {{
+      const proj = it.project_id ? `<code style="color:var(--accent)">${{esc(it.project_id)}}</code>`
+                                  : '<span style="color:var(--red)">— нет —</span>';
+      const email = it.client_email ? `<span style="color:var(--muted);font-size:.85em">${{esc(it.client_email)}}</span>` : '—';
+      html += `<tr>
+        <td style="padding:6px 4px"><code>${{esc(it.name)}}</code></td>
+        <td style="padding:6px 4px">${{proj}}</td>
+        <td style="padding:6px 4px">${{email}}</td>
+        <td style="padding:6px 4px;text-align:right">
+          <button class="btn btn-sm" style="background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.2)"
+            onclick="deleteSA('${{esc(it.name)}}')">🗑</button>
+        </td></tr>`;
+    }}
+    html += '</tbody></table>';
+    box.innerHTML = html;
+  }} catch(e) {{
+    document.getElementById('sa-list').innerHTML = '<p style="color:var(--red);font-size:.82em">Ошибка загрузки: '+e+'</p>';
+  }}
+}}
+
+async function uploadSA() {{
+  const inp = document.getElementById('sa-file-input');
+  if (!inp.files || !inp.files[0]) {{ alert('Выберите JSON файл'); return; }}
+  const f = inp.files[0];
+  if (f.size > 200000) {{ alert('Файл слишком большой (макс 200KB)'); return; }}
+  const fd = new FormData();
+  fd.append('file', f, f.name);
+  const r = await fetch('/admin/api/keys/sa/upload', {{method:'POST', body: fd}});
+  const d = await r.json();
+  if (d.ok) {{
+    inp.value = '';
+    alert('✅ Загружен: ' + d.name + '\\nДоступен сразу — Veo и Lyria теперь смогут жечь $300 пробник.');
+    loadSAList();
+  }} else {{
+    const errs = {{
+      'invalid_json': 'Не валидный JSON',
+      'not_a_service_account': 'Это не файл service-account (поле "type" должно быть "service_account")',
+      'missing_fields': 'В файле нет project_id / client_email / private_key',
+      'file_too_large': 'Файл слишком большой',
+      'no_file': 'Файл не получен',
+      'not_utf8': 'Файл не в UTF-8',
+    }};
+    alert('Ошибка: ' + (errs[d.error] || d.error || 'неизвестная'));
+  }}
+}}
+
+async function deleteSA(name) {{
+  if (!confirm('Удалить ' + name + '?')) return;
+  const r = await fetch('/admin/api/keys/sa/delete', {{
+    method:'POST', headers:{{'Content-Type':'application/json'}}, body: JSON.stringify({{name}})
+  }});
+  const d = await r.json();
+  if (d.ok) loadSAList();
+  else alert('Ошибка: ' + (d.error || 'неизвестная'));
+}}
+
+loadSAList();
+setInterval(loadSAList, 10000);
+</script>
+
 <script>
 const TOTAL_KEYS = {total};
 
@@ -1988,6 +2080,70 @@ async def api_keys_delete(request: web.Request) -> web.Response:
         return web.Response(text=json.dumps({"ok": True}), content_type="application/json")
     except Exception as e:
         logger.exception("api_keys_delete error")
+        return web.Response(text=json.dumps({"ok": False, "error": str(e)}), content_type="application/json", status=500)
+
+
+@_api_require_auth
+async def api_keys_sa_list(request: web.Request) -> web.Response:
+    try:
+        items = _key_store.list_sa_files()
+        return web.Response(text=json.dumps({"ok": True, "items": items}), content_type="application/json")
+    except Exception as e:
+        logger.exception("api_keys_sa_list error")
+        return web.Response(text=json.dumps({"ok": False, "error": str(e)}), content_type="application/json", status=500)
+
+
+@_api_require_auth
+async def api_keys_sa_upload(request: web.Request) -> web.Response:
+    try:
+        reader = await request.multipart()
+        filename = "service_account.json"
+        content: str | None = None
+        async for field in reader:
+            if field.name == "file":
+                if field.filename:
+                    filename = field.filename
+                raw = await field.read(decode=False)
+                if len(raw) > 200_000:
+                    return web.Response(text=json.dumps({"ok": False, "error": "file_too_large"}),
+                                        content_type="application/json", status=400)
+                try:
+                    content = raw.decode("utf-8")
+                except Exception:
+                    return web.Response(text=json.dumps({"ok": False, "error": "not_utf8"}),
+                                        content_type="application/json", status=400)
+        if content is None:
+            return web.Response(text=json.dumps({"ok": False, "error": "no_file"}),
+                                content_type="application/json", status=400)
+        ok, info = _key_store.add_sa_file(filename, content)
+        if not ok:
+            return web.Response(text=json.dumps({"ok": False, "error": info}),
+                                content_type="application/json", status=400)
+        if _vertex_service is not None:
+            _vertex_service.reload_keys()
+        return web.Response(text=json.dumps({"ok": True, "name": info}), content_type="application/json")
+    except Exception as e:
+        logger.exception("api_keys_sa_upload error")
+        return web.Response(text=json.dumps({"ok": False, "error": str(e)}), content_type="application/json", status=500)
+
+
+@_api_require_auth
+async def api_keys_sa_delete(request: web.Request) -> web.Response:
+    try:
+        data = await request.json()
+        name = (data.get("name") or "").strip()
+        if not name:
+            return web.Response(text=json.dumps({"ok": False, "error": "no_name"}),
+                                content_type="application/json", status=400)
+        ok = _key_store.remove_sa_file(name)
+        if not ok:
+            return web.Response(text=json.dumps({"ok": False, "error": "not_found"}),
+                                content_type="application/json", status=404)
+        if _vertex_service is not None:
+            _vertex_service.reload_keys()
+        return web.Response(text=json.dumps({"ok": True}), content_type="application/json")
+    except Exception as e:
+        logger.exception("api_keys_sa_delete error")
         return web.Response(text=json.dumps({"ok": False, "error": str(e)}), content_type="application/json", status=500)
 
 
@@ -3036,6 +3192,9 @@ def register_admin_routes(app: web.Application) -> None:
     app.router.add_post("/admin/api/keys/add",               api_keys_add)
     app.router.add_post("/admin/api/keys/update",            api_keys_update)
     app.router.add_post("/admin/api/keys/delete",            api_keys_delete)
+    app.router.add_get("/admin/api/keys/sa/list",            api_keys_sa_list)
+    app.router.add_post("/admin/api/keys/sa/upload",         api_keys_sa_upload)
+    app.router.add_post("/admin/api/keys/sa/delete",         api_keys_sa_delete)
     app.router.add_get("/admin/api/keys/{index}/history",    api_keys_history)
     app.router.add_get("/admin/tg-photo/{file_unique_id}",   handle_tg_photo)
     app.router.add_get("/admin/tg-photo-fid/{file_id}",     handle_tg_photo_by_fileid)

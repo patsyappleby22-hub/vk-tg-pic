@@ -79,7 +79,17 @@ An asynchronous multi-platform bot (Telegram + VK) for AI image, video, and musi
 ## Music Generation (Lyria 3)
 - Models: lyria-3-pro-preview (full song, 4 credits) and lyria-3-clip-preview (30s clip, 2 credits)
 - Inputs: text prompts and image + prompt; output is MP3 audio
-- Implementation: `VertexAIService.generate_music()` uses Gemini Developer API `generate_content` with AUDIO/TEXT response modalities and extracts MP3 bytes from inline data
+- Implementation: `VertexAIService.generate_music()` uses `generate_content` with AUDIO/TEXT response modalities and extracts MP3 bytes from inline data; runs against Vertex AI when a service-account slot is selected, against Gemini Developer API when an api-key slot is selected.
+
+## Authentication & API key rotation
+- Two slot types in `bot/services/vertex_ai_service.py`:
+  - `_ApiKeySlot` — Google API key (Vertex Express) for Imagen/Gemini text/chat. Veo & Lyria fall back to Gemini Developer API endpoint with the same key.
+  - `_CredSlot` — service-account JSON loaded from `data/service_accounts/`. Supports image, chat, **video (Veo)**, and **music (Lyria)** all through Vertex AI — required to spend Google's $300 trial credit on Veo/Lyria.
+- Both slot types are loaded together; rotation cycles all of them. 429 → 60s cooldown.
+- Admin panel `/admin/api-keys`:
+  - Add/edit/delete API keys (with optional project ID for Veo via API key).
+  - Upload service-account JSON via file picker → endpoint `POST /admin/api/keys/sa/upload` (multipart) → validated (`type=service_account`, `project_id`, `private_key`, `client_email`) → stored in `data/service_accounts/` (chmod 600) → `vertex_service.reload_keys()` applies it instantly.
+  - List/delete uploaded SAs: `GET /admin/api/keys/sa/list`, `POST /admin/api/keys/sa/delete`.
 - Supported on both Telegram (`reply_audio`) and VK (document upload as .mp3)
 - Music models appear in the same unified model/settings picker as image and video models
 

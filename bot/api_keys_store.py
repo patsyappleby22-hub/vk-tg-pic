@@ -127,3 +127,78 @@ def mask_key(key: str) -> str:
     if len(key) <= 12:
         return key[:4] + "..." + key[-2:]
     return key[:8] + "..." + key[-4:]
+
+
+# ---------------------------------------------------------------------------
+# Service Account JSON file management
+# ---------------------------------------------------------------------------
+
+_SA_DIR = Path(__file__).resolve().parent.parent / "data" / "service_accounts"
+
+
+def _safe_filename(name: str) -> str:
+    name = os.path.basename(name).strip()
+    if not name.lower().endswith(".json"):
+        name = name + ".json"
+    safe = "".join(c for c in name if c.isalnum() or c in "._-")
+    return safe or "sa.json"
+
+
+def list_sa_files() -> list[dict]:
+    """Return list of saved service-account JSONs as [{name, project_id, client_email}]."""
+    if not _SA_DIR.exists():
+        return []
+    out: list[dict] = []
+    for f in sorted(_SA_DIR.glob("*.json")):
+        info = {"name": f.name, "project_id": None, "client_email": None}
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+            info["project_id"] = data.get("project_id")
+            info["client_email"] = data.get("client_email")
+        except Exception:
+            pass
+        out.append(info)
+    return out
+
+
+def add_sa_file(filename: str, content: str) -> tuple[bool, str]:
+    """Validate and save SA JSON file. Returns (ok, message_or_filename)."""
+    try:
+        data = json.loads(content)
+    except Exception as e:
+        return False, f"invalid_json: {e}"
+    if not isinstance(data, dict):
+        return False, "invalid_json: not an object"
+    if data.get("type") != "service_account":
+        return False, "not_a_service_account"
+    if not data.get("project_id") or not data.get("private_key") or not data.get("client_email"):
+        return False, "missing_fields"
+
+    safe_name = _safe_filename(filename)
+    _SA_DIR.mkdir(parents=True, exist_ok=True)
+    target = _SA_DIR / safe_name
+
+    base, ext = os.path.splitext(safe_name)
+    i = 1
+    while target.exists():
+        i += 1
+        target = _SA_DIR / f"{base}_{i}{ext}"
+
+    target.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        os.chmod(target, 0o600)
+    except Exception:
+        pass
+    return True, target.name
+
+
+def remove_sa_file(name: str) -> bool:
+    safe_name = _safe_filename(name)
+    target = _SA_DIR / safe_name
+    if not target.exists() or not target.is_file():
+        return False
+    try:
+        target.unlink()
+        return True
+    except Exception:
+        return False

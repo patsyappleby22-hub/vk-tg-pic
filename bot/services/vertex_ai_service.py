@@ -333,12 +333,15 @@ class _ApiKeySlot(_BaseSlot):
 
 
 class _CredSlot(_BaseSlot):
-    """Slot that authenticates via a service-account JSON file (Vertex AI)."""
+    """Slot that authenticates via a service-account JSON file (Vertex AI).
+    Service-account-based slots can run image, chat, video (Veo) and music (Lyria)
+    — all served by the Vertex AI endpoint."""
 
     def __init__(self, sa_path: Path, index: int) -> None:
         super().__init__(index)
         self.sa_path = sa_path
         self._project_id: str | None = None
+        self._video_client = None
         self._load_project_id()
 
     def _load_project_id(self) -> None:
@@ -353,6 +356,10 @@ class _CredSlot(_BaseSlot):
     def label(self) -> str:
         return self.sa_path.stem
 
+    @property
+    def has_project(self) -> bool:
+        return bool(self._project_id)
+
     def get_client(self) -> Any:
         if self.client is None:
             import google.genai as genai
@@ -362,8 +369,25 @@ class _CredSlot(_BaseSlot):
                 location="global",
                 credentials=self._get_credentials(),
             )
-            logger.info("Initialised genai client for account '%s' (project=%s)", self.label, self._project_id)
+            logger.info("Initialised genai client for account '%s' (project=%s, Vertex AI / SA)", self.label, self._project_id)
         return self.client
+
+    def get_video_client(self) -> Any:
+        """Vertex AI client for Veo & Lyria. Uses regional endpoint (us-central1)."""
+        if self._video_client is None:
+            import google.genai as genai
+            self._video_client = genai.Client(
+                vertexai=True,
+                project=self._project_id,
+                location="us-central1",
+                credentials=self._get_credentials(),
+            )
+            logger.info("Initialised video/music client for account '%s' (Vertex AI / SA, us-central1)", self.label)
+        return self._video_client
+
+    def reset_client(self) -> None:
+        super().reset_client()
+        self._video_client = None
 
     def _get_credentials(self) -> Any:
         from google.oauth2 import service_account as sa
@@ -394,13 +418,14 @@ class VertexAIService:
         if api_entries:
             logger.info("Loaded %d API key(s) for authentication", len(api_entries))
 
-        # --- Priority 2: Service account JSON files (fallback) ---
-        if not slots:
-            sa_files = _load_sa_files()
-            for i, f in enumerate(sa_files):
-                slots.append(_CredSlot(sa_path=f, index=i))
-            if sa_files:
-                logger.info("Loaded %d service account file(s) for authentication", len(sa_files))
+        # Service-account JSON files are loaded alongside API keys — they
+        # additionally enable Veo / Lyria via Vertex AI (which API keys can't do).
+        sa_files = _load_sa_files()
+        base = len(slots)
+        for i, f in enumerate(sa_files):
+            slots.append(_CredSlot(sa_path=f, index=base + i))
+        if sa_files:
+            logger.info("Loaded %d service account file(s) for authentication", len(sa_files))
 
         if not slots:
             logger.warning(
@@ -420,10 +445,10 @@ class VertexAIService:
         api_entries = get_all_keys()
         for i, entry in enumerate(api_entries):
             slots.append(_ApiKeySlot(api_key=entry["key"], index=i, project_id=entry.get("project_id")))
-        if not slots:
-            sa_files = _load_sa_files()
-            for i, f in enumerate(sa_files):
-                slots.append(_CredSlot(sa_path=f, index=i))
+        sa_files = _load_sa_files()
+        base = len(slots)
+        for i, f in enumerate(sa_files):
+            slots.append(_CredSlot(sa_path=f, index=base + i))
         if self._lock.locked():
             self._slots = slots
             self._current_index = 0
@@ -515,9 +540,9 @@ class VertexAIService:
             if with_project:
                 return with_project
         if self._is_music_model(model):
-            api_slots = [s for s in usable if isinstance(s, _ApiKeySlot)]
-            if api_slots:
-                return api_slots
+            music_slots = [s for s in usable if isinstance(s, _ApiKeySlot) or isinstance(s, _CredSlot)]
+            if music_slots:
+                return music_slots
         return usable
 
     async def generate_music(
@@ -568,9 +593,6 @@ class VertexAIService:
             slot.last_model = model
 
             try:
-                if not isinstance(slot, _ApiKeySlot):
-                    raise GenerationError("Музыка пока поддерживается только с API-ключами")
-
                 mode_label = "image→music" if image else "text→music"
                 logger.info(
                     "Music [%s]: trying '%s' model=%s prompt='%s'",
@@ -656,7 +678,7 @@ class VertexAIService:
 
     def _generate_music_with_gemini_api(
         self,
-        slot: _ApiKeySlot,
+        slot: _BaseSlot,
         prompt: str,
         model: str,
         image: bytes | None,
@@ -1107,11 +1129,6 @@ class VertexAIService:
             slot.last_model = model
 
             try:
-                if isinstance(slot, _ApiKeySlot):
-                    pass
-                else:
-                    raise GenerationError("Видео пока поддерживается только с API-ключами")
-
                 if video is not None:
                     _mode = "video→video (extension)"
                 elif image is not None:
@@ -1209,7 +1226,7 @@ class VertexAIService:
 
     def _generate_video_with_gemini_api(
         self,
-        slot: _ApiKeySlot,
+        slot: _BaseSlot,
         prompt: str,
         model: str,
         aspect_ratio: str,
