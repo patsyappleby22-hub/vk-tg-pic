@@ -180,12 +180,18 @@ def get_video_aspect_keyboard(user_id: int) -> str:
 
 
 def get_video_panel_text(user_id: int) -> str:
+    from bot.user_settings import calc_video_credits
     settings = get_user_settings(user_id)
     model_id = settings.get("model", "veo-3.1-generate-001")
     model_info = AVAILABLE_MODELS.get(model_id, {})
     model_label = model_info.get("label", model_id)
-    credits = model_info.get("credits", 3)
     has_audio = video_supports_audio(model_id)
+    _dur = settings.get("video_duration", 8)
+    _aud = settings.get("video_audio", True) and has_audio
+    _task = settings.get("video_task", "text-to-video")
+    if _task in ("image-to-video", "video-extension"):
+        _dur = 8
+    credits = calc_video_credits(model_id, duration_seconds=_dur, audio=_aud)
 
     task_id = settings.get("video_task", "text-to-video")
     avail_tasks = get_available_tasks_for_model(model_id)
@@ -247,6 +253,7 @@ def get_video_task_keyboard(user_id: int) -> str:
 
 
 def get_video_panel_keyboard(user_id: int) -> str:
+    from bot.user_settings import calc_video_credits
     settings = get_user_settings(user_id)
     model_id = settings.get("model", "veo-3.1-generate-001")
     aspect = settings.get("video_aspect_ratio", "16:9")
@@ -259,6 +266,8 @@ def get_video_panel_keyboard(user_id: int) -> str:
         res = "1080p"
     task_id = settings.get("video_task", "text-to-video")
     task_label = VIDEO_TASKS.get(task_id, {}).get("label", task_id)
+    _audio_eff = audio and has_audio
+    _dur_eff = 8 if task_id in ("image-to-video", "video-extension") else dur
 
     kb = Keyboard(inline=True)
 
@@ -270,8 +279,13 @@ def get_video_panel_keyboard(user_id: int) -> str:
         kb.add(Callback(text, payload={"cmd": "vp_aspect", "id": key}))
     kb.row()
 
+    _locked = task_id in ("image-to-video", "video-extension")
     for d in VIDEO_DURATIONS:
-        text = f"✅ {d}с" if d == dur else f"{d}с"
+        c = calc_video_credits(model_id, duration_seconds=d, audio=_audio_eff)
+        if _locked:
+            text = f"✅ 8с ({c}кр)" if d == 8 else f"🔒 {d}с"
+        else:
+            text = f"✅ {d}с ({c}кр)" if d == dur else f"{d}с ({c}кр)"
         kb.add(Callback(text, payload={"cmd": "vp_dur", "id": d}))
     kb.row()
 
@@ -282,7 +296,9 @@ def get_video_panel_keyboard(user_id: int) -> str:
     kb.row()
 
     if has_audio:
-        audio_text = "✅ 🔊 Аудио вкл" if audio else "🔇 Аудио выкл"
+        c_on = calc_video_credits(model_id, duration_seconds=_dur_eff, audio=True)
+        c_off = calc_video_credits(model_id, duration_seconds=_dur_eff, audio=False)
+        audio_text = f"✅ 🔊 Аудио вкл ({c_on}кр)" if audio else f"🔇 Аудио выкл ({c_off}кр)"
         kb.add(Callback(audio_text, payload={"cmd": "vp_audio"}))
         kb.row()
 

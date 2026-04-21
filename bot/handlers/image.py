@@ -243,7 +243,12 @@ async def handle_photo_prompt(
     if is_music_model(user_model):
         credits_cost = get_music_credits_cost(user_model)
     elif is_video_model(user_model):
-        credits_cost = get_video_credits_cost(user_model)
+        from bot.user_settings import calc_video_credits, video_supports_audio
+        credits_cost = calc_video_credits(
+            user_model,
+            duration_seconds=8,
+            audio=settings.get("video_audio", True) and video_supports_audio(user_model),
+        )
     else:
         credits_cost = 2 if settings.get("resolution") == "4k" else 1
 
@@ -350,7 +355,7 @@ async def handle_photo_prompt(
         return
 
     if is_video_model(user_model):
-        from bot.user_settings import video_supports_image, video_supports_audio, get_video_credits_cost as _vcc
+        from bot.user_settings import video_supports_image, video_supports_audio, calc_video_credits as _vcc
         if not video_supports_image(user_model):
             model_label = AVAILABLE_MODELS.get(user_model, {}).get("label", user_model)
             await message.reply(
@@ -371,7 +376,8 @@ async def handle_photo_prompt(
             )
             return
 
-        credits_cost = _vcc(user_model)
+        video_audio = settings.get("video_audio", True) and video_supports_audio(user_model)
+        credits_cost = _vcc(user_model, duration_seconds=8, audio=video_audio)
         if not has_credits(uid, credits_cost):
             await message.reply(
                 "💳 <b>Недостаточно кредитов</b>\n\n"
@@ -410,7 +416,7 @@ async def handle_photo_prompt(
                 aspect_ratio=video_aspect,
                 duration_seconds=8,
                 resolution=video_resolution,
-                generate_audio=False,
+                generate_audio=video_audio,
                 user_id=uid,
                 username=_uname,
                 image=all_photo_bytes[0],
@@ -696,7 +702,9 @@ async def handle_video_extension(
         )
         return
 
-    credits_cost = get_video_credits_cost(user_model)
+    from bot.user_settings import video_supports_audio, calc_video_credits
+    video_audio = settings.get("video_audio", True) and video_supports_audio(user_model)
+    credits_cost = calc_video_credits(user_model, duration_seconds=8, audio=video_audio)
     if not has_credits(uid, credits_cost):
         await message.reply(
             "💳 <b>Недостаточно кредитов</b>\n\n"
@@ -713,8 +721,6 @@ async def handle_video_extension(
     model_label = AVAILABLE_MODELS.get(user_model, {}).get("label", user_model)
     video_aspect = settings.get("video_aspect_ratio", "16:9")
     video_resolution = settings.get("video_resolution", "720p")
-    from bot.user_settings import video_supports_audio
-    video_audio = settings.get("video_audio", True) and video_supports_audio(user_model)
 
     prompt_display = caption[:100] if caption else "без дополнительного описания"
     base_text = (
@@ -830,7 +836,10 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
     _is_music = is_music_model(user_model)
 
     if _is_video:
-        credits_cost = get_video_credits_cost(user_model)
+        from bot.user_settings import calc_video_credits, video_supports_audio
+        _vd = settings.get("video_duration", 8)
+        _va = settings.get("video_audio", True) and video_supports_audio(user_model)
+        credits_cost = calc_video_credits(user_model, duration_seconds=_vd, audio=_va)
         video_task = settings.get("video_task", "text-to-video")
         if video_task == "image-to-video":
             from bot.user_settings import video_supports_image

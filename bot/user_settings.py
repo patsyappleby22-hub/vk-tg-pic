@@ -204,9 +204,43 @@ def is_music_model(model_id: str) -> bool:
     return info.get("type") == "music"
 
 
-def get_video_credits_cost(model_id: str) -> int:
-    info = AVAILABLE_MODELS.get(model_id, {})
-    return info.get("credits", 3)
+# Google Vertex/Gemini API pricing for Veo 3.1 (USD per second)
+# audio_premium is added on top of video when generate_audio=True
+VIDEO_PRICE_PER_SEC: dict[str, dict[str, float]] = {
+    "veo-3.1-generate-001":      {"video": 0.20, "audio_premium": 0.20},
+    "veo-3.1-fast-generate-001": {"video": 0.10, "audio_premium": 0.05},
+    "veo-3.1-lite-generate-001": {"video": 0.05, "audio_premium": 0.03},
+}
+
+# Our credit price: 30 credits = $1.40 → 1 credit ≈ $0.04667
+# Our user-facing price target: 3× cheaper than Google
+CREDIT_USD = 1.40 / 30
+PRICE_MARKDOWN = 3.0
+
+
+def calc_video_credits(model_id: str, duration_seconds: int = 8, audio: bool = False) -> int:
+    """Calculate credits to charge for one video generation call.
+
+    Cost depends on model, duration (seconds), and whether audio is generated.
+    Mirrors Google's per-second billing scaled by PRICE_MARKDOWN and converted to credits.
+    """
+    import math
+    pricing = VIDEO_PRICE_PER_SEC.get(model_id)
+    if pricing is None:
+        info = AVAILABLE_MODELS.get(model_id, {})
+        return int(info.get("credits", 3))
+    if duration_seconds not in (4, 6, 8):
+        duration_seconds = 8
+    has_audio = bool(audio) and video_supports_audio(model_id)
+    google_usd = (pricing["video"] + (pricing["audio_premium"] if has_audio else 0)) * duration_seconds
+    user_usd = google_usd / PRICE_MARKDOWN
+    credits = math.ceil(user_usd / CREDIT_USD)
+    return max(1, credits)
+
+
+def get_video_credits_cost(model_id: str, duration_seconds: int = 8, audio: bool = True) -> int:
+    """Backward-compatible wrapper. Defaults to worst-case (8s with audio)."""
+    return calc_video_credits(model_id, duration_seconds=duration_seconds, audio=audio)
 
 
 def get_music_credits_cost(model_id: str) -> int:

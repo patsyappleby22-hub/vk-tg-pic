@@ -991,7 +991,12 @@ async def _generate_and_send(
             return
 
     if _is_video:
-        credits_cost = get_video_credits_cost(user_model)
+        from bot.user_settings import calc_video_credits, video_supports_audio as _vsa
+        _vd_cost = settings.get("video_duration", 8)
+        if images:
+            _vd_cost = 8  # image-to-video is forced to 8s
+        _va_cost = settings.get("video_audio", True) and _vsa(user_model)
+        credits_cost = calc_video_credits(user_model, duration_seconds=_vd_cost, audio=_va_cost)
     elif _is_music:
         credits_cost = get_music_credits_cost(user_model)
     else:

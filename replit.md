@@ -54,7 +54,13 @@ An asynchronous multi-platform bot (Telegram + VK) for AI image, video, and musi
 ## Credits System
 - 5 free credits on registration (FREE_CREDITS = 5)
 - 1 credit per image generation, 2 credits for 4K
-- Video: 5 credits (Veo 3.1), 3 credits (Fast), 2 credits (Lite)
+- Video: cost is calculated dynamically by `calc_video_credits(model, duration, audio)` in `bot/user_settings.py`.
+  Formula: `ceil((google_usd_per_sec * duration / PRICE_MARKDOWN) / CREDIT_USD)` with `PRICE_MARKDOWN=3.0`, `CREDIT_USD=1.40/30`.
+  Pricing matrix (per Google):
+    - veo-3.1-generate-001: $0.20/s video + $0.20/s audio
+    - veo-3.1-fast-generate-001: $0.10/s + $0.05/s audio
+    - veo-3.1-lite-generate-001: $0.05/s + $0.03/s audio
+  Resulting credits, e.g. 8 sec: Standard 12/23 (no/with audio), Fast 6/9, Lite 3/5. Image-to-video & extension force 8 sec.
 - Music: 4 credits (Lyria 3 Pro full song, $0.08), 2 credits (Lyria 3 30s clip, $0.04)
 - Packages: 30 credits (99₽), 100 credits (299₽), 200 credits (549₽)
 
