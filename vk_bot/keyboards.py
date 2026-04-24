@@ -388,6 +388,25 @@ def get_chat_cancel_keyboard() -> str:
     return kb.get_json()
 
 
+def get_chat_model_keyboard(active_key: str) -> str:
+    """Inline keyboard shown at chat start: switch between Gemini / Grok."""
+    from bot.user_settings import CHAT_MODELS
+    kb = Keyboard(inline=True)
+    first = True
+    for key, m in CHAT_MODELS.items():
+        if not first:
+            kb.row()
+        first = False
+        prefix = "✅ " if key == active_key else ""
+        kb.add(Callback(
+            f"{prefix}{m['label']}",
+            payload={"cmd": "chat_model", "id": key},
+        ))
+    kb.row()
+    kb.add(Callback("❌ Завершить чат", payload={"cmd": "chat_cancel"}))
+    return kb.get_json()
+
+
 def get_balance_keyboard() -> str:
     kb = Keyboard(inline=True)
     kb.add(Callback("🔹 3 кредита — 10₽", payload={"cmd": "buy", "pack": "pack_3"}))

@@ -31,6 +31,7 @@ _PERSISTENT_KEYS = {
     "credits", "blocked",
     "video_duration", "video_resolution", "video_aspect_ratio",
     "video_audio", "video_task",
+    "chat_model",
 }
 
 user_settings: dict[int, dict[str, Any]] = {}
@@ -326,6 +327,42 @@ THINKING_LEVELS: dict[str, dict[str, str]] = {
     },
 }
 
+CHAT_MODELS: dict[str, dict[str, Any]] = {
+    "gemini-3.1-pro": {
+        "label": "💎 Gemini 3.1 Pro",
+        "short": "Gemini 3.1 Pro",
+        "desc": "Мультимодальный: текст, фото, видео, аудио, PDF",
+        "backend": "gemini",
+        "model_id": "gemini-3.1-pro-preview",
+    },
+    "grok-4.20-reasoning": {
+        "label": "🧠 Grok 4.20 (Reasoning)",
+        "short": "Grok 4.20",
+        "desc": "С поиском в интернете, рассуждения, текст и фото",
+        "backend": "grok",
+        "model_id": "xai/grok-4.20-reasoning",
+    },
+}
+
+DEFAULT_CHAT_MODEL = "gemini-3.1-pro"
+
+
+def get_chat_model(user_id: int) -> str:
+    cm = get_user_settings(user_id).get("chat_model", DEFAULT_CHAT_MODEL)
+    if cm not in CHAT_MODELS:
+        cm = DEFAULT_CHAT_MODEL
+    return cm
+
+
+def set_chat_model(user_id: int, chat_model: str) -> bool:
+    if chat_model not in CHAT_MODELS:
+        return False
+    s = get_user_settings(user_id)
+    s["chat_model"] = chat_model
+    _save_user(user_id)
+    return True
+
+
 DEFAULT_SETTINGS: dict[str, Any] = {
     "model": "gemini-3.1-flash-image-preview",
     "send_mode": "photo",
@@ -344,6 +381,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "video_aspect_ratio": "16:9",
     "video_audio": True,
     "video_task": "text-to-video",
+    "chat_model": DEFAULT_CHAT_MODEL,
 }
 
 

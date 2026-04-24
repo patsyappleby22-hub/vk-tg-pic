@@ -117,6 +117,30 @@ RESERVED_TEXTS = MENU_TEXTS | SETTINGS_TEXTS | STOP_TEXTS | CHAT_TEXTS | BALANCE
 
 _chat_sessions: dict[int, list[dict[str, Any]]] = {}
 
+
+def _vk_chat_intro_text(active_chat_model_key: str) -> str:
+    from bot.user_settings import CHAT_MODELS
+    info = CHAT_MODELS.get(active_chat_model_key) or CHAT_MODELS["gemini-3.1-pro"]
+    if info["backend"] == "grok":
+        return (
+            f"💬 Чат с {info['short']}\n\n"
+            "🧠 Рассуждение шаг за шагом\n"
+            "🌐 Поиск свежей информации в интернете\n"
+            "🖼 Понимает текст и фото\n"
+            "🎯 Объясняет, решает задачи, генерирует идеи\n\n"
+            "Кнопками ниже можно сменить модель.\n"
+            "Для выхода — ⛔ Стоп"
+        )
+    return (
+        f"💬 Чат с {info['short']}\n\n"
+        "🧠 Анализирую текст, код, фото, видео, аудио и документы\n"
+        "🌍 Отвечаю на любом языке\n"
+        "📎 Разбираю PDF и файлы\n"
+        "🎯 Решаю задачи, объясняю, генерирую идеи\n\n"
+        "Кнопками ниже можно сменить модель.\n"
+        "Для выхода — ⛔ Стоп"
+    )
+
 active_tasks: dict[int, asyncio.Task] = {}
 
 _TRANSLIT = str.maketrans({
@@ -452,15 +476,14 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
 
     @bot.on.message(text=list(CHAT_TEXTS))
     async def cmd_chat(message: Message):
+        from bot.user_settings import get_chat_model
+        from vk_bot.keyboards import get_chat_model_keyboard
         uid = message.from_id
         _chat_sessions[uid] = []
+        active = get_chat_model(uid)
         await message.answer(
-            "💬 Чат с Gemini 3.1 Pro\n\n"
-            "🧠 Анализирую текст, код, фото, видео, аудио и документы\n"
-            "🌍 Отвечаю на любом языке\n"
-            "📎 Разбираю PDF и файлы\n"
-            "🎯 Решаю задачи, объясняю, генерирую идеи\n\n"
-            "Для выхода — ⛔ Стоп",
+            _vk_chat_intro_text(active),
+            keyboard=get_chat_model_keyboard(active),
         )
 
     @bot.on.raw_event(GroupEventType.MESSAGE_EVENT, dataclass=dict)
@@ -720,6 +743,20 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
         elif cmd == "chat_cancel":
             _chat_sessions.pop(uid, None)
             await edit_msg("❌ Чат завершён.\n\nМожете отправить промпт для генерации изображения.", get_persistent_keyboard())
+
+        elif cmd == "chat_model":
+            from bot.user_settings import CHAT_MODELS, get_chat_model, set_chat_model
+            from vk_bot.keyboards import get_chat_model_keyboard
+            new_key = data.get("id", "")
+            if new_key not in CHAT_MODELS:
+                return
+            current = get_chat_model(uid)
+            if new_key == current:
+                return
+            set_chat_model(uid, new_key)
+            # Reset chat history so the new model starts fresh.
+            _chat_sessions[uid] = []
+            await edit_msg(_vk_chat_intro_text(new_key), get_chat_model_keyboard(new_key))
 
     @bot.on.message()
     async def handle_text(message: Message):
@@ -1061,8 +1098,14 @@ async def _handle_vk_chat_message(
     )
 
     try:
-        contents = _build_chat_api_contents(history)
-        response = await vertex_service.chat_text(contents)
+        from bot.user_settings import CHAT_MODELS, get_chat_model
+        chat_model_key = get_chat_model(uid)
+        chat_info = CHAT_MODELS.get(chat_model_key, CHAT_MODELS["gemini-3.1-pro"])
+        if chat_info["backend"] == "grok":
+            response = await vertex_service.chat_grok(history, enable_search=True)
+        else:
+            contents = _build_chat_api_contents(history)
+            response = await vertex_service.chat_text(contents)
 
         stop_event.set()
         anim_task.cancel()

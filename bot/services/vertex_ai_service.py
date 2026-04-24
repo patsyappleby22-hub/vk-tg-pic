@@ -1385,6 +1385,74 @@ class VertexAIService:
     CHAT_MODEL = "gemini-3.1-pro-preview"
     SEARCH_MODEL = "gemini-3.1-flash-lite-preview"
 
+    async def chat_grok(
+        self,
+        history: list[dict[str, Any]],
+        *,
+        enable_search: bool = True,
+    ) -> str:
+        """Route a chat turn to Grok 4.20 via Vertex AI Model Garden.
+
+        Picks the next available `_CredSlot` (service account). Same key-rotation
+        flavour as `chat_text`: a 429 puts the slot on cooldown and we try the
+        next one until the deadline.
+        """
+        from bot.services.grok_service import chat_grok as _grok_call, GrokError
+
+        deadline = time.monotonic() + 300
+
+        while time.monotonic() < deadline:
+            async with self._lock:
+                # Filter to credential (service-account) slots only — Grok via
+                # Model Garden is billed via the Vertex AI project, so we need
+                # an SA token, not a Gemini API key.
+                usable = [s for s in self._slots if isinstance(s, _CredSlot) and not s.auth_error]
+                slot = None
+                if usable:
+                    # Reuse the rotation logic by pretending it's the chat model;
+                    # cooldown / capacity tracking still applies.
+                    candidates = sorted(
+                        usable,
+                        key=lambda s: (s.cooldown_until, s.last_used_at),
+                    )
+                    for c in candidates:
+                        if c.cooldown_until <= time.monotonic():
+                            slot = c
+                            break
+
+            if slot is None:
+                logger.error("Grok: no service-account slots available")
+                self._alert_quota_exhausted("xai/grok-4.20-reasoning")
+                raise QuotaExceededError()
+
+            slot.active_requests += 1
+            slot.last_used_at = time.monotonic()
+            slot.last_model = "xai/grok-4.20-reasoning"
+            try:
+                logger.info("Grok: calling via slot '%s' (search=%s)", slot.label, enable_search)
+                result = await _grok_call(slot, history, enable_search=enable_search)
+                slot.total_ok += 1
+                return result
+            except GrokError as exc:
+                slot.total_err += 1
+                msg = str(exc).lower()
+                if "429" in msg or "quota" in msg or "rate" in msg or "resource exhausted" in msg:
+                    slot.mark_rate_limited()
+                    logger.warning("Grok: slot '%s' rate-limited, rotating", slot.label)
+                    continue
+                if "401" in msg or "403" in msg or "unauth" in msg:
+                    slot.auth_error = True
+                    slot.auth_error_msg = str(exc)[:120]
+                    logger.warning("Grok: slot '%s' auth error, skipping", slot.label)
+                    continue
+                logger.error("Grok: slot '%s' error: %s", slot.label, exc)
+                raise GenerationError(str(exc))
+            finally:
+                slot.active_requests = max(0, slot.active_requests - 1)
+
+        logger.error("Grok: deadline reached")
+        raise QuotaExceededError()
+
     async def chat_text(
         self,
         contents: list[Any],

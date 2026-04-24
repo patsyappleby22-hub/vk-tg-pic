@@ -16,13 +16,24 @@ from typing import Any
 
 from aiogram import Bot, Router
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import Message
+from aiogram.filters import Command
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 
 from bot.keyboards import BTN_CHAT, get_persistent_keyboard
 from bot.services.vertex_ai_service import VertexAIService
 from bot.user_settings import (
-    has_chat_quota, increment_chat_count,
-    get_chat_daily_count, get_chat_daily_limit,
+    CHAT_MODELS,
+    get_chat_daily_count,
+    get_chat_daily_limit,
+    get_chat_model,
+    has_chat_quota,
+    increment_chat_count,
+    set_chat_model,
 )
 
 logger = logging.getLogger(__name__)
@@ -317,19 +328,68 @@ async def _animate_thinking(msg: Any, stop: asyncio.Event) -> None:
         i += 1
 
 
+def _build_chat_intro(active_model_key: str) -> tuple[str, InlineKeyboardMarkup]:
+    info = CHAT_MODELS.get(active_model_key) or CHAT_MODELS["gemini-3.1-pro"]
+    if info["backend"] == "grok":
+        body = (
+            f"💬 <b>Чат с {info['short']}</b>\n\n"
+            "🧠 Рассуждение шаг за шагом\n"
+            "🌐 Поиск свежей информации в интернете\n"
+            "🖼 Понимает текст и фото\n"
+            "🎯 Объясняет, решает задачи, генерирует идеи\n\n"
+            "<i>Для выхода — ⛔ Стоп</i>"
+        )
+    else:
+        body = (
+            f"💬 <b>Чат с {info['short']}</b>\n\n"
+            "🧠 Анализирую текст, код, фото, видео, аудио и документы\n"
+            "🌍 Отвечаю на любом языке\n"
+            "📎 Разбираю PDF и файлы\n"
+            "🎯 Решаю задачи, объясняю, генерирую идеи\n\n"
+            "<i>Для выхода — ⛔ Стоп</i>"
+        )
+
+    rows: list[list[InlineKeyboardButton]] = []
+    for key, m in CHAT_MODELS.items():
+        prefix = "✅ " if key == active_model_key else ""
+        rows.append([InlineKeyboardButton(
+            text=f"{prefix}{m['label']}",
+            callback_data=f"chatm:{key}",
+        )])
+    kb = InlineKeyboardMarkup(inline_keyboard=rows)
+    return body, kb
+
+
 @router.message(lambda m: m.text == BTN_CHAT)
 async def start_chat(message: Message) -> None:
     uid = message.from_user.id
     _sessions[uid] = []
-    await message.answer(
-        "💬 <b>Чат с Gemini 3.1 Pro</b>\n\n"
-        "🧠 Анализирую текст, код, фото, видео, аудио и документы\n"
-        "🌍 Отвечаю на любом языке\n"
-        "📎 Разбираю PDF и файлы\n"
-        "🎯 Решаю задачи, объясняю, генерирую идеи\n\n"
-        "<i>Для выхода — ⛔ Стоп</i>",
-        parse_mode="HTML",
-    )
+    text, kb = _build_chat_intro(get_chat_model(uid))
+    await message.answer(text, parse_mode="HTML", reply_markup=kb)
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("chatm:"))
+async def chat_model_pick(call: CallbackQuery) -> None:
+    uid = call.from_user.id
+    key = (call.data or "").split(":", 1)[1]
+    if key not in CHAT_MODELS:
+        await call.answer("Неизвестная модель", show_alert=False)
+        return
+
+    current = get_chat_model(uid)
+    if key == current:
+        await call.answer("Уже выбрана", show_alert=False)
+        return
+
+    set_chat_model(uid, key)
+    # Reset history so the new model starts fresh.
+    _sessions[uid] = []
+    text, kb = _build_chat_intro(key)
+    try:
+        await call.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+    except TelegramBadRequest:
+        await call.message.answer(text, parse_mode="HTML", reply_markup=kb)
+    await call.answer(f"Переключено на {CHAT_MODELS[key]['short']}")
 
 
 @router.message(
@@ -368,8 +428,13 @@ async def chat_message(message: Message, vertex_service: VertexAIService) -> Non
             _sessions[uid] = []
         _sessions[uid].append({"role": "user", "parts": parts})
 
-        contents = _build_api_contents(_sessions[uid])
-        response = await vertex_service.chat_text(contents)
+        chat_model_key = get_chat_model(uid)
+        chat_info = CHAT_MODELS.get(chat_model_key, CHAT_MODELS["gemini-3.1-pro"])
+        if chat_info["backend"] == "grok":
+            response = await vertex_service.chat_grok(_sessions[uid], enable_search=True)
+        else:
+            contents = _build_api_contents(_sessions[uid])
+            response = await vertex_service.chat_text(contents)
 
         stop_event.set()
         anim_task.cancel()
