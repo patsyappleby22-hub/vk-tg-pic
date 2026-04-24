@@ -349,14 +349,14 @@ def _build_chat_intro(active_model_key: str) -> tuple[str, InlineKeyboardMarkup]
             "<i>Для выхода — ⛔ Стоп</i>"
         )
 
-    rows: list[list[InlineKeyboardButton]] = []
+    model_row: list[InlineKeyboardButton] = []
     for key, m in CHAT_MODELS.items():
         prefix = "✅ " if key == active_model_key else ""
-        rows.append([InlineKeyboardButton(
-            text=f"{prefix}{m['label']}",
+        model_row.append(InlineKeyboardButton(
+            text=f"{prefix}{m['short']}",
             callback_data=f"chatm:{key}",
-        )])
-    kb = InlineKeyboardMarkup(inline_keyboard=rows)
+        ))
+    kb = InlineKeyboardMarkup(inline_keyboard=[model_row])
     return body, kb
 
 

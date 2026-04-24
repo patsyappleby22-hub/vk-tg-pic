@@ -392,14 +392,10 @@ def get_chat_model_keyboard(active_key: str) -> str:
     """Inline keyboard shown at chat start: switch between Gemini / Grok."""
     from bot.user_settings import CHAT_MODELS
     kb = Keyboard(inline=True)
-    first = True
     for key, m in CHAT_MODELS.items():
-        if not first:
-            kb.row()
-        first = False
         prefix = "✅ " if key == active_key else ""
         kb.add(Callback(
-            f"{prefix}{m['label']}",
+            f"{prefix}{m['short']}",
             payload={"cmd": "chat_model", "id": key},
         ))
     kb.row()
