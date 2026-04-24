@@ -137,33 +137,66 @@ async def chat_grok(
     }
 
     messages = _convert_history_to_openai(history)
-    body: dict[str, Any] = {
+    base_body: dict[str, Any] = {
         "model": GROK_MODEL,
         "messages": messages,
         "temperature": 1.0,
         "stream": False,
     }
+
+    # xAI deprecated the old `search_parameters` Live Search field on 2026-04
+    # in favour of the Agent Tools API. We now request the `web_search` tool
+    # and let Grok decide when to call it. If Vertex Model Garden hasn't
+    # exposed the new tool yet, we transparently retry without tools so the
+    # chat never breaks for the user.
+    attempts: list[dict[str, Any]] = []
     if enable_search:
-        # Grok-style live search hint (passed through Model Garden).
-        body["search_parameters"] = {"mode": "auto"}
+        attempts.append({
+            **base_body,
+            "tools": [{"type": "web_search"}],
+            "tool_choice": "auto",
+        })
+    attempts.append(base_body)
 
     timeout = aiohttp.ClientTimeout(total=_REQUEST_TIMEOUT_SECONDS)
+    data: dict[str, Any] | None = None
+    last_error: str | None = None
+
     try:
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(url, headers=headers, json=body) as resp:
-                raw = await resp.text()
-                if resp.status >= 400:
-                    snippet = raw[:500]
-                    logger.error("Grok HTTP %d: %s", resp.status, snippet)
-                    raise GrokError(f"Vertex Model Garden returned {resp.status}: {snippet}")
-                try:
-                    data = await resp.json(content_type=None)
-                except Exception:
-                    raise GrokError(f"Grok response is not JSON: {raw[:300]}")
+            for idx, body in enumerate(attempts):
+                async with session.post(url, headers=headers, json=body) as resp:
+                    raw = await resp.text()
+                    if resp.status >= 400:
+                        snippet = raw[:500]
+                        logger.error("Grok HTTP %d: %s", resp.status, snippet)
+                        last_error = f"Vertex Model Garden returned {resp.status}: {snippet}"
+                        # If the failure looks like a tools-compatibility issue
+                        # (Live Search deprecation, unknown tool, bad request)
+                        # AND we still have a fallback attempt left, retry it.
+                        retryable = (
+                            idx + 1 < len(attempts)
+                            and resp.status in (400, 404, 410, 422)
+                        )
+                        if retryable:
+                            logger.warning(
+                                "Grok: retrying without tools after HTTP %d",
+                                resp.status,
+                            )
+                            continue
+                        raise GrokError(last_error)
+                    try:
+                        data = await resp.json(content_type=None)
+                        break
+                    except Exception:
+                        raise GrokError(f"Grok response is not JSON: {raw[:300]}")
     except asyncio.TimeoutError:
         raise GrokError("Grok request timed out.")
     except aiohttp.ClientError as exc:
         raise GrokError(f"Grok HTTP error: {exc}")
+
+    if data is None:
+        raise GrokError(last_error or "Grok call failed without response.")
 
     choices = data.get("choices") or []
     if not choices:
