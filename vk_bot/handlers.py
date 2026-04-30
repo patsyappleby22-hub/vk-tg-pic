@@ -360,7 +360,6 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
             return "⚙️ Настройки\n\nВыберите что изменить:"
         mi = AVAILABLE_MODELS.get(mid, {})
         ml = mi.get("label", mid)
-        cr = mi.get("credits", 3)
         has_audio = _vsa(mid)
         has_image = _vsi(mid)
         al = _VA.get(s.get("video_aspect_ratio", "16:9"), "16:9")
@@ -370,7 +369,10 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
         if res not in avail_res:
             res = "1080p"
         rl = _VR.get(res, {}).get("label", res)
-        au = s.get("video_audio", True)
+        au = s.get("video_audio", True) and has_audio
+        # Dynamic cost calculation based on current settings
+        from bot.user_settings import calc_video_credits
+        cr = calc_video_credits(mid, duration_seconds=d, audio=au, resolution=res)
         input_type = "текст + фото" if has_image else "только текст"
         lines = [
             f"⚙️ Настройки — {ml}",
@@ -381,7 +383,7 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
             f"│ 📺 Разрешение: {rl}",
         ]
         if has_audio:
-            lines.append(f"│ 🔊 Аудио: {'Вкл' if au else 'Выкл'}")
+            lines.append(f"│ 🔊 Аудио: {'Вкл' if s.get('video_audio', True) else 'Выкл'}")
         lines += [
             "├─────────────────────",
             f"│ 💰 Стоимость: {cr} кр.",
