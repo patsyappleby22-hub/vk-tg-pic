@@ -344,7 +344,7 @@ async def vp_set_aspect(callback: CallbackQuery) -> None:
     settings["video_aspect_ratio"] = key
     save_user_settings(uid)
     await callback.answer(f"Формат: {VIDEO_ASPECT_RATIOS[key]}")
-    await _safe_edit(callback, get_video_panel_text(uid), reply_markup=get_video_panel_keyboard(uid))
+    await _safe_edit(callback, _video_settings_text(uid), reply_markup=get_settings_summary_keyboard(uid))
 
 
 @router.callback_query(lambda c: c.data and c.data.startswith("vp_dur_"))
@@ -362,7 +362,7 @@ async def vp_set_duration(callback: CallbackQuery) -> None:
     settings["video_duration"] = dur
     save_user_settings(uid)
     await callback.answer(f"Длительность: {dur} сек")
-    await _safe_edit(callback, get_video_panel_text(uid), reply_markup=get_video_panel_keyboard(uid))
+    await _safe_edit(callback, _video_settings_text(uid), reply_markup=get_settings_summary_keyboard(uid))
 
 
 @router.callback_query(lambda c: c.data and c.data.startswith("vp_res_"))
@@ -382,7 +382,7 @@ async def vp_set_resolution(callback: CallbackQuery) -> None:
     settings["video_resolution"] = res_id
     save_user_settings(uid)
     await callback.answer(f"Разрешение: {res_id}")
-    await _safe_edit(callback, get_video_panel_text(uid), reply_markup=get_video_panel_keyboard(uid))
+    await _safe_edit(callback, _video_settings_text(uid), reply_markup=get_settings_summary_keyboard(uid))
 
 
 @router.callback_query(lambda c: c.data == "vp_audio")
@@ -399,7 +399,7 @@ async def vp_toggle_audio(callback: CallbackQuery) -> None:
     save_user_settings(uid)
     state = "Вкл" if not current else "Выкл"
     await callback.answer(f"Аудио: {state}")
-    await _safe_edit(callback, get_video_panel_text(uid), reply_markup=get_video_panel_keyboard(uid))
+    await _safe_edit(callback, _video_settings_text(uid), reply_markup=get_settings_summary_keyboard(uid))
 
 
 @router.callback_query(lambda c: c.data == "choose_video_task")
@@ -436,7 +436,7 @@ async def set_video_task(callback: CallbackQuery) -> None:
     settings["video_task"] = task_id
     save_user_settings(uid)
     await callback.answer(f"Задача: {task_info['label']}")
-    await _safe_edit(callback, get_video_panel_text(uid), reply_markup=get_video_panel_keyboard(uid))
+    await _safe_edit(callback, _video_settings_text(uid), reply_markup=get_settings_summary_keyboard(uid))
 
 
 @router.callback_query(lambda c: c.data == "choose_video_resolution")

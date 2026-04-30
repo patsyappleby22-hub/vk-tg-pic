@@ -610,8 +610,7 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
                 settings = get_user_settings(uid)
                 settings["video_aspect_ratio"] = key
                 save_user_settings(uid)
-            from vk_bot.keyboards import get_video_panel_text, get_video_panel_keyboard
-            await edit_msg(get_video_panel_text(uid), get_video_panel_keyboard(uid))
+            await edit_msg(_vk_get_settings_text(uid), get_settings_keyboard(uid))
 
         elif cmd == "vp_dur":
             from bot.user_settings import VIDEO_DURATIONS
@@ -620,8 +619,7 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
                 settings = get_user_settings(uid)
                 settings["video_duration"] = dur
                 save_user_settings(uid)
-            from vk_bot.keyboards import get_video_panel_text, get_video_panel_keyboard
-            await edit_msg(get_video_panel_text(uid), get_video_panel_keyboard(uid))
+            await edit_msg(_vk_get_settings_text(uid), get_settings_keyboard(uid))
 
         elif cmd == "vp_res":
             from bot.user_settings import VIDEO_RESOLUTIONS, get_video_resolutions_for_model as _gvrm2
@@ -631,8 +629,7 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
             if res in VIDEO_RESOLUTIONS and res in avail:
                 settings["video_resolution"] = res
                 save_user_settings(uid)
-            from vk_bot.keyboards import get_video_panel_text, get_video_panel_keyboard
-            await edit_msg(get_video_panel_text(uid), get_video_panel_keyboard(uid))
+            await edit_msg(_vk_get_settings_text(uid), get_settings_keyboard(uid))
 
         elif cmd == "vp_audio":
             settings = get_user_settings(uid)
@@ -641,8 +638,7 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
             if _vsa2(model_id):
                 settings["video_audio"] = not settings.get("video_audio", True)
                 save_user_settings(uid)
-            from vk_bot.keyboards import get_video_panel_text, get_video_panel_keyboard
-            await edit_msg(get_video_panel_text(uid), get_video_panel_keyboard(uid))
+            await edit_msg(_vk_get_settings_text(uid), get_settings_keyboard(uid))
 
         elif cmd == "choose_vtask":
             from vk_bot.keyboards import get_video_task_keyboard
@@ -666,8 +662,7 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
                 if task_id in avail:
                     settings["video_task"] = task_id
                     save_user_settings(uid)
-            from vk_bot.keyboards import get_video_panel_text, get_video_panel_keyboard
-            await edit_msg(get_video_panel_text(uid), get_video_panel_keyboard(uid))
+            await edit_msg(_vk_get_settings_text(uid), get_settings_keyboard(uid))
 
         elif cmd == "choose_video_duration":
             from vk_bot.keyboards import get_video_duration_keyboard
