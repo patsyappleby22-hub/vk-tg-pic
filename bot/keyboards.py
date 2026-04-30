@@ -153,11 +153,9 @@ def get_video_panel_text(user_id: int) -> str:
     model_info = AVAILABLE_MODELS.get(model_id, {})
     model_label = model_info.get("label", model_id)
     has_audio = video_supports_audio(model_id)
-    _dur = settings.get("video_duration", 8)
     _aud = settings.get("video_audio", True) and has_audio
     _task = settings.get("video_task", "text-to-video")
-    if _task in ("image-to-video", "video-extension"):
-        _dur = 8
+    _dur = 7 if _task == "video-extension" else settings.get("video_duration", 8)
     res = settings.get("video_resolution", "720p")
     avail_res = get_video_resolutions_for_model(model_id)
     if res not in avail_res:
@@ -232,7 +230,7 @@ def get_video_panel_keyboard(user_id: int) -> InlineKeyboardMarkup:
     task_id = settings.get("video_task", "text-to-video")
     task_label = VIDEO_TASKS.get(task_id, {}).get("label", task_id)
     _audio_eff = audio and has_audio
-    _dur_eff = 8 if task_id in ("image-to-video", "video-extension") else dur
+    _dur_eff = 7 if task_id == "video-extension" else dur
 
     rows: list[list[InlineKeyboardButton]] = []
 
@@ -247,14 +245,17 @@ def get_video_panel_keyboard(user_id: int) -> InlineKeyboardMarkup:
 
     rows.append([InlineKeyboardButton(text="── ⏱ Длительность ──", callback_data="noop")])
     dur_row: list[InlineKeyboardButton] = []
-    _locked = task_id in ("image-to-video", "video-extension")
-    for d in VIDEO_DURATIONS:
-        c = calc_video_credits(model_id, duration_seconds=d, audio=_audio_eff, resolution=res)
-        if _locked:
-            text = f"✅ 8с ({c}кр)" if d == 8 else f"🔒 {d}с"
-        else:
+    _ext_locked = task_id == "video-extension"  # only extension is truly locked
+    _c_ext = calc_video_credits(model_id, duration_seconds=7, audio=_audio_eff, resolution=res)
+    if _ext_locked:
+        # video-extension: fixed 7s — show price but no choice
+        dur_row.append(InlineKeyboardButton(text=f"🔒 7с ({_c_ext}кр)", callback_data="noop"))
+    else:
+        # text-to-video and image-to-video: full 4/6/8s choice
+        for d in VIDEO_DURATIONS:
+            c = calc_video_credits(model_id, duration_seconds=d, audio=_audio_eff, resolution=res)
             text = f"✅ {d}с ({c}кр)" if d == dur else f"{d}с ({c}кр)"
-        dur_row.append(InlineKeyboardButton(text=text, callback_data=f"vp_dur_{d}"))
+            dur_row.append(InlineKeyboardButton(text=text, callback_data=f"vp_dur_{d}"))
     rows.append(dur_row)
 
     rows.append([InlineKeyboardButton(text="── 📺 Разрешение ──", callback_data="noop")])

@@ -1226,7 +1226,7 @@ async def _handle_vk_video_extension(
 
     video_audio = settings.get("video_audio", True) and video_supports_audio(user_model)
     _vres_ext = settings.get("video_resolution", "720p")
-    credits_cost = calc_video_credits(user_model, duration_seconds=8, audio=video_audio, resolution=_vres_ext)
+    credits_cost = calc_video_credits(user_model, duration_seconds=7, audio=video_audio, resolution=_vres_ext)
     if not reserve_credits(uid, credits_cost):
         await message.answer(
             "💳 Недостаточно кредитов\n\n"
