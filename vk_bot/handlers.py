@@ -1241,7 +1241,7 @@ async def _handle_vk_video_extension(
     base_text = (
         f"🔄 Расширяю видео…\n"
         f"🤖 {model_label}\n"
-        f"📐 {video_aspect} • 8 сек • {video_resolution}\n"
+        f"📐 {video_aspect} • 7 сек • {video_resolution}\n"
         f"{prompt_display}{'…' if len(caption) > 100 else ''}"
     )
     processing_id = await bot.api.messages.send(
@@ -1257,7 +1257,7 @@ async def _handle_vk_video_extension(
             prompt=caption or "Continue the video naturally",
             model=user_model,
             aspect_ratio=video_aspect,
-            duration_seconds=8,
+            duration_seconds=7,
             resolution=video_resolution,
             generate_audio=video_audio,
             user_id=uid,
