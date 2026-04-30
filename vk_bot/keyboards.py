@@ -71,9 +71,10 @@ def get_settings_keyboard(user_id: int) -> str:
             r_label = avail_res[r].get("label", r).replace("📺 ", "").replace("🖥 ", "").replace("📽 ", "")
             text = f"✅ {r_label}" if r == res else r_label
             kb.add(Callback(text, payload={"cmd": "vp_res", "id": r}))
-        kb.row()
 
+        # Only add audio row if the model supports it — avoids empty trailing row
         if has_audio:
+            kb.row()
             audio_text = "✅ 🔊 Аудио вкл" if audio else "🔇 Аудио выкл"
             kb.add(Callback(audio_text, payload={"cmd": "vp_audio"}))
     elif is_music_model(current_model):
