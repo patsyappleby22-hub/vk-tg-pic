@@ -158,7 +158,11 @@ def get_video_panel_text(user_id: int) -> str:
     _task = settings.get("video_task", "text-to-video")
     if _task in ("image-to-video", "video-extension"):
         _dur = 8
-    credits = calc_video_credits(model_id, duration_seconds=_dur, audio=_aud)
+    res = settings.get("video_resolution", "720p")
+    avail_res = get_video_resolutions_for_model(model_id)
+    if res not in avail_res:
+        res = "1080p"
+    credits = calc_video_credits(model_id, duration_seconds=_dur, audio=_aud, resolution=res)
 
     task_id = settings.get("video_task", "text-to-video")
     avail_tasks = get_available_tasks_for_model(model_id)
@@ -170,10 +174,6 @@ def get_video_panel_text(user_id: int) -> str:
     aspect = settings.get("video_aspect_ratio", "16:9")
     aspect_label = VIDEO_ASPECT_RATIOS.get(aspect, aspect)
     dur = settings.get("video_duration", 8)
-    res = settings.get("video_resolution", "720p")
-    avail_res = get_video_resolutions_for_model(model_id)
-    if res not in avail_res:
-        res = "1080p"
     res_info = VIDEO_RESOLUTIONS.get(res, {})
     res_label = res_info.get("label", res)
     audio = settings.get("video_audio", True)
@@ -249,7 +249,7 @@ def get_video_panel_keyboard(user_id: int) -> InlineKeyboardMarkup:
     dur_row: list[InlineKeyboardButton] = []
     _locked = task_id in ("image-to-video", "video-extension")
     for d in VIDEO_DURATIONS:
-        c = calc_video_credits(model_id, duration_seconds=d, audio=_audio_eff)
+        c = calc_video_credits(model_id, duration_seconds=d, audio=_audio_eff, resolution=res)
         if _locked:
             text = f"✅ 8с ({c}кр)" if d == 8 else f"🔒 {d}с"
         else:
@@ -266,8 +266,8 @@ def get_video_panel_keyboard(user_id: int) -> InlineKeyboardMarkup:
     rows.append(res_row)
 
     if has_audio:
-        c_on = calc_video_credits(model_id, duration_seconds=_dur_eff, audio=True)
-        c_off = calc_video_credits(model_id, duration_seconds=_dur_eff, audio=False)
+        c_on = calc_video_credits(model_id, duration_seconds=_dur_eff, audio=True, resolution=res)
+        c_off = calc_video_credits(model_id, duration_seconds=_dur_eff, audio=False, resolution=res)
         audio_text = f"✅ 🔊 Аудио вкл ({c_on}кр)" if audio else f"🔇 Аудио выкл ({c_off}кр)"
         rows.append([InlineKeyboardButton(text=audio_text, callback_data="vp_audio")])
 

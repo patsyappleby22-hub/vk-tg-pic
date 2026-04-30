@@ -387,7 +387,8 @@ async def handle_photo_prompt(
             return
 
         video_audio = settings.get("video_audio", True) and video_supports_audio(user_model)
-        credits_cost = _vcc(user_model, duration_seconds=8, audio=video_audio)
+        _vres_photo = settings.get("video_resolution", "720p")
+        credits_cost = _vcc(user_model, duration_seconds=8, audio=video_audio, resolution=_vres_photo)
         if not reserve_credits(uid, credits_cost):
             await message.reply(
                 "💳 <b>Недостаточно кредитов</b>\n\n"
@@ -723,7 +724,8 @@ async def handle_video_extension(
 
     from bot.user_settings import video_supports_audio, calc_video_credits
     video_audio = settings.get("video_audio", True) and video_supports_audio(user_model)
-    credits_cost = calc_video_credits(user_model, duration_seconds=8, audio=video_audio)
+    _vres_ext = settings.get("video_resolution", "720p")
+    credits_cost = calc_video_credits(user_model, duration_seconds=8, audio=video_audio, resolution=_vres_ext)
     if not reserve_credits(uid, credits_cost):
         await message.reply(
             "💳 <b>Недостаточно кредитов</b>\n\n"
@@ -862,7 +864,8 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
         from bot.user_settings import calc_video_credits, video_supports_audio
         _vd = settings.get("video_duration", 8)
         _va = settings.get("video_audio", True) and video_supports_audio(user_model)
-        credits_cost = calc_video_credits(user_model, duration_seconds=_vd, audio=_va)
+        _vres = settings.get("video_resolution", "720p")
+        credits_cost = calc_video_credits(user_model, duration_seconds=_vd, audio=_va, resolution=_vres)
         video_task = settings.get("video_task", "text-to-video")
         if video_task == "image-to-video":
             from bot.user_settings import video_supports_image

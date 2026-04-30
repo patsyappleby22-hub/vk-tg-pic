@@ -1225,7 +1225,8 @@ async def _handle_vk_video_extension(
         return
 
     video_audio = settings.get("video_audio", True) and video_supports_audio(user_model)
-    credits_cost = calc_video_credits(user_model, duration_seconds=8, audio=video_audio)
+    _vres_ext = settings.get("video_resolution", "720p")
+    credits_cost = calc_video_credits(user_model, duration_seconds=8, audio=video_audio, resolution=_vres_ext)
     if not reserve_credits(uid, credits_cost):
         await message.answer(
             "💳 Недостаточно кредитов\n\n"
@@ -1413,7 +1414,8 @@ async def _generate_and_send(
         if images:
             _vd_cost = 8  # image-to-video is forced to 8s
         _va_cost = settings.get("video_audio", True) and _vsa(user_model)
-        credits_cost = calc_video_credits(user_model, duration_seconds=_vd_cost, audio=_va_cost)
+        _vres_main = settings.get("video_resolution", "720p")
+        credits_cost = calc_video_credits(user_model, duration_seconds=_vd_cost, audio=_va_cost, resolution=_vres_main)
     elif _is_music:
         credits_cost = get_music_credits_cost(user_model)
     else:

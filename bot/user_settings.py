@@ -261,11 +261,25 @@ def is_music_model(model_id: str) -> bool:
 
 
 # Google Vertex/Gemini API pricing for Veo 3.1 (USD per second)
-# audio_premium is added on top of video when generate_audio=True
-VIDEO_PRICE_PER_SEC: dict[str, dict[str, float]] = {
-    "veo-3.1-generate-001":      {"video": 0.20, "audio_premium": 0.20},
-    "veo-3.1-fast-generate-001": {"video": 0.10, "audio_premium": 0.05},
-    "veo-3.1-lite-generate-001": {"video": 0.05, "audio_premium": 0.03},
+# Structure: model -> resolution -> {"video": price, "audio": price_with_audio}
+# Source: https://cloud.google.com/vertex-ai/generative-ai/pricing (as of April 2026)
+# audio price = video+audio combined rate (NOT a premium on top — it's a separate SKU)
+VIDEO_PRICE_PER_SEC: dict[str, dict[str, dict[str, float]]] = {
+    "veo-3.1-generate-001": {
+        "720p":  {"video": 0.20, "audio": 0.40},
+        "1080p": {"video": 0.20, "audio": 0.40},
+        "4k":    {"video": 0.40, "audio": 0.60},
+    },
+    "veo-3.1-fast-generate-001": {
+        "720p":  {"video": 0.08, "audio": 0.10},
+        "1080p": {"video": 0.10, "audio": 0.12},
+        "4k":    {"video": 0.25, "audio": 0.30},
+    },
+    "veo-3.1-lite-generate-001": {
+        "720p":  {"video": 0.03, "audio": 0.05},
+        "1080p": {"video": 0.05, "audio": 0.08},
+        # 4K not supported for Lite
+    },
 }
 
 # Our credit price: 30 credits = $1.40 → 1 credit ≈ $0.04667
@@ -274,21 +288,33 @@ CREDIT_USD = 1.40 / 30
 PRICE_MARKDOWN = 3.0
 
 
-def calc_video_credits(model_id: str, duration_seconds: int = 8, audio: bool = False) -> int:
+def calc_video_credits(
+    model_id: str,
+    duration_seconds: int = 8,
+    audio: bool = False,
+    resolution: str = "720p",
+) -> int:
     """Calculate credits to charge for one video generation call.
 
-    Cost depends on model, duration (seconds), and whether audio is generated.
+    Cost depends on model, resolution, duration (seconds), and whether audio is generated.
     Mirrors Google's per-second billing scaled by PRICE_MARKDOWN and converted to credits.
     """
     import math
-    pricing = VIDEO_PRICE_PER_SEC.get(model_id)
-    if pricing is None:
+    model_pricing = VIDEO_PRICE_PER_SEC.get(model_id)
+    if model_pricing is None:
         info = AVAILABLE_MODELS.get(model_id, {})
         return int(info.get("credits", 3))
     if duration_seconds not in (4, 6, 8):
         duration_seconds = 8
+    # normalise resolution key: "720p", "1080p", "4k"
+    res_key = resolution.lower().replace(" ", "")
+    if res_key not in model_pricing:
+        # fallback to highest available if 4K requested but not supported
+        res_key = max(model_pricing.keys(), key=lambda k: int(k.replace("p", "").replace("k", "000").replace("4", "4")))
+    tier = model_pricing[res_key]
     has_audio = bool(audio) and video_supports_audio(model_id)
-    google_usd = (pricing["video"] + (pricing["audio_premium"] if has_audio else 0)) * duration_seconds
+    price_per_sec = tier["audio"] if has_audio else tier["video"]
+    google_usd = price_per_sec * duration_seconds
     user_usd = google_usd / PRICE_MARKDOWN
     credits = math.ceil(user_usd / CREDIT_USD)
     return max(1, credits)
