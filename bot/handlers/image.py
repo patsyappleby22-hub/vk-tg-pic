@@ -723,7 +723,7 @@ async def handle_video_extension(
 
     from bot.user_settings import video_supports_audio, calc_video_credits
     video_audio = settings.get("video_audio", True) and video_supports_audio(user_model)
-    credits_cost = calc_video_credits(user_model, duration_seconds=7, audio=video_audio)
+    credits_cost = calc_video_credits(user_model, duration_seconds=8, audio=video_audio)
     if not reserve_credits(uid, credits_cost):
         await message.reply(
             "💳 <b>Недостаточно кредитов</b>\n\n"
