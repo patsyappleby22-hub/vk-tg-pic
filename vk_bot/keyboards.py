@@ -384,7 +384,6 @@ def get_send_mode_keyboard(user_id: int) -> str:
 
 def get_chat_cancel_keyboard() -> str:
     kb = Keyboard(inline=True)
-    kb.add(Callback("❌ Завершить чат", payload={"cmd": "chat_cancel"}))
     return kb.get_json()
 
 
@@ -398,8 +397,6 @@ def get_chat_model_keyboard(active_key: str) -> str:
             f"{prefix}{m['short']}",
             payload={"cmd": "chat_model", "id": key},
         ))
-    kb.row()
-    kb.add(Callback("❌ Завершить чат", payload={"cmd": "chat_cancel"}))
     return kb.get_json()
 
 
