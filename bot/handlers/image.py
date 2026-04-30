@@ -28,6 +28,7 @@ from bot.user_settings import (
     is_blocked, has_credits, is_video_model, get_video_credits_cost,
     is_music_model, get_music_credits_cost,
     video_supports_video_extension,
+    reserve_credits, release_credits, confirm_credits,
 )
 from bot.keyboards import BTN_MENU, BTN_STOP, BTN_SETTINGS, BTN_CHAT
 from bot.log_channel import log_generation, log_generation_video, log_generation_audio
@@ -252,7 +253,7 @@ async def handle_photo_prompt(
     else:
         credits_cost = 2 if settings.get("resolution") == "4k" else 1
 
-    if not has_credits(uid, credits_cost):
+    if not reserve_credits(uid, credits_cost):
         msg = (
             "💳 <b>Кредиты закончились</b>\n\n"
             "У вас больше нет доступных генераций.\n"
@@ -316,7 +317,7 @@ async def handle_photo_prompt(
                 caption=f"✅ Музыка по фото готова!\n<i>{caption[:200]}</i>",
                 parse_mode="HTML",
             )
-            increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost, prompt=caption, model=user_model, gen_type="music")
+            confirm_credits(uid, credits_cost, message.from_user.first_name or "", platform="tg", prompt=caption, model=user_model, gen_type="music")
             asyncio.create_task(log_generation_audio(
                 audio_bytes=audio_bytes, prompt=caption, user_id=uid,
                 user_name=message.from_user.first_name or str(uid),
@@ -329,6 +330,7 @@ async def handle_photo_prompt(
         except asyncio.CancelledError:
             await animator.stop()
             clear_active_task(uid)
+            release_credits(uid, credits_cost)
             try:
                 await processing_msg.edit_text("⛔ <b>Генерация отменена.</b>", parse_mode="HTML")
             except Exception:
@@ -336,6 +338,7 @@ async def handle_photo_prompt(
         except SafetyFilterError as exc:
             await animator.stop()
             clear_active_task(uid)
+            release_credits(uid, credits_cost)
             await processing_msg.edit_text(
                 f"🚫 <b>Запрос заблокирован фильтрами безопасности</b>\n\n{exc.user_message}",
                 parse_mode="HTML",
@@ -343,6 +346,7 @@ async def handle_photo_prompt(
         except QuotaExceededError:
             await animator.stop()
             clear_active_task(uid)
+            release_credits(uid, credits_cost)
             await processing_msg.edit_text(
                 f"Модель <b>{model_label}</b> сейчас перегружена 😔\n\nПопробуйте через пару минут.",
                 parse_mode="HTML",
@@ -351,6 +355,7 @@ async def handle_photo_prompt(
         except Exception as exc:
             await animator.stop()
             clear_active_task(uid)
+            release_credits(uid, credits_cost)
             logger.exception("Error image→music '%s': %s", caption[:60], exc)
             await processing_msg.edit_text(
                 "Не удалось сгенерировать музыку по фото 😔\n\nПопробуйте ещё раз.",
@@ -383,7 +388,7 @@ async def handle_photo_prompt(
 
         video_audio = settings.get("video_audio", True) and video_supports_audio(user_model)
         credits_cost = _vcc(user_model, duration_seconds=8, audio=video_audio)
-        if not has_credits(uid, credits_cost):
+        if not reserve_credits(uid, credits_cost):
             await message.reply(
                 "💳 <b>Недостаточно кредитов</b>\n\n"
                 f"Генерация видео стоит <b>{credits_cost} кредитов</b>.\n"
@@ -441,7 +446,7 @@ async def handle_photo_prompt(
                 caption=f"✅ Видео по фото готово!\n<i>{caption[:200]}</i>",
                 parse_mode="HTML",
             )
-            increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost, prompt=caption, model=user_model, gen_type="video")
+            confirm_credits(uid, credits_cost, message.from_user.first_name or "", platform="tg", prompt=caption, model=user_model, gen_type="video")
             asyncio.create_task(log_generation_video(
                 video_bytes=video_bytes, prompt=caption, user_id=uid,
                 user_name=message.from_user.first_name or str(uid),
@@ -455,6 +460,7 @@ async def handle_photo_prompt(
         except asyncio.CancelledError:
             await animator.stop()
             clear_active_task(uid)
+            release_credits(uid, credits_cost)
             try:
                 await processing_msg.edit_text("⛔ <b>Генерация отменена.</b>", parse_mode="HTML")
             except Exception:
@@ -462,6 +468,7 @@ async def handle_photo_prompt(
         except SafetyFilterError as exc:
             await animator.stop()
             clear_active_task(uid)
+            release_credits(uid, credits_cost)
             await processing_msg.edit_text(
                 f"🚫 <b>Запрос заблокирован фильтрами безопасности</b>\n\n{exc.user_message}",
                 parse_mode="HTML",
@@ -469,6 +476,7 @@ async def handle_photo_prompt(
         except QuotaExceededError:
             await animator.stop()
             clear_active_task(uid)
+            release_credits(uid, credits_cost)
             current_name = AVAILABLE_MODELS.get(user_model, {}).get("label", user_model)
             await processing_msg.edit_text(
                 f"Модель <b>{current_name}</b> сейчас перегружена 😔\n\nПопробуйте через пару минут.",
@@ -478,6 +486,7 @@ async def handle_photo_prompt(
         except Exception as exc:
             await animator.stop()
             clear_active_task(uid)
+            release_credits(uid, credits_cost)
             logger.exception("Error image→video '%s': %s", caption[:60], exc)
             await processing_msg.edit_text(
                 "Не удалось сгенерировать видео по фото 😔\n\nПопробуйте ещё раз.",
@@ -575,7 +584,7 @@ async def handle_photo_prompt(
                 parse_mode="HTML",
             )
 
-        increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost, prompt=caption, model=user_model, gen_type="image")
+        confirm_credits(uid, credits_cost, message.from_user.first_name or "", platform="tg", prompt=caption, model=user_model, gen_type="image")
         asyncio.create_task(log_generation(
             image_bytes=image_bytes,
             prompt=caption,
@@ -598,6 +607,7 @@ async def handle_photo_prompt(
     except asyncio.CancelledError:
         await animator.stop()
         clear_active_task(uid)
+        release_credits(uid, credits_cost)
         try:
             await processing_msg.edit_text(
                 "⛔ <b>Генерация отменена.</b>",
@@ -609,6 +619,7 @@ async def handle_photo_prompt(
     except SafetyFilterError as exc:
         await animator.stop()
         clear_active_task(uid)
+        release_credits(uid, credits_cost)
         logger.warning("Safety filter blocked photo edit '%s': %s", caption[:60], exc)
         await processing_msg.edit_text(
             "🚫 <b>Запрос заблокирован фильтрами безопасности</b>\n\n"
@@ -618,6 +629,7 @@ async def handle_photo_prompt(
     except QuotaExceededError:
         await animator.stop()
         clear_active_task(uid)
+        release_credits(uid, credits_cost)
         logger.error("Quota exhausted for photo edit '%s'", caption[:60])
         current_name = AVAILABLE_MODELS.get(user_model, {}).get("label", user_model)
         other_name = _other_model_label(user_model)
@@ -631,6 +643,7 @@ async def handle_photo_prompt(
     except BotError as exc:
         await animator.stop()
         clear_active_task(uid)
+        release_credits(uid, credits_cost)
         logger.error("Bot error for photo edit '%s': %s", caption[:60], exc)
         await processing_msg.edit_text(
             f"{exc.user_message}",
@@ -640,6 +653,7 @@ async def handle_photo_prompt(
     except Exception as exc:
         await animator.stop()
         clear_active_task(uid)
+        release_credits(uid, credits_cost)
         logger.exception("Unexpected error for photo edit '%s': %s", caption[:60], exc)
         await processing_msg.edit_text(
             "Не удалось обработать изображение 😔\n\n"
@@ -710,7 +724,7 @@ async def handle_video_extension(
     from bot.user_settings import video_supports_audio, calc_video_credits
     video_audio = settings.get("video_audio", True) and video_supports_audio(user_model)
     credits_cost = calc_video_credits(user_model, duration_seconds=7, audio=video_audio)
-    if not has_credits(uid, credits_cost):
+    if not reserve_credits(uid, credits_cost):
         await message.reply(
             "💳 <b>Недостаточно кредитов</b>\n\n"
             f"Расширение видео стоит <b>{credits_cost} кредитов</b>.\n"
@@ -771,7 +785,7 @@ async def handle_video_extension(
             caption=f"✅ Видео расширено!\n<i>{caption[:200] if caption else 'Без описания'}</i>",
             parse_mode="HTML",
         )
-        increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost, prompt=caption, model=user_model, gen_type="video_ext")
+        confirm_credits(uid, credits_cost, message.from_user.first_name or "", platform="tg", prompt=caption, model=user_model, gen_type="video_ext")
         try:
             await bot_obj.delete_message(chat_id=message.chat.id, message_id=processing_msg.message_id)
         except Exception:
@@ -780,6 +794,7 @@ async def handle_video_extension(
     except asyncio.CancelledError:
         await animator.stop()
         clear_active_task(uid)
+        release_credits(uid, credits_cost)
         try:
             await processing_msg.edit_text("⛔ <b>Генерация отменена.</b>", parse_mode="HTML")
         except Exception:
@@ -787,6 +802,7 @@ async def handle_video_extension(
     except SafetyFilterError as exc:
         await animator.stop()
         clear_active_task(uid)
+        release_credits(uid, credits_cost)
         await processing_msg.edit_text(
             f"🚫 <b>Запрос заблокирован фильтрами безопасности</b>\n\n{exc.user_message}",
             parse_mode="HTML",
@@ -794,6 +810,7 @@ async def handle_video_extension(
     except QuotaExceededError:
         await animator.stop()
         clear_active_task(uid)
+        release_credits(uid, credits_cost)
         await processing_msg.edit_text(
             f"Модель <b>{model_label}</b> сейчас перегружена 😔\n\nПопробуйте через пару минут.",
             parse_mode="HTML",
@@ -802,6 +819,7 @@ async def handle_video_extension(
     except Exception as exc:
         await animator.stop()
         clear_active_task(uid)
+        release_credits(uid, credits_cost)
         logger.exception("Error video-extension: %s", exc)
         await processing_msg.edit_text(
             "Не удалось расширить видео 😔\n\nПопробуйте ещё раз.",
@@ -870,7 +888,7 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
     else:
         credits_cost = 2 if settings.get("resolution") == "4k" else 1
 
-    if not has_credits(uid, credits_cost):
+    if not reserve_credits(uid, credits_cost):
         cost_label = f"{credits_cost} кредитов" if credits_cost > 1 else "1 кредит"
         msg = (
             f"💳 <b>Недостаточно кредитов</b>\n\n"
@@ -1018,7 +1036,7 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
                 )
 
         _log_gen_type = "video" if _is_video else "music" if _is_music else "image"
-        increment_generations(uid, message.from_user.first_name or "", platform="tg", credits_cost=credits_cost, prompt=prompt, model=user_model, gen_type=_log_gen_type)
+        confirm_credits(uid, credits_cost, message.from_user.first_name or "", platform="tg", prompt=prompt, model=user_model, gen_type=_log_gen_type)
         _uname_log = message.from_user.first_name or str(uid)
         if _is_video:
             asyncio.create_task(log_generation_video(
@@ -1049,6 +1067,7 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
     except asyncio.CancelledError:
         await animator.stop()
         clear_active_task(uid)
+        release_credits(uid, credits_cost)
         try:
             await processing_msg.edit_text(
                 "⛔ <b>Генерация отменена.</b>",
@@ -1060,6 +1079,7 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
     except SafetyFilterError as exc:
         await animator.stop()
         clear_active_task(uid)
+        release_credits(uid, credits_cost)
         logger.warning("Safety filter blocked prompt '%s': %s", prompt[:60], exc)
         await processing_msg.edit_text(
             "🚫 <b>Запрос заблокирован фильтрами безопасности</b>\n\n"
@@ -1069,6 +1089,7 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
     except QuotaExceededError:
         await animator.stop()
         clear_active_task(uid)
+        release_credits(uid, credits_cost)
         logger.error("Quota exhausted for prompt '%s'", prompt[:60])
         current_name = AVAILABLE_MODELS.get(user_model, {}).get("label", user_model)
         other_name = _other_model_label(user_model)
@@ -1082,6 +1103,7 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
     except BotError as exc:
         await animator.stop()
         clear_active_task(uid)
+        release_credits(uid, credits_cost)
         logger.error("Bot error for prompt '%s': %s", prompt[:60], exc)
         await processing_msg.edit_text(
             f"{exc.user_message}",
@@ -1091,6 +1113,7 @@ async def handle_text_prompt(message: Message, vertex_service: VertexAIService) 
     except Exception as exc:
         await animator.stop()
         clear_active_task(uid)
+        release_credits(uid, credits_cost)
         logger.exception("Unexpected error for prompt '%s': %s", prompt[:60], exc)
         await processing_msg.edit_text(
             f"Не удалось сгенерировать {gen_type} 😔\n\n"

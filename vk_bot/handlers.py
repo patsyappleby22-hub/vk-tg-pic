@@ -20,6 +20,7 @@ from bot.user_settings import (
     get_chat_daily_count, get_chat_daily_limit,
     is_video_model, get_video_credits_cost,
     is_music_model, get_music_credits_cost,
+    reserve_credits, release_credits, confirm_credits,
 )
 from bot.keyboards import ASPECT_RATIOS
 from core.exceptions import BotError, QuotaExceededError, SafetyFilterError
@@ -1225,7 +1226,7 @@ async def _handle_vk_video_extension(
 
     video_audio = settings.get("video_audio", True) and video_supports_audio(user_model)
     credits_cost = calc_video_credits(user_model, duration_seconds=8, audio=video_audio)
-    if not has_credits(uid, credits_cost):
+    if not reserve_credits(uid, credits_cost):
         await message.answer(
             "💳 Недостаточно кредитов\n\n"
             f"Расширение видео стоит {credits_cost} кредитов.\n"
@@ -1301,7 +1302,7 @@ async def _handle_vk_video_extension(
         )
         try:
             first_name = settings.get("first_name", "")
-            increment_generations(uid, first_name, platform="vk", credits_cost=credits_cost)
+            confirm_credits(uid, credits_cost, first_name, platform="vk", gen_type="video_ext")
         except Exception:
             pass
         try:
@@ -1312,6 +1313,7 @@ async def _handle_vk_video_extension(
     except asyncio.CancelledError:
         await animator.stop()
         active_tasks.pop(uid, None)
+        release_credits(uid, credits_cost)
         try:
             await bot.api.messages.edit(
                 peer_id=peer_id, message_id=processing_id,
@@ -1323,6 +1325,7 @@ async def _handle_vk_video_extension(
     except SafetyFilterError as exc:
         await animator.stop()
         active_tasks.pop(uid, None)
+        release_credits(uid, credits_cost)
         try:
             await bot.api.messages.edit(
                 peer_id=peer_id, message_id=processing_id,
@@ -1334,6 +1337,7 @@ async def _handle_vk_video_extension(
     except QuotaExceededError:
         await animator.stop()
         active_tasks.pop(uid, None)
+        release_credits(uid, credits_cost)
         try:
             await bot.api.messages.edit(
                 peer_id=peer_id, message_id=processing_id,
@@ -1349,6 +1353,7 @@ async def _handle_vk_video_extension(
     except BotError as exc:
         await animator.stop()
         active_tasks.pop(uid, None)
+        release_credits(uid, credits_cost)
         try:
             await bot.api.messages.edit(
                 peer_id=peer_id, message_id=processing_id,
@@ -1361,6 +1366,7 @@ async def _handle_vk_video_extension(
     except Exception as exc:
         await animator.stop()
         active_tasks.pop(uid, None)
+        release_credits(uid, credits_cost)
         logger.exception("VK video extension error: %s", exc)
         try:
             await bot.api.messages.edit(
@@ -1413,7 +1419,7 @@ async def _generate_and_send(
     else:
         credits_cost = 2 if settings.get("resolution") == "4k" else 1
 
-    if not has_credits(uid, credits_cost):
+    if not reserve_credits(uid, credits_cost):
         cost_label = f"{credits_cost} кредитов" if credits_cost > 1 else "1 кредит"
         msg = (
             f"💳 Недостаточно кредитов\n\n"
@@ -1562,7 +1568,8 @@ async def _generate_and_send(
 
         try:
             first_name = settings.get("first_name", "")
-            increment_generations(uid, first_name, platform="vk", credits_cost=credits_cost)
+            _gen_type_log = "video" if _is_video else "music" if _is_music else "image"
+            confirm_credits(uid, credits_cost, first_name, platform="vk", prompt=prompt, model=user_model, gen_type=_gen_type_log)
         except Exception:
             pass
 
@@ -1585,6 +1592,7 @@ async def _generate_and_send(
     except asyncio.CancelledError:
         await animator.stop()
         active_tasks.pop(uid, None)
+        release_credits(uid, credits_cost)
         try:
             await bot.api.messages.edit(
                 peer_id=peer_id, message_id=processing_id,
@@ -1596,6 +1604,7 @@ async def _generate_and_send(
     except SafetyFilterError as exc:
         await animator.stop()
         active_tasks.pop(uid, None)
+        release_credits(uid, credits_cost)
         try:
             await bot.api.messages.edit(
                 peer_id=peer_id, message_id=processing_id,
@@ -1607,6 +1616,7 @@ async def _generate_and_send(
     except QuotaExceededError:
         await animator.stop()
         active_tasks.pop(uid, None)
+        release_credits(uid, credits_cost)
         current_name = AVAILABLE_MODELS.get(user_model, {}).get("label", user_model)
         try:
             await bot.api.messages.edit(
@@ -1621,6 +1631,7 @@ async def _generate_and_send(
     except BotError as exc:
         await animator.stop()
         active_tasks.pop(uid, None)
+        release_credits(uid, credits_cost)
         try:
             await bot.api.messages.edit(
                 peer_id=peer_id, message_id=processing_id,
@@ -1633,6 +1644,7 @@ async def _generate_and_send(
     except Exception as exc:
         await animator.stop()
         active_tasks.pop(uid, None)
+        release_credits(uid, credits_cost)
         logger.exception("VK generation error: %s", exc)
         try:
             await bot.api.messages.edit(

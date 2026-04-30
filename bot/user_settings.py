@@ -38,6 +38,61 @@ user_settings: dict[int, dict[str, Any]] = {}
 
 active_tasks: dict[int, asyncio.Task] = {}
 
+# ── Credit reservation (freeze) ───────────────────────────────────────────────
+# Maps user_id → number of credits currently frozen (reserved but not yet spent).
+# Purpose: prevent parallel requests from passing has_credits() before the first
+# one actually deducts. On success → confirm_credits() deducts + unfreezes.
+# On error/cancel → release_credits() unfreezes without deducting.
+_reserved_credits: dict[int, int] = {}
+
+
+def reserve_credits(user_id: int, amount: int) -> bool:
+    """Freeze `amount` credits for user_id.
+
+    Returns True and freezes the credits if
+    (current_balance - already_frozen) >= amount.
+    Returns False if the user cannot afford this reservation.
+    """
+    s = get_user_settings(user_id)
+    balance = s.get("credits", FREE_CREDITS)
+    already_frozen = _reserved_credits.get(user_id, 0)
+    available = balance - already_frozen
+    if available < amount:
+        return False
+    _reserved_credits[user_id] = already_frozen + amount
+    return True
+
+
+def release_credits(user_id: int, amount: int) -> None:
+    """Unfreeze `amount` credits without spending them (called on error/cancel)."""
+    frozen = _reserved_credits.get(user_id, 0)
+    new_frozen = max(0, frozen - amount)
+    if new_frozen == 0:
+        _reserved_credits.pop(user_id, None)
+    else:
+        _reserved_credits[user_id] = new_frozen
+
+
+def confirm_credits(
+    user_id: int,
+    amount: int,
+    first_name: str = "",
+    platform: str = "tg",
+    prompt: str = "",
+    model: str = "",
+    gen_type: str = "image",
+) -> None:
+    """Unfreeze `amount` and actually deduct them (called on successful generation)."""
+    release_credits(user_id, amount)
+    increment_generations(
+        user_id, first_name,
+        platform=platform,
+        credits_cost=amount,
+        prompt=prompt,
+        model=model,
+        gen_type=gen_type,
+    )
+
 
 def set_active_task(user_id: int, task: asyncio.Task) -> None:
     active_tasks[user_id] = task
