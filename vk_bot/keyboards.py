@@ -39,6 +39,17 @@ def get_settings_keyboard(user_id: int) -> str:
     kb.row()
 
     if is_video_model(current_model):
+        from bot.user_settings import (
+            VIDEO_TASKS, get_available_tasks_for_model, calc_video_credits,
+        )
+        task_id = settings.get("video_task", "text-to-video")
+        avail_tasks = get_available_tasks_for_model(current_model)
+        if task_id not in avail_tasks:
+            task_id = "text-to-video"
+        task_label = VIDEO_TASKS.get(task_id, {}).get("label", task_id)
+        kb.add(Callback(f"🎯 {task_label}", payload={"cmd": "choose_vtask"}))
+        kb.row()
+
         aspect = settings.get("video_aspect_ratio", "16:9")
         dur = settings.get("video_duration", 8)
         res = settings.get("video_resolution", "720p")
@@ -47,15 +58,21 @@ def get_settings_keyboard(user_id: int) -> str:
         avail_res = get_video_resolutions_for_model(current_model)
         if res not in avail_res:
             res = "1080p"
+        _audio_eff = audio and has_audio
 
         for key, label in VIDEO_ASPECT_RATIOS.items():
             text = f"✅ {label}" if key == aspect else label
             kb.add(Callback(text, payload={"cmd": "vp_aspect", "id": key}))
         kb.row()
 
-        for d in VIDEO_DURATIONS:
-            text = f"✅ {d}с" if d == dur else f"{d}с"
-            kb.add(Callback(text, payload={"cmd": "vp_dur", "id": d}))
+        if task_id == "video-extension":
+            _c_ext = calc_video_credits(current_model, duration_seconds=7, audio=_audio_eff, resolution=res)
+            kb.add(Callback(f"🔒 7с ({_c_ext}кр)", payload={"cmd": "noop"}))
+        else:
+            for d in VIDEO_DURATIONS:
+                c = calc_video_credits(current_model, duration_seconds=d, audio=_audio_eff, resolution=res)
+                text = f"✅ {d}с ({c}кр)" if d == dur else f"{d}с ({c}кр)"
+                kb.add(Callback(text, payload={"cmd": "vp_dur", "id": d}))
         kb.row()
 
         for r in avail_res:
@@ -65,7 +82,10 @@ def get_settings_keyboard(user_id: int) -> str:
         kb.row()
 
         if has_audio:
-            audio_text = "✅ 🔊 Аудио вкл" if audio else "🔇 Аудио выкл"
+            _dur_eff = 7 if task_id == "video-extension" else dur
+            c_on = calc_video_credits(current_model, duration_seconds=_dur_eff, audio=True, resolution=res)
+            c_off = calc_video_credits(current_model, duration_seconds=_dur_eff, audio=False, resolution=res)
+            audio_text = f"✅ 🔊 Аудио вкл ({c_on}кр)" if audio else f"🔇 Аудио выкл ({c_off}кр)"
             kb.add(Callback(audio_text, payload={"cmd": "vp_audio"}))
     elif is_music_model(current_model):
         credits = model_info.get("credits", 2)
