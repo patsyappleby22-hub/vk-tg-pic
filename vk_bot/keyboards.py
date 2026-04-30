@@ -45,8 +45,6 @@ def get_settings_keyboard(user_id: int) -> str:
         if task_id not in avail_tasks:
             task_id = "text-to-video"
         task_label = VIDEO_TASKS.get(task_id, {}).get("label", task_id)
-        kb.add(Callback(f"🎯 {task_label}", payload={"cmd": "choose_vtask"}))
-        kb.row()
 
         aspect = settings.get("video_aspect_ratio", "16:9")
         dur = settings.get("video_duration", 8)
@@ -57,26 +55,30 @@ def get_settings_keyboard(user_id: int) -> str:
         if res not in avail_res:
             res = "1080p"
 
+        # Row 2: aspect ratios (2 buttons)
         for key, label in VIDEO_ASPECT_RATIOS.items():
             text = f"✅ {label}" if key == aspect else label
             kb.add(Callback(text, payload={"cmd": "vp_aspect", "id": key}))
         kb.row()
 
+        # Row 3: durations (3 buttons)
         for d in VIDEO_DURATIONS:
             text = f"✅ {d}с" if d == dur else f"{d}с"
             kb.add(Callback(text, payload={"cmd": "vp_dur", "id": d}))
         kb.row()
 
+        # Row 4: resolutions (2-3 buttons) + audio toggle if supported (max 4 per row)
         for r in avail_res:
             r_label = avail_res[r].get("label", r).replace("📺 ", "").replace("🖥 ", "").replace("📽 ", "")
             text = f"✅ {r_label}" if r == res else r_label
             kb.add(Callback(text, payload={"cmd": "vp_res", "id": r}))
-
-        # Only add audio row if the model supports it — avoids empty trailing row
         if has_audio:
-            kb.row()
-            audio_text = "✅ 🔊 Аудио вкл" if audio else "🔇 Аудио выкл"
+            audio_text = "🔊" if audio else "🔇"
             kb.add(Callback(audio_text, payload={"cmd": "vp_audio"}))
+        kb.row()
+
+        # Row 5: task selector
+        kb.add(Callback(f"🎯 {task_label}", payload={"cmd": "choose_vtask"}))
     elif is_music_model(current_model):
         credits = model_info.get("credits", 2)
         duration_label = model_info.get("duration_label", "аудио")
