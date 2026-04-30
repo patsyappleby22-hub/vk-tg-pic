@@ -39,6 +39,15 @@ def get_settings_keyboard(user_id: int) -> str:
     kb.row()
 
     if is_video_model(current_model):
+        from bot.user_settings import VIDEO_TASKS, get_available_tasks_for_model
+        task_id = settings.get("video_task", "text-to-video")
+        avail_tasks = get_available_tasks_for_model(current_model)
+        if task_id not in avail_tasks:
+            task_id = "text-to-video"
+        task_label = VIDEO_TASKS.get(task_id, {}).get("label", task_id)
+        kb.add(Callback(f"🎯 {task_label}", payload={"cmd": "choose_vtask"}))
+        kb.row()
+
         aspect = settings.get("video_aspect_ratio", "16:9")
         dur = settings.get("video_duration", 8)
         res = settings.get("video_resolution", "720p")
