@@ -764,12 +764,13 @@ class VertexAIService:
         else:
             contents = prompt
 
-        # Per Google docs: lyria-3-clip-preview doesn't need response_modalities;
-        # lyria-3-pro-preview needs them only for WAV output.
-        # For MP3 (default), both models work without explicit config.
+        # Vertex AI requires explicit response_modalities for Lyria models
         response = client.models.generate_content(
             model=model,
             contents=contents,
+            config=genai_types.GenerateContentConfig(
+                response_modalities=["AUDIO"],
+            ),
         )
 
         # Parse response following Google's documented pattern:
