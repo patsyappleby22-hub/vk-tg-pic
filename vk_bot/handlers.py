@@ -31,7 +31,7 @@ from vk_bot.keyboards import (
     get_switch_model_keyboard,
     get_balance_keyboard,
 )
-from vk_bot.photo_upload import upload_photo_to_vk, upload_document_to_vk, download_vk_photo
+from vk_bot.photo_upload import upload_photo_to_vk, upload_document_to_vk, upload_audio_message_to_vk, download_vk_photo
 from bot.log_channel import log_generation_vk
 
 logger = logging.getLogger(__name__)
@@ -1533,15 +1533,14 @@ async def _generate_and_send(
             upload_base = f"🎨 {action} {gen_type}...\n🤖 {model_label}\n\n✅ Готово за {elapsed} сек."
             upload_animator = VKProgressAnimator(
                 bot, peer_id, processing_id, upload_base,
-                action_text="📤 Загрузка MP3",
+                action_text="📤 Загрузка аудио",
             )
             upload_animator.start()
             try:
-                attachment = await upload_document_to_vk(
+                attachment = await upload_audio_message_to_vk(
                     bot.api,
                     peer_id,
                     result_bytes,
-                    filename=_prompt_to_audio_filename(prompt),
                 )
             finally:
                 await upload_animator.stop()

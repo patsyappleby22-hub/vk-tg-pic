@@ -198,6 +198,80 @@ async def upload_document_to_vk(api: Any, peer_id: int, image_bytes: bytes, file
     raise last_err
 
 
+async def upload_audio_message_to_vk(api: Any, peer_id: int, audio_bytes: bytes) -> str:
+    """Upload audio as a VK audio_message (voice message) — playable directly in chat.
+
+    VK's doc API blocks all audio files (MP3, OGG) via magic-byte detection.
+    The audio_message upload type bypasses this and produces a playable attachment.
+    Requires OGG Opus format — MP3 is converted automatically via ffmpeg.
+    """
+    _, content_type = _detect_format(audio_bytes)
+    if content_type == "audio/mpeg":
+        logger.info("Audio MP3→OGG Opus conversion for VK audio_message (%d bytes)", len(audio_bytes))
+        audio_bytes = _mp3_to_ogg(audio_bytes)
+        logger.info("Conversion OK: %d bytes", len(audio_bytes))
+
+    last_err: Exception | None = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            upload_server = await api.docs.get_messages_upload_server(
+                type="audio_message", peer_id=peer_id
+            )
+            upload_url = upload_server.upload_url
+            logger.info(
+                "VK audio_message upload URL obtained (attempt %d), uploading %d bytes...",
+                attempt + 1, len(audio_bytes),
+            )
+
+            form = aiohttp.FormData()
+            form.add_field(
+                "file", io.BytesIO(audio_bytes),
+                filename="audio.ogg", content_type="audio/ogg",
+            )
+
+            timeout = aiohttp.ClientTimeout(total=120)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(upload_url, data=form) as resp:
+                    status = resp.status
+                    raw_text = await resp.text()
+                    logger.info(
+                        "VK audio_message upload response (attempt %d): status=%d, body=%s",
+                        attempt + 1, status, raw_text[:300],
+                    )
+                    if status == 405:
+                        raise ValueError("VK returned 405 (stale upload URL), retrying...")
+                    if status != 200:
+                        raise ValueError(f"VK upload returned HTTP {status}")
+                    result = json.loads(raw_text)
+
+            file_field = result.get("file", "")
+            if not file_field:
+                raise ValueError(f"VK audio_message upload returned empty file field: {result}")
+
+            saved = await api.docs.save(file=file_field)
+            audio_msg = getattr(saved, "audio_message", None)
+            if audio_msg is None:
+                # Some vkbottle versions wrap in .doc
+                audio_msg = getattr(saved, "doc", None)
+            if audio_msg is None:
+                raise ValueError(f"VK docs.save did not return audio_message: {saved}")
+
+            attachment = f"audio_message{audio_msg.owner_id}_{audio_msg.id}"
+            logger.info("VK audio_message saved: %s", attachment)
+            return attachment
+
+        except Exception as exc:
+            last_err = exc
+            is_stale = "405" in str(exc) or "stale upload URL" in str(exc)
+            logger.warning(
+                "VK audio_message upload attempt %d/%d failed: %s", attempt + 1, MAX_RETRIES, exc
+            )
+            if attempt < MAX_RETRIES - 1:
+                await asyncio.sleep(10 if "504" in str(exc) else 2)
+
+    raise last_err
+
+
 async def download_vk_photo(api: Any, photo_sizes: list) -> bytes:
     best = max(photo_sizes, key=lambda s: s.width * s.height)
     url = best.url
