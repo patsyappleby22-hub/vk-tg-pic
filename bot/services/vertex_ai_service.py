@@ -744,34 +744,72 @@ class VertexAIService:
         self._alert_quota_exhausted(model)
         raise QuotaExceededError()
 
-    def _describe_image_for_music(self, slot: _BaseSlot, image: bytes, prompt: str) -> str:
-        """Use Gemini vision to describe an image as a music prompt for Lyria."""
-        from google.genai import types as genai_types
+    def _generate_music_via_interactions(
+        self,
+        slot: "_CredSlot",
+        prompt: str,
+        model: str,
+        image: bytes | None,
+    ) -> bytes:
+        """Call the official Lyria REST endpoint /interactions (Vertex AI).
+
+        POST https://aiplatform.googleapis.com/v1beta1/projects/{PROJECT}/locations/global/interactions
+        Supports text prompt + optional image input. Response contains audio in outputs[].
+        """
+        import json as _json
+        import urllib.error
+        import urllib.request
+        from google.auth.transport.requests import Request
+
+        credentials = slot._get_credentials()
+        credentials.refresh(Request())
+        access_token = credentials.token
+
+        inputs: list[dict] = [{"type": "text", "text": prompt}]
+        if image is not None:
+            inputs.append({
+                "type": "image",
+                "mime_type": "image/jpeg",
+                "data": base64.b64encode(image).decode("ascii"),
+            })
+
+        body = _json.dumps({"model": model, "input": inputs}).encode("utf-8")
+        url = (
+            f"https://aiplatform.googleapis.com/v1beta1/"
+            f"projects/{slot._project_id}/locations/global/interactions"
+        )
+        req = urllib.request.Request(
+            url,
+            data=body,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json; charset=utf-8",
+            },
+            method="POST",
+        )
+        logger.info(
+            "Music /interactions: project=%s model=%s image=%s prompt='%s'",
+            slot._project_id, model, image is not None, prompt[:80],
+        )
         try:
-            vision_client = slot.get_client()
-            user_hint = f' Пользователь хочет: "{prompt}".' if prompt and prompt not in ("неизвестно", "") else ""
-            vision_response = vision_client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents=[
-                    genai_types.Part.from_bytes(data=image, mime_type="image/jpeg"),
-                    (
-                        "Опиши это изображение для генерации музыки: настроение, атмосфера, жанр, "
-                        "темп (быстрый/медленный), инструменты, эмоции."
-                        + user_hint
-                        + " Ответ строго на английском языке, 2-3 предложения, только описание без вводных слов."
-                    ),
-                ],
-            )
-            description = (getattr(vision_response, "text", None) or "").strip()
-            if description:
-                combined = description
-                if prompt and prompt not in ("неизвестно", ""):
-                    combined = f"{prompt}. {description}"
-                logger.info("Music image→description: '%s'", combined[:120])
-                return combined
-        except Exception as exc:
-            logger.warning("Music: image description failed, falling back to text-only prompt: %s", exc)
-        return prompt
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                response_data = _json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            body_text = exc.read().decode("utf-8", errors="replace")[:500]
+            raise GenerationError(f"{exc.code} {exc.reason}: {body_text}") from exc
+
+        outputs = response_data.get("outputs", [])
+        for output in outputs:
+            if output.get("type") == "audio":
+                data = output.get("data", "")
+                if data:
+                    return base64.b64decode(data)
+
+        text_outputs = [o.get("text", "") for o in outputs if o.get("type") == "text" and o.get("text")]
+        details = " ".join(text_outputs)[:300]
+        if details and _is_safety_error_text(details):
+            raise SafetyFilterError(details)
+        raise GenerationError(details or "Lyria не вернула аудиоданные")
 
     def _generate_music_with_gemini_api(
         self,
@@ -780,32 +818,49 @@ class VertexAIService:
         model: str,
         image: bytes | None,
     ) -> bytes:
-        # Lyria models are text-to-music only — they do NOT accept image input.
-        # If an image is provided, first describe it via Gemini Vision, then feed
-        # the resulting text description to Lyria.
+        # Official Lyria /interactions endpoint supports text + image natively.
+        # Use it when we have a service-account slot with a known project ID.
+        if isinstance(slot, _CredSlot) and slot._project_id:
+            return self._generate_music_via_interactions(slot, prompt, model, image)
+
+        # API-key fallback: /interactions requires OAuth, not available with API keys.
+        # For image input — describe via Gemini Vision, then call Lyria text-only.
         if image is not None:
-            prompt = self._describe_image_for_music(slot, image, prompt)
+            from google.genai import types as genai_types
+            try:
+                vision_client = slot.get_client()
+                user_hint = (
+                    f' User wants: "{prompt}".'
+                    if prompt and prompt not in ("неизвестно", "") else ""
+                )
+                vision_resp = vision_client.models.generate_content(
+                    model="gemini-2.0-flash",
+                    contents=[
+                        genai_types.Part.from_bytes(data=image, mime_type="image/jpeg"),
+                        (
+                            "Describe this image for music generation: mood, atmosphere, genre, "
+                            "tempo, instruments, emotions."
+                            + user_hint
+                            + " Answer in English only, 2-3 sentences, description only."
+                        ),
+                    ],
+                )
+                description = (getattr(vision_resp, "text", None) or "").strip()
+                if description:
+                    prompt = f"{prompt}. {description}" if prompt and prompt not in ("неизвестно", "") else description
+                    logger.info("Music image→text description: '%s'", prompt[:120])
+            except Exception as exc:
+                logger.warning("Music: image description failed, using text prompt only: %s", exc)
 
-        # Lyria requires global endpoint on Vertex AI, not us-central1
-        client = slot.get_music_client() if hasattr(slot, 'get_music_client') else slot.get_video_client()
-        contents: Any = prompt
+        client = slot.get_video_client()
+        response = client.models.generate_content(model=model, contents=prompt)
 
-        # Lyria models auto-generate audio — no config/response_modalities needed
-        # (per Google docs: all examples call generate_content without config)
-        response = client.models.generate_content(
-            model=model,
-            contents=contents,
-        )
-
-        # Parse response following Google's documented pattern:
-        # parts contain text (lyrics) and inline_data (audio bytes)
         parts = None
         if getattr(response, "candidates", None) and response.candidates:
             candidate = response.candidates[0]
             content = getattr(candidate, "content", None)
             if content:
                 parts = getattr(content, "parts", None)
-        # Fallback: some SDK versions expose parts directly
         if not parts:
             parts = getattr(response, "parts", None)
 
@@ -821,11 +876,7 @@ class VertexAIService:
                         return base64.b64decode(data)
                     return data
 
-        text_parts = [
-            getattr(part, "text", "")
-            for part in parts
-            if getattr(part, "text", None)
-        ]
+        text_parts = [getattr(p, "text", "") for p in parts if getattr(p, "text", None)]
         details = " ".join(text_parts)[:300]
         if details and _is_safety_error_text(details):
             raise SafetyFilterError(details)
