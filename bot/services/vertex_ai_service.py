@@ -818,69 +818,9 @@ class VertexAIService:
         model: str,
         image: bytes | None,
     ) -> bytes:
-        # Official Lyria /interactions endpoint supports text + image natively.
-        # Use it when we have a service-account slot with a known project ID.
-        if isinstance(slot, _CredSlot) and slot._project_id:
-            return self._generate_music_via_interactions(slot, prompt, model, image)
-
-        # API-key fallback: /interactions requires OAuth, not available with API keys.
-        # For image input — describe via Gemini Vision, then call Lyria text-only.
-        if image is not None:
-            from google.genai import types as genai_types
-            try:
-                vision_client = slot.get_client()
-                user_hint = (
-                    f' User wants: "{prompt}".'
-                    if prompt and prompt not in ("неизвестно", "") else ""
-                )
-                vision_resp = vision_client.models.generate_content(
-                    model="gemini-2.0-flash",
-                    contents=[
-                        genai_types.Part.from_bytes(data=image, mime_type="image/jpeg"),
-                        (
-                            "Describe this image for music generation: mood, atmosphere, genre, "
-                            "tempo, instruments, emotions."
-                            + user_hint
-                            + " Answer in English only, 2-3 sentences, description only."
-                        ),
-                    ],
-                )
-                description = (getattr(vision_resp, "text", None) or "").strip()
-                if description:
-                    prompt = f"{prompt}. {description}" if prompt and prompt not in ("неизвестно", "") else description
-                    logger.info("Music image→text description: '%s'", prompt[:120])
-            except Exception as exc:
-                logger.warning("Music: image description failed, using text prompt only: %s", exc)
-
-        client = slot.get_video_client()
-        response = client.models.generate_content(model=model, contents=prompt)
-
-        parts = None
-        if getattr(response, "candidates", None) and response.candidates:
-            candidate = response.candidates[0]
-            content = getattr(candidate, "content", None)
-            if content:
-                parts = getattr(content, "parts", None)
-        if not parts:
-            parts = getattr(response, "parts", None)
-
-        if not parts:
-            raise GenerationError("Lyria не вернула аудио")
-
-        for part in parts:
-            inline_data = getattr(part, "inline_data", None) or getattr(part, "inlineData", None)
-            if inline_data is not None:
-                data = getattr(inline_data, "data", None)
-                if data:
-                    if isinstance(data, str):
-                        return base64.b64decode(data)
-                    return data
-
-        text_parts = [getattr(p, "text", "") for p in parts if getattr(p, "text", None)]
-        details = " ".join(text_parts)[:300]
-        if details and _is_safety_error_text(details):
-            raise SafetyFilterError(details)
-        raise GenerationError(details or "Lyria не вернула аудиоданные")
+        if not isinstance(slot, _CredSlot) or not slot._project_id:
+            raise GenerationError("Генерация музыки доступна только через Vertex AI (service account)")
+        return self._generate_music_via_interactions(slot, prompt, model, image)
 
     def _get_next_available_slot(self, model: str) -> _BaseSlot | None:
         """Return the next ready slot using round-robin rotation.
