@@ -764,13 +764,11 @@ class VertexAIService:
         else:
             contents = prompt
 
-        # Vertex AI requires explicit response_modalities for Lyria models
+        # Lyria models auto-generate audio — no config/response_modalities needed
+        # (per Google docs: all examples call generate_content without config)
         response = client.models.generate_content(
             model=model,
             contents=contents,
-            config=genai_types.GenerateContentConfig(
-                response_modalities=["AUDIO"],
-            ),
         )
 
         # Parse response following Google's documented pattern:
