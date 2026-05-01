@@ -1,0 +1,54 @@
+
+
+Direction
+2026-05-01T11:42:06.357167359Z stdout F ValueError: VK doc upload returned empty file field: {'error': 'wrong_music_file', 'error_descr': 'wrong_music_file'}
+2026-05-01T11:42:06.357163575Z stdout F     raise ValueError(f"VK doc upload returned empty file field: {result}")
+2026-05-01T11:42:06.357160029Z stdout F   File "/app/vk_bot/photo_upload.py", line 147, in upload_document_to_vk
+2026-05-01T11:42:06.357156915Z stdout F     raise last_err
+2026-05-01T11:42:06.357153617Z stdout F   File "/app/vk_bot/photo_upload.py", line 167, in upload_document_to_vk
+2026-05-01T11:42:06.357150613Z stdout F     ^
+2026-05-01T11:42:06.357147359Z stdout F     )
+2026-05-01T11:42:06.357143991Z stdout F     ...<4 lines>...
+2026-05-01T11:42:06.357140702Z stdout F                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-05-01T11:42:06.357137622Z stdout F     attachment = await upload_document_to_vk(
+2026-05-01T11:42:06.357134275Z stdout F   File "/app/vk_bot/handlers.py", line 1540, in _generate_and_send
+2026-05-01T11:42:06.357127115Z stdout F Traceback (most recent call last):
+2026-05-01T11:42:06.357105803Z stdout F 2026-05-01 14:42:06 [ERROR] vk_bot.handlers — VK generation error: VK doc upload returned empty file field: {'error': 'wrong_music_file', 'error_descr': 'wrong_music_file'}
+2026-05-01T11:42:06.349847767Z stdout F 2026-05-01 14:42:06 [WARNING] vk_bot.photo_upload — VK doc upload attempt 5/5 failed: VK doc upload returned empty file field: {'error': 'wrong_music_file', 'error_descr': 'wrong_music_file'}
+2026-05-01T11:42:06.349234172Z stdout F 2026-05-01 14:42:06 [INFO] vk_bot.photo_upload — VK doc upload response (attempt 5): status=200, body={"error":"wrong_music_file","error_descr":"wrong_music_file"}
+2026-05-01T11:42:05.559399846Z stdout F 2026-05-01 14:42:05 [INFO] vk_bot.photo_upload — VK doc upload URL obtained (attempt 5), uploading 4254405 bytes...
+2026-05-01T11:42:03.474126864Z stdout F 2026-05-01 14:42:03 [WARNING] vk_bot.photo_upload — VK doc upload attempt 4/5 failed: VK doc upload returned empty file field: {'error': 'wrong_music_file', 'error_descr': 'wrong_music_file'}
+2026-05-01T11:42:03.473250517Z stdout F 2026-05-01 14:42:03 [INFO] vk_bot.photo_upload — VK doc upload response (attempt 4): status=200, body={"error":"wrong_music_file","error_descr":"wrong_music_file"}
+2026-05-01T11:42:02.7547665Z stdout F 2026-05-01 14:42:02 [INFO] vk_bot.photo_upload — VK doc upload URL obtained (attempt 4), uploading 4254405 bytes...
+2026-05-01T11:42:00.627194834Z stdout F 2026-05-01 14:42:00 [WARNING] vk_bot.photo_upload — VK doc upload attempt 3/5 failed: VK doc upload returned empty file field: {'error': 'wrong_music_file', 'error_descr': 'wrong_music_file'}
+2026-05-01T11:42:00.626629221Z stdout F 2026-05-01 14:42:00 [INFO] vk_bot.photo_upload — VK doc upload response (attempt 3): status=200, body={"error":"wrong_music_file","error_descr":"wrong_music_file"}
+2026-05-01T11:41:59.539410347Z stdout F 2026-05-01 14:41:59 [INFO] vk_bot.photo_upload — VK doc upload URL obtained (attempt 3), uploading 4254405 bytes...
+2026-05-01T11:41:57.441678025Z stdout F 2026-05-01 14:41:57 [WARNING] vk_bot.photo_upload — VK doc upload attempt 2/5 failed: VK doc upload returned empty file field: {'error': 'wrong_music_file', 'error_descr': 'wrong_music_file'}
+2026-05-01T11:41:57.441071554Z stdout F 2026-05-01 14:41:57 [INFO] vk_bot.photo_upload — VK doc upload response (attempt 2): status=200, body={"error":"wrong_music_file","error_descr":"wrong_music_file"}
+2026-05-01T11:41:56.649878559Z stdout F 2026-05-01 14:41:56 [INFO] vk_bot.photo_upload — VK doc upload URL obtained (attempt 2), uploading 4254405 bytes...
+2026-05-01T11:41:54.55539395Z stdout F 2026-05-01 14:41:54 [WARNING] vk_bot.photo_upload — VK doc upload attempt 1/5 failed: VK doc upload returned empty file field: {'error': 'wrong_music_file', 'error_descr': 'wrong_music_file'}
+2026-05-01T11:41:54.554396781Z stdout F 2026-05-01 14:41:54 [INFO] vk_bot.photo_upload — VK doc upload response (attempt 1): status=200, body={"error":"wrong_music_file","error_descr":"wrong_music_file"}
+2026-05-01T11:41:52.288553293Z stdout F 2026-05-01 14:41:52 [INFO] vk_bot.photo_upload — VK doc upload URL obtained (attempt 1), uploading 4254405 bytes...
+2026-05-01T11:41:52.158145398Z stdout F 2026-05-01 14:41:52 [INFO] vk_bot.photo_upload — Uploading document to VK: 4254405 bytes, format=audio/mpeg
+2026-05-01T11:41:52.15717227Z stdout F 2026-05-01 14:41:52 [INFO] vk_bot.photo_upload — Audio file detected — uploading with neutral MIME type to bypass VK MP3 filter
+2026-05-01T11:41:52.155949333Z stdout F 2026-05-01 14:41:52 [INFO] bot.services.vertex_ai_service — Music OK: slot='first-vision-491914-r4-04dc11021c1a' model=lyria-3-pro-preview duration=62.2s size=4154.7 KB
+2026-05-01T11:41:23.522889682Z stdout F 2026-05-01 14:41:23 [INFO] bot.autopub.scheduler — [autopub] scheduler tick #16  enabled=False  time=14:41 MSK
+2026-05-01T11:40:50.253917024Z stdout F Имена забытых, лица без'
+2026-05-01T11:40:50.253912414Z stdout F Я слышу, как дышит пустота
+2026-05-01T11:40:50.253883392Z stdout F 2026-05-01 14:40:50 [INFO] bot.services.vertex_ai_service — Music /interactions: project=first-vision-491914-r4 model=lyria-3-pro-preview image=False prompt='В тишине между ударами сердца
+2026-05-01T11:40:49.953427735Z stdout F Име'
+2026-05-01T11:40:49.953422677Z stdout F Я слышу, как дышит пустота
+2026-05-01T11:40:49.953387811Z stdout F 2026-05-01 14:40:49 [INFO] bot.services.vertex_ai_service — Music [text→music]: trying 'first-vision-491914-r4-04dc11021c1a' model=lyria-3-pro-preview prompt='В тишине между ударами сердца
+2026-05-01T11:40:31.62094002Z stdout F 2026-05-01 14:40:31 [INFO] bot.services.vertex_ai_service — Grok: calling via slot 'first-vision-491914-r4-04dc11021c1a' (search=True)
+2026-05-01T11:40:13.675886388Z stdout F 2026-05-01 14:40:13 [INFO] bot.db — db: loaded 12 users from PostgreSQL
+2026-05-01T11:40:13.657369472Z stdout F 2026-05-01 14:40:13 [INFO] bot.db — db: loaded 12 users from PostgreSQL
+2026-05-01T11:39:14.399017139Z stdout F 2026-05-01 14:39:14 [INFO] bot.services.vertex_ai_service — Grok: calling via slot 'first-vision-491914-r4-04dc11021c1a' (search=True)
+2026-05-01T11:36:23.501069239Z stdout F 2026-05-01 14:36:23 [INFO] bot.autopub.scheduler — [autopub] scheduler tick #11  enabled=False  time=14:36 MSK
+2026-05-01T11:35:30.940605947Z stdout F 2026-05-01 14:35:30 [WARNING] bot.web_admin — handle_tg_photo failed for AgADHqIAAq_liEs: Cannot write to closing transport
+2026-05-01T11:35:21.947886974Z stdout F 2026-05-01 14:35:21 [WARNING] bot.web_admin — handle_tg_photo failed for AgADHqIAAq_liEs: Cannot write to closing transport
+2026-05-01T11:35:16.491372749Z stdout F 2026-05-01 14:35:16 [INFO] bot.db — db: loaded 12 users from PostgreSQL
+2026-05-01T11:34:14.074910006Z stdout F 2026-05-01 14:34:14 [INFO] bot.log_channel — log_channel: аудио отправлено в канал -1003911574431
+2026-05-01T11:34:13.325024106Z stdout F 2026-05-01 14:34:13 [INFO] bot.middlewares.logging_middleware — ← [message] user_id=6014789391 username=@gayrath02 — 56208.6 ms
+2026-05-01T11:34:12.659007639Z stdout F 2026-05-01 14:34:12 [INFO] bot.services.vertex_ai_service — Music OK: slot='first-vision-491914-r4-04dc11021c1a' model=lyria-3-pro-preview duration=55.4s size=3431.0 KB
+2026-05-01T11:33:17.467948114Z stdout F 2026-05-01 14:33:17 [INFO] bot.services.vertex_ai_service — Music /interactions: project=first-vision-491914-r4 model=lyria-3-pro-preview image=True prompt='неизвестно'
+2026-05-01T11:33:17.208294883Z stdout F 2026-05-01 14:33:17 [INFO] bot.services.vertex_ai_service — Music [ima

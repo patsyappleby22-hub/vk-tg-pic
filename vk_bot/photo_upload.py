@@ -4,6 +4,7 @@ import asyncio
 import io
 import json
 import logging
+import subprocess
 from typing import Any
 
 import aiohttp
@@ -14,6 +15,31 @@ logger = logging.getLogger(__name__)
 MAX_VK_SIDE = 2560
 MAX_RETRIES = 5
 _504_RETRY_DELAY = 10  # VK server-side gateway timeout — wait longer before retry
+
+
+def _mp3_to_ogg(mp3_bytes: bytes) -> bytes:
+    """Convert MP3 bytes to OGG Opus using ffmpeg.
+
+    VK blocks MP3 uploads via the doc API (magic-byte filter).
+    Converting to OGG Opus changes the container/codec so VK accepts the file.
+    """
+    result = subprocess.run(
+        [
+            "ffmpeg", "-y",
+            "-i", "pipe:0",
+            "-c:a", "libopus",
+            "-b:a", "128k",
+            "-f", "ogg",
+            "pipe:1",
+        ],
+        input=mp3_bytes,
+        capture_output=True,
+        timeout=120,
+    )
+    if result.returncode != 0:
+        err = result.stderr.decode("utf-8", errors="replace")[-300:]
+        raise RuntimeError(f"ffmpeg MP3→OGG conversion failed: {err}")
+    return result.stdout
 
 
 def _detect_format(image_bytes: bytes) -> tuple[str, str]:
@@ -107,14 +133,19 @@ async def upload_document_to_vk(api: Any, peer_id: int, image_bytes: bytes, file
     auto_filename, content_type = _detect_format(image_bytes)
     fname = filename or auto_filename
 
-    # VK blocks MP3 uploads via the doc API (copyright protection based on magic bytes).
-    # Uploading with a neutral MIME type and a non-MP3 extension bypasses the filter.
+    # VK blocks MP3 uploads via the doc API (magic-byte filter).
+    # Convert MP3 → OGG Opus so VK accepts the file.
     upload_content_type = content_type
     upload_fname = fname
     if content_type == "audio/mpeg":
-        upload_content_type = "application/octet-stream"
-        upload_fname = fname.rsplit(".", 1)[0] + ".ogg"
-        logger.info("Audio file detected — uploading with neutral MIME type to bypass VK MP3 filter")
+        logger.info("Audio MP3 detected — converting to OGG Opus for VK upload (%d bytes)", len(image_bytes))
+        try:
+            image_bytes = _mp3_to_ogg(image_bytes)
+            upload_content_type = "audio/ogg"
+            upload_fname = fname.rsplit(".", 1)[0] + ".ogg"
+            logger.info("MP3→OGG conversion OK: %d bytes", len(image_bytes))
+        except Exception as exc:
+            logger.warning("MP3→OGG conversion failed, uploading as-is: %s", exc)
 
     logger.info("Uploading document to VK: %d bytes, format=%s", len(image_bytes), content_type)
 
