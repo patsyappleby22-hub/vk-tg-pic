@@ -1,0 +1,142 @@
+Jump to project navigationJump to main content
+Northflank Cloud Platform logo, to the homepage
+ZT
+Current team:
+zaan's team
+
+Current project:
+gcp
+
+
+Create new
+
+Docs
+
+Support
+
+MK
+Marvel Kinoolami
+Project navigation
+Dashboard
+Services
+Jobs
+Volumes
+Addons
+Secrets
+Environments
+Templates
+Project template
+Project settings
+vk-tg
+
+Service ID:
+vk-tg
+
+Add a description
+
+
+Add tags
+vk-tg-picgenai.ru
+
+View 3 additional domains
+Europe - West
+Northflank
+patsyappleby22-hub/vk-tg-pic
+main
+b4b3b37
+b4b3b37274248256e2e40ec2d08e4a6dc1683a88
+
+Running
+0.2 vCPU / 512 MB
+1 / 1
+CI
+
+CD
+
+
+
+
+
+Service navigation
+Overview
+
+Observability
+Deployments
+
+Run
+Resources
+
+Networking
+
+Environment
+
+Health checks
+
+CMD override
+
+Volumes
+
+Code
+Builds
+
+Build options
+
+Build arguments
+
+Commits
+
+Billing
+
+vk-tg /
+Instances /
+vk-tg-57bff98d7f
+
+
+
+
+Logs
+
+Metrics
+Connection
+Live tailing
+
+Search logs
+Search logs
+==
+!=
+ABC
+(.*)
+
+Returned 28 lines
+
+Direction
+2026-05-01T11:27:31.99384932Z stdout F 2026-05-01 14:27:31 [INFO] bot.log_channel — log_channel: аудио отправлено в канал -1003911574431
+2026-05-01T11:27:31.560912457Z stdout F 2026-05-01 14:27:31 [INFO] bot.middlewares.logging_middleware — ← [message] user_id=6014789391 username=@gayrath02 — 15589.0 ms
+2026-05-01T11:27:31.154501214Z stdout F 2026-05-01 14:27:31 [INFO] bot.services.vertex_ai_service — Music OK: slot='first-vision-491914-r4-04dc11021c1a' model=lyria-3-clip-preview duration=15.1s size=721.2 KB
+2026-05-01T11:27:18.7739401Z stdout F 2026-05-01 14:27:18 [INFO] bot.services.vertex_ai_service — Music /interactions: project=first-vision-491914-r4 model=lyria-3-clip-preview image=True prompt='неизвестно'
+2026-05-01T11:27:16.056709549Z stdout F 2026-05-01 14:27:16 [INFO] bot.services.vertex_ai_service — Music [image→music]: trying 'first-vision-491914-r4-04dc11021c1a' model=lyria-3-clip-preview prompt='неизвестно'
+2026-05-01T11:27:15.972636747Z stdout F 2026-05-01 14:27:15 [INFO] bot.middlewares.logging_middleware — → [message] user_id=6014789391 username=@gayrath02
+2026-05-01T11:27:08.365266296Z stdout F 2026-05-01 14:27:08 [INFO] bot.middlewares.logging_middleware — ← [callback_query] user_id=6014789391 username=@gayrath02 — 49.1 ms
+2026-05-01T11:27:08.31611646Z stdout F 2026-05-01 14:27:08 [INFO] bot.middlewares.logging_middleware — → [callback_query] user_id=6014789391 username=@gayrath02
+2026-05-01T11:27:07.140187079Z stdout F 2026-05-01 14:27:07 [INFO] bot.middlewares.logging_middleware — ← [callback_query] user_id=6014789391 username=@gayrath02 — 54.9 ms
+2026-05-01T11:27:07.085449061Z stdout F 2026-05-01 14:27:07 [INFO] bot.middlewares.logging_middleware — → [callback_query] user_id=6014789391 username=@gayrath02
+2026-05-01T11:27:05.793354973Z stdout F 2026-05-01 14:27:05 [INFO] bot.middlewares.logging_middleware — ← [message] user_id=6014789391 username=@gayrath02 — 86.1 ms
+2026-05-01T11:27:05.707156275Z stdout F 2026-05-01 14:27:05 [INFO] bot.middlewares.logging_middleware — → [message] user_id=6014789391 username=@gayrath02
+2026-05-01T11:26:23.451632968Z stdout F 2026-05-01 14:26:23 [INFO] bot.autopub.scheduler — [autopub] scheduler tick #1  enabled=False  time=14:26 MSK
+2026-05-01T11:26:23.446150913Z stdout F 2026-05-01 14:26:23 [INFO] bot.autopub.scheduler — autopub scheduler: started (tick=60s)
+2026-05-01T11:26:23.445389114Z stdout F 2026-05-01 14:26:23 [INFO] bot.web_admin — Admin panel routes registered at /admin
+2026-05-01T11:26:23.360802652Z stdout F 2026-05-01 14:26:23 [INFO] start_all — Web server starting on port 8080 (landing + payment webhooks)
+2026-05-01T11:26:23.344406139Z stdout F 2026-05-01 14:26:23 [INFO] start_all — VK bot starting...
+2026-05-01T11:25:53.650687055Z stdout F 2026-05-01 14:25:53 [INFO] start_all — Telegram bot starting...
+2026-05-01T11:25:36.498154452Z stdout F 2026-05-01 14:25:36 [INFO] start_all — Running bots: Telegram, VK
+2026-05-01T11:25:34.531604515Z stdout F 2026-05-01 14:25:34 [INFO] bot.services.vertex_ai_service — VertexAIService initialised with 7 credential slot(s)
+2026-05-01T11:25:34.531114873Z stdout F 2026-05-01 14:25:34 [INFO] bot.services.vertex_ai_service — Loaded 1 service account file(s) for authentication
+2026-05-01T11:25:34.520925945Z stdout F 2026-05-01 14:25:34 [INFO] bot.services.vertex_ai_service — Loaded 6 API key(s) for authentication
+2026-05-01T11:25:34.510277403Z stdout F 2026-05-01 14:25:34 [INFO] bot.user_settings — Loaded 12 users from PostgreSQL
+2026-05-01T11:25:34.510245904Z stdout F 2026-05-01 14:25:34 [INFO] bot.db — db: loaded 12 users from PostgreSQL
+2026-05-01T11:25:34.506444267Z stdout F 2026-05-01 14:25:34 [INFO] bot.db — db: tables ready (PostgreSQL)
+2026-05-01T11:25:29.644712443Z stdout F [2026-05-01T11:25:29Z INFO ] Starting container entrypoint...
+2026-05-01T11:25:29.639106224Z stdout F [2026-05-01T11:25:29Z INFO ] Successfully fetched environment variables.
+2026-05-01T11:25:29.473523995Z stdout F [2026-05-01T11:25:29Z INFO ] Securely fetching environment variables...
+All services normal
+HomeDocsChangelogBlog
