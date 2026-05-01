@@ -744,6 +744,35 @@ class VertexAIService:
         self._alert_quota_exhausted(model)
         raise QuotaExceededError()
 
+    def _describe_image_for_music(self, slot: _BaseSlot, image: bytes, prompt: str) -> str:
+        """Use Gemini vision to describe an image as a music prompt for Lyria."""
+        from google.genai import types as genai_types
+        try:
+            vision_client = slot.get_client()
+            user_hint = f' Пользователь хочет: "{prompt}".' if prompt and prompt not in ("неизвестно", "") else ""
+            vision_response = vision_client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=[
+                    genai_types.Part.from_bytes(data=image, mime_type="image/jpeg"),
+                    (
+                        "Опиши это изображение для генерации музыки: настроение, атмосфера, жанр, "
+                        "темп (быстрый/медленный), инструменты, эмоции."
+                        + user_hint
+                        + " Ответ строго на английском языке, 2-3 предложения, только описание без вводных слов."
+                    ),
+                ],
+            )
+            description = (getattr(vision_response, "text", None) or "").strip()
+            if description:
+                combined = description
+                if prompt and prompt not in ("неизвестно", ""):
+                    combined = f"{prompt}. {description}"
+                logger.info("Music image→description: '%s'", combined[:120])
+                return combined
+        except Exception as exc:
+            logger.warning("Music: image description failed, falling back to text-only prompt: %s", exc)
+        return prompt
+
     def _generate_music_with_gemini_api(
         self,
         slot: _BaseSlot,
@@ -751,18 +780,15 @@ class VertexAIService:
         model: str,
         image: bytes | None,
     ) -> bytes:
-        from google.genai import types as genai_types
+        # Lyria models are text-to-music only — they do NOT accept image input.
+        # If an image is provided, first describe it via Gemini Vision, then feed
+        # the resulting text description to Lyria.
+        if image is not None:
+            prompt = self._describe_image_for_music(slot, image, prompt)
 
         # Lyria requires global endpoint on Vertex AI, not us-central1
         client = slot.get_music_client() if hasattr(slot, 'get_music_client') else slot.get_video_client()
-        contents: Any
-        if image is not None:
-            contents = [
-                prompt,
-                genai_types.Part.from_bytes(data=image, mime_type="image/jpeg"),
-            ]
-        else:
-            contents = prompt
+        contents: Any = prompt
 
         # Lyria models auto-generate audio — no config/response_modalities needed
         # (per Google docs: all examples call generate_content without config)

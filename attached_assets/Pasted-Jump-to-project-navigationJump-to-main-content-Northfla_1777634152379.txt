@@ -1,0 +1,173 @@
+Jump to project navigationJump to main content
+Northflank Cloud Platform logo, to the homepage
+ZT
+Current team:
+zaan's team
+
+Current project:
+gcp
+
+
+Create new
+
+Docs
+
+Support
+
+MK
+Marvel Kinoolami
+Project navigation
+Dashboard
+Services
+Jobs
+Volumes
+Addons
+Secrets
+Environments
+Templates
+Project template
+Project settings
+vk-tg
+
+Service ID:
+vk-tg
+
+Add a description
+
+
+Add tags
+vk-tg-picgenai.ru
+
+View 3 additional domains
+Europe - West
+Northflank
+patsyappleby22-hub/vk-tg-pic
+main
+49d416d
+49d416d12fcd5314aa6cb0106a8300e5b47c506b
+
+Running
+0.2 vCPU / 512 MB
+1 / 1
+CI
+
+CD
+
+
+
+
+
+Service navigation
+Overview
+
+Observability
+Deployments
+
+Run
+Resources
+
+Networking
+
+Environment
+
+Health checks
+
+CMD override
+
+Volumes
+
+Code
+Builds
+
+Build options
+
+Build arguments
+
+Commits
+
+Billing
+
+vk-tg /
+Instances /
+vk-tg-64bbd45cfc
+
+
+
+
+Logs
+
+Metrics
+Connection
+Live tailing
+
+Search logs
+Search logs
+==
+!=
+ABC
+(.*)
+
+Returned 124 lines
+
+Direction
+2026-05-01T10:17:58.161779297Z stdout F     )
+2026-05-01T10:17:58.161777308Z stdout F         'post', path, request_dict, http_options
+2026-05-01T10:17:58.161775116Z stdout F     response = self._api_client.request(
+2026-05-01T10:17:58.16177278Z stdout F   File "/usr/local/lib/python3.13/site-packages/google/genai/models.py", line 4767, in _generate_content
+2026-05-01T10:17:58.161770709Z stdout F     )
+2026-05-01T10:17:58.161768681Z stdout F         model=model, contents=contents, config=parsed_config
+2026-05-01T10:17:58.161765972Z stdout F     response = self._generate_content(
+2026-05-01T10:17:58.161763838Z stdout F   File "/usr/local/lib/python3.13/site-packages/google/genai/models.py", line 6329, in generate_content
+2026-05-01T10:17:58.161761336Z stdout F     )
+2026-05-01T10:17:58.161759322Z stdout F         contents=contents,
+2026-05-01T10:17:58.161756166Z stdout F         model=model,
+2026-05-01T10:17:58.161754149Z stdout F     response = client.models.generate_content(
+2026-05-01T10:17:58.16175129Z stdout F   File "/app/bot/services/vertex_ai_service.py", line 769, in _generate_music_with_gemini_api
+2026-05-01T10:17:58.161748111Z stdout F     result = self.fn(*self.args, **self.kwargs)
+2026-05-01T10:17:58.161744856Z stdout F   File "/usr/local/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+2026-05-01T10:17:58.161741319Z stdout F            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-05-01T10:17:58.161738209Z stdout F     return await loop.run_in_executor(None, func_call)
+2026-05-01T10:17:58.161734297Z stdout F   File "/usr/local/lib/python3.13/asyncio/threads.py", line 25, in to_thread
+2026-05-01T10:17:58.161730211Z stdout F     ^
+2026-05-01T10:17:58.161727244Z stdout F     )
+2026-05-01T10:17:58.161723947Z stdout F     ...<5 lines>...
+2026-05-01T10:17:58.161716579Z stdout F                   ^^^^^^^^^^^^^^^^^^^^^^^^
+2026-05-01T10:17:58.161713552Z stdout F     music_bytes = await asyncio.to_thread(
+2026-05-01T10:17:58.161710288Z stdout F   File "/app/bot/services/vertex_ai_service.py", line 654, in _generate_music_inner
+2026-05-01T10:17:58.161704599Z stdout F Traceback (most recent call last):
+2026-05-01T10:17:58.161664384Z stdout F 2026-05-01 13:17:58 [ERROR] bot.handlers.image — Error image→music 'неизвестно': Image generation failed: 400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Request contains an invalid argument.', 'status': 'INVALID_ARGUMENT'}}
+2026-05-01T10:17:58.126773985Z stdout F 2026-05-01 13:17:58 [ERROR] bot.services.vertex_ai_service — Music: slot 'first-vision-491914-r4-04dc11021c1a' error: ClientError("400 INVALID_ARGUMENT. {'error': {'code': 400, 'message': 'Request contains an invalid argument.', 'status': 'INVALID_ARGUMENT'}}")
+2026-05-01T10:17:58.123783719Z stdout F 2026-05-01 13:17:58 [INFO] httpx — HTTP Request: POST https://aiplatform.googleapis.com/v1beta1/projects/first-vision-491914-r4/locations/global/publishers/google/models/lyria-3-clip-preview:generateContent "HTTP/1.1 400 Bad Request"
+2026-05-01T10:17:57.668257978Z stdout F 2026-05-01 13:17:57 [INFO] bot.services.vertex_ai_service — Initialised music client for account 'first-vision-491914-r4-04dc11021c1a' (Vertex AI / SA, global)
+2026-05-01T10:17:48.935487988Z stdout F 2026-05-01 13:17:48 [INFO] bot.services.vertex_ai_service — Music [image→music]: trying 'first-vision-491914-r4-04dc11021c1a' model=lyria-3-clip-preview prompt='неизвестно'
+2026-05-01T10:17:48.865832808Z stdout F 2026-05-01 13:17:48 [INFO] bot.middlewares.logging_middleware — → [message] user_id=6014789391 username=@gayrath02
+2026-05-01T10:17:39.996964591Z stdout F 2026-05-01 13:17:39 [INFO] bot.middlewares.logging_middleware — ← [callback_query] user_id=6014789391 username=@gayrath02 — 62.6 ms
+2026-05-01T10:17:39.93418013Z stdout F 2026-05-01 13:17:39 [INFO] bot.middlewares.logging_middleware — → [callback_query] user_id=6014789391 username=@gayrath02
+2026-05-01T10:17:38.914644791Z stdout F 2026-05-01 13:17:38 [INFO] bot.middlewares.logging_middleware — ← [callback_query] user_id=6014789391 username=@gayrath02 — 59.8 ms
+2026-05-01T10:17:38.854950109Z stdout F 2026-05-01 13:17:38 [INFO] bot.middlewares.logging_middleware — → [callback_query] user_id=6014789391 username=@gayrath02
+2026-05-01T10:17:37.847858288Z stdout F 2026-05-01 13:17:37 [INFO] bot.middlewares.logging_middleware — ← [callback_query] user_id=6014789391 username=@gayrath02 — 18.5 ms
+2026-05-01T10:17:37.829256446Z stdout F 2026-05-01 13:17:37 [INFO] bot.middlewares.logging_middleware — → [callback_query] user_id=6014789391 username=@gayrath02
+2026-05-01T10:17:36.786492331Z stdout F 2026-05-01 13:17:36 [INFO] bot.middlewares.logging_middleware — ← [callback_query] user_id=6014789391 username=@gayrath02 — 18.9 ms
+2026-05-01T10:17:36.767602403Z stdout F 2026-05-01 13:17:36 [INFO] bot.middlewares.logging_middleware — → [callback_query] user_id=6014789391 username=@gayrath02
+2026-05-01T10:17:21.410759856Z stdout F 2026-05-01 13:17:21 [INFO] bot.middlewares.logging_middleware — ← [message] user_id=6014789391 username=@gayrath02 — 142.8 ms
+2026-05-01T10:17:21.393411167Z stdout F 2026-05-01 13:17:21 [INFO] bot.middlewares.logging_middleware — ← [message] user_id=6014789391 username=@gayrath02 — 126.2 ms
+2026-05-01T10:17:21.267653478Z stdout F 2026-05-01 13:17:21 [INFO] bot.middlewares.logging_middleware — → [message] user_id=6014789391 username=@gayrath02
+2026-05-01T10:17:21.267039641Z stdout F 2026-05-01 13:17:21 [INFO] bot.middlewares.logging_middleware — → [message] user_id=6014789391 username=@gayrath02
+2026-05-01T10:17:20.970164186Z stdout F 2026-05-01 13:17:20 [INFO] bot.autopub.scheduler — [autopub] scheduler tick #1  enabled=False  time=13:17 MSK
+2026-05-01T10:17:20.96532825Z stdout F 2026-05-01 13:17:20 [INFO] bot.autopub.scheduler — autopub scheduler: started (tick=60s)
+2026-05-01T10:17:20.963935121Z stdout F 2026-05-01 13:17:20 [INFO] bot.web_admin — Admin panel routes registered at /admin
+2026-05-01T10:17:20.961933263Z stdout F 2026-05-01 13:17:20 [INFO] start_all — Web server starting on port 8080 (landing + payment webhooks)
+2026-05-01T10:17:20.877187349Z stdout F 2026-05-01 13:17:20 [INFO] start_all — VK bot starting...
+2026-05-01T10:16:53.567632719Z stdout F 2026-05-01 13:16:53 [INFO] start_all — Telegram bot starting...
+2026-05-01T10:16:37.318940593Z stdout F 2026-05-01 13:16:37 [INFO] start_all — Running bots: Telegram, VK
+2026-05-01T10:16:35.424545188Z stdout F 2026-05-01 13:16:35 [INFO] bot.services.vertex_ai_service — VertexAIService initialised with 7 credential slot(s)
+2026-05-01T10:16:35.424496254Z stdout F 2026-05-01 13:16:35 [INFO] bot.services.vertex_ai_service — Loaded 1 service account file(s) for authentication
+2026-05-01T10:16:35.41128313Z stdout F 2026-05-01 13:16:35 [INFO] bot.services.vertex_ai_service — Loaded 6 API key(s) for authentication
+2026-05-01T10:16:35.396524911Z stdout F 2026-05-01 13:16:35 [INFO] bot.user_settings — Loaded 12 users from PostgreSQL
+2026-05-01T10:16:35.395261186Z stdout F 2026-05-01 13:16:35 [INFO] bot.db — db: loaded 12 users from PostgreSQL
+2026-05-01T10:16:35.387970884Z stdout F 2026-05-01 13:16:35 [INFO] bot.db — db: tables ready (PostgreSQL)
+2026-05-01T10:16:30.796612631Z stdout F [2026-05-01T10:16:30Z INFO ] Starting container entrypoint...
+2026-05-01T10:16:30.794139699Z stdout F [2026-05-01T10:16:30Z INFO ] Successfully fetched environment variables.
+2026-05-01T10:16:30.763980521Z stdout F [2026-05-01T10:16:30Z INFO ] Securely fetching environment variables...
+All services normal
+HomeDocsChangelogBlog

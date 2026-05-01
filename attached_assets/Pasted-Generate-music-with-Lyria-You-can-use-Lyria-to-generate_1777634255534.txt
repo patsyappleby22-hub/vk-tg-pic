@@ -1,0 +1,122 @@
+Generate music with Lyria
+
+
+
+You can use Lyria to generate novel music tracks from prompts. Supported interfaces include the Google Cloud console and the Gemini API in Vertex AI API.
+
+Try Lyria on Vertex AI (Vertex AI Studio)
+
+Before you begin
+In the Google Cloud console, on the project selector page, select or create a Google Cloud project.
+
+Roles required to select or create a project
+
+Note: If you don't plan to keep the resources that you create in this procedure, create a project instead of selecting an existing project. After you finish these steps, you can delete the project, removing all resources associated with the project.
+Go to project selector
+
+Enable the Vertex AI API.
+
+Roles required to enable APIs
+
+Enable the API
+
+Set up authentication for your environment.
+
+Select the tab for how you plan to use the samples on this page:
+
+Console
+REST
+When you use the Google Cloud console to access Google Cloud services and APIs, you don't need to set up authentication.
+
+Console
+Lyria 3 REST
+Lyria 2 REST
+
+Before using any of the request data, make the following replacements:
+
+PROJECT_ID: A string representing your Google Cloud project ID.
+MODEL_ID: A string representing the model ID to use. The following are accepted values:
+
+lyria-3-clip-preview
+lyria-3-pro-preview
+TEXT_PROMPT: The text prompt used to guide music generation.
+IMAGE_URI: optional: the Cloud Storage uri where your input image is located.
+IMAGE_DATABYTES: Optional: A Base64-encoded input image.
+HTTP method and URL:
+
+
+
+POST https://aiplatform.googleapis.com/v1beta1/projects/PROJECT_ID/locations/global/interactions
+Request JSON body:
+
+
+
+{
+  "model": "MODEL_ID",
+  "input": [
+    {
+      "type": "text",
+      "text": "TEXT_PROMPT"
+    },
+    {
+      "type": "image",
+      "mime_type": "image/jpeg",
+      "uri": "IMAGE_URI"
+    },
+    {
+      "type": "image",
+      "mime_type": "image/png",
+      "data": "IMAGE_DATABYTES"
+    },
+  ]
+}
+
+To send your request, choose one of these options:
+
+curl
+PowerShell
+Note: The following command assumes that you have logged in to the gcloud CLI with your user account by running gcloud init or gcloud auth login , or by using Cloud Shell, which automatically logs you into the gcloud CLI . You can check the currently active account by running gcloud auth list.
+Save the request body in a file named request.json, and execute the following command:
+
+
+
+curl -X POST \
+     -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+     -H "Content-Type: application/json; charset=utf-8" \
+     -d @request.json \
+     "https://aiplatform.googleapis.com/v1beta1/projects/PROJECT_ID/locations/global/interactions"
+The request returns the operation name, status, and result.
+
+{
+  "status": "completed",
+  "outputs": [
+    {
+      "text": "LYRICS",
+      "type": "text"
+    },
+    {
+      "text": "DESCRIPTION",
+      "type": "text"
+    },
+    {
+      "mime_type": "audio/mpeg",
+      "data": "GENERATED_SONG_DATABYTES",
+      "type": "audio"
+    },
+    {}
+  ],
+  "role": "model",
+  "created": "CREATED_TIME",
+  "updated": "UPDATE_TIME",
+  "object": "interaction",
+  "model": "lyria-3-pro-preview"
+}
+
+What's next
+Learn how to write effective prompts in the Lyria music generation prompt guide
+
+Explore the Lyria API reference
+
+Discover other Generative AI models on Vertex AI
+
+Эта информация оказалась полезной?
