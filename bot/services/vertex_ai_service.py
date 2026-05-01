@@ -369,6 +369,7 @@ class _CredSlot(_BaseSlot):
         self.sa_path = sa_path
         self._project_id: str | None = None
         self._video_client = None
+        self._music_client = None
         self._load_project_id()
 
     def _load_project_id(self) -> None:
@@ -412,9 +413,23 @@ class _CredSlot(_BaseSlot):
             logger.info("Initialised video/music client for account '%s' (Vertex AI / SA, us-central1)", self.label)
         return self._video_client
 
+    def get_music_client(self) -> Any:
+        """Vertex AI client for Lyria. Uses global endpoint (required for Lyria models)."""
+        if self._music_client is None:
+            import google.genai as genai
+            self._music_client = genai.Client(
+                vertexai=True,
+                project=self._project_id,
+                location="global",
+                credentials=self._get_credentials(),
+            )
+            logger.info("Initialised music client for account '%s' (Vertex AI / SA, global)", self.label)
+        return self._music_client
+
     def reset_client(self) -> None:
         super().reset_client()
         self._video_client = None
+        self._music_client = None
 
     def _get_credentials(self) -> Any:
         from google.oauth2 import service_account as sa
@@ -738,7 +753,8 @@ class VertexAIService:
     ) -> bytes:
         from google.genai import types as genai_types
 
-        client = slot.get_video_client()
+        # Lyria requires global endpoint on Vertex AI, not us-central1
+        client = slot.get_music_client() if hasattr(slot, 'get_music_client') else slot.get_video_client()
         contents: Any
         if image is not None:
             contents = [
