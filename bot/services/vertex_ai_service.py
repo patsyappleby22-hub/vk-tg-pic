@@ -748,19 +748,25 @@ class VertexAIService:
         else:
             contents = prompt
 
+        # Per Google docs: lyria-3-clip-preview doesn't need response_modalities;
+        # lyria-3-pro-preview needs them only for WAV output.
+        # For MP3 (default), both models work without explicit config.
         response = client.models.generate_content(
             model=model,
             contents=contents,
-            config=genai_types.GenerateContentConfig(
-                response_modalities=["AUDIO", "TEXT"],
-            ),
         )
 
-        parts = getattr(response, "parts", None)
-        if not parts and getattr(response, "candidates", None):
+        # Parse response following Google's documented pattern:
+        # parts contain text (lyrics) and inline_data (audio bytes)
+        parts = None
+        if getattr(response, "candidates", None) and response.candidates:
             candidate = response.candidates[0]
             content = getattr(candidate, "content", None)
-            parts = getattr(content, "parts", None) if content else None
+            if content:
+                parts = getattr(content, "parts", None)
+        # Fallback: some SDK versions expose parts directly
+        if not parts:
+            parts = getattr(response, "parts", None)
 
         if not parts:
             raise GenerationError("Lyria не вернула аудио")
