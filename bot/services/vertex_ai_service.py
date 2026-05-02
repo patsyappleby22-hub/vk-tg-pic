@@ -162,14 +162,7 @@ def _build_config_for_model(
         "image_config": genai_types.ImageConfig(**image_cfg_kwargs),
     }
 
-    # Thinking is only useful for chat/reasoning models. Image-generation
-    # models (…-image-preview, …-image-generate, …) must NOT be asked to
-    # think — they end up emitting only thought parts and never produce an
-    # image, which downstream then misclassifies as "model returned text
-    # instead of an image".
-    model_l = model.lower()
-    is_image_model = "image" in model_l
-    if "flash" in model_l and "lite" not in model_l and not is_image_model:
+    if "flash" in model.lower() and "lite" not in model.lower():
         level = thinking_level.upper() if thinking_level != "none" else "NONE"
         config_kwargs["thinking_config"] = genai_types.ThinkingConfig(
             thinking_level=level,
