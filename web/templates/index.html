@@ -284,42 +284,6 @@
         }
         .btn-ico { width: 17px; height: 17px; fill: currentColor; flex-shrink: 0; }
 
-        /* Scroll indicator */
-        .scroll-ind {
-            position: absolute;
-            bottom: 40px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
-        }
-        .scroll-mouse {
-            width: 22px; height: 34px;
-            border: 1.5px solid var(--border-md);
-            border-radius: 11px;
-            position: relative;
-        }
-        .scroll-wheel {
-            width: 3px; height: 6px;
-            background: var(--accent);
-            border-radius: 2px;
-            position: absolute;
-            top: 6px; left: 50%;
-            transform: translateX(-50%);
-            animation: scrollWheel 2s ease-in-out infinite;
-        }
-        @keyframes scrollWheel {
-            0% { top: 6px; opacity: 1; }
-            100% { top: 20px; opacity: 0; }
-        }
-        .scroll-text {
-            font-size: 0.65em;
-            color: var(--muted);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-        }
 
         /* ─── Divider ─── */
         hr.div {
@@ -892,10 +856,6 @@
         </a>
     </div>
 
-    <div class="scroll-ind fade-up fade-up-delay-4">
-        <div class="scroll-mouse"><div class="scroll-wheel"></div></div>
-        <span class="scroll-text">Прокрутите</span>
-    </div>
 </section>
 
 <hr class="div">
