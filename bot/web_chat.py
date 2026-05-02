@@ -113,9 +113,17 @@ _CODE_GLOBAL_WINDOW = 10           # minutes
 _MAX_CHATS_PER_USER = 50
 _MAX_MESSAGES_PER_CHAT = 200
 _HISTORY_TURNS_FOR_MODEL = 30
-_MAX_UPLOAD_SIZE = 12 * 1024 * 1024   # 12 MiB per file
+_MAX_UPLOAD_SIZE = 12 * 1024 * 1024         # 12 MiB per image/audio/other file
+_MAX_UPLOAD_VIDEO_SIZE = 100 * 1024 * 1024  # 100 MiB per video (Veo extension input)
 _MAX_UPLOAD_FILES = 4
 _MAX_PROMPT_CHARS = 8000
+
+
+def _max_upload_size_for_mime(mime: str) -> int:
+    """Per-mime upload cap. Video is far larger than images."""
+    if (mime or "").lower().startswith("video/"):
+        return _MAX_UPLOAD_VIDEO_SIZE
+    return _MAX_UPLOAD_SIZE
 
 _MEDIA_CACHE_DIR = Path(os.getenv("WEB_MEDIA_CACHE_DIR", "/tmp/web_media_cache"))
 _MEDIA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -874,14 +882,15 @@ async def _read_multipart(request: web.Request) -> tuple[dict, list[tuple[bytes,
         elif part.name == "files":
             buf = bytearray()
             mime = part.headers.get("Content-Type", "application/octet-stream")
+            cap = _max_upload_size_for_mime(mime)
             while True:
                 chunk = await part.read_chunk(1 << 16)
                 if not chunk:
                     break
                 buf.extend(chunk)
-                if len(buf) > _MAX_UPLOAD_SIZE:
+                if len(buf) > cap:
                     raise web.HTTPRequestEntityTooLarge(
-                        max_size=_MAX_UPLOAD_SIZE, actual_size=len(buf),
+                        max_size=cap, actual_size=len(buf),
                     )
             if buf:
                 files.append((bytes(buf), mime))
@@ -1213,6 +1222,10 @@ async def _run_video(uid: int, user_first: str, cid: int,
             image_input = d
         elif m.startswith("video/") and video_input is None and info.get("supports_video_extension"):
             video_input = d
+    # Video extension takes precedence: if a video was attached, ignore any
+    # image so we don't send both inputs to Veo (which expects exactly one).
+    if video_input is not None:
+        image_input = None
 
     gen_id = _gen_new(uid)
     _gens_gc()
@@ -1556,7 +1569,7 @@ async def handle_generate(request: web.Request) -> web.Response:
             continue
         if not blob:
             continue
-        if len(blob) > _MAX_UPLOAD_SIZE:
+        if len(blob) > _max_upload_size_for_mime(mime):
             return web.json_response(
                 {"error": "Файл слишком большой"}, status=413)
         files.append((blob, mime))
@@ -2977,13 +2990,25 @@ a:hover{opacity:.8}
   function addFiles(fileList) {
     for (const f of fileList) {
       if (state.pendingFiles.length >= 4) break;
-      if (f.size > 12*1024*1024) { alert("Файл больше 12 МБ"); continue; }
-      const reader = new FileReader();
-      reader.onload = e => {
-        state.pendingFiles.push({name: f.name, type: f.type, size: f.size, blob: f, dataUrl: e.target.result});
+      const isVideo = (f.type || "").startsWith("video/");
+      const cap = isVideo ? 100*1024*1024 : 12*1024*1024;
+      if (f.size > cap) {
+        alert(isVideo ? "Видео больше 100 МБ" : "Файл больше 12 МБ");
+        continue;
+      }
+      if (isVideo) {
+        // Skip dataURL read for video — file can be huge and we never need
+        // an inline preview; just keep the blob and a placeholder icon.
+        state.pendingFiles.push({name: f.name, type: f.type, size: f.size, blob: f, dataUrl: ""});
         renderPending();
-      };
-      reader.readAsDataURL(f);
+      } else {
+        const reader = new FileReader();
+        reader.onload = e => {
+          state.pendingFiles.push({name: f.name, type: f.type, size: f.size, blob: f, dataUrl: e.target.result});
+          renderPending();
+        };
+        reader.readAsDataURL(f);
+      }
     }
     $("fileInput").value = "";
   }
@@ -2991,12 +3016,20 @@ a:hover{opacity:.8}
     const wrap = $("pendingFiles");
     if (!state.pendingFiles.length) { wrap.style.display = "none"; wrap.innerHTML = ""; return; }
     wrap.style.display = "flex";
-    wrap.innerHTML = state.pendingFiles.map((f,i) => `
+    const vidIcon = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" style="flex-shrink:0;color:var(--accent)"><rect x="3" y="6" width="14" height="12" rx="2"/><path d="M17 10l4-2v8l-4-2z"/></svg>`;
+    wrap.innerHTML = state.pendingFiles.map((f,i) => {
+      const isImg = f.type.startsWith("image/");
+      const isVid = f.type.startsWith("video/");
+      const thumb = isImg ? `<img src="${f.dataUrl}">` : (isVid ? vidIcon : "");
+      const sizeLbl = f.size > 1024*1024 ? `${(f.size/1024/1024).toFixed(1)} МБ` : `${Math.ceil(f.size/1024)} КБ`;
+      const nameWithSize = isVid ? `${escapeHtml(f.name)} · ${sizeLbl}` : escapeHtml(f.name);
+      return `
       <div class="pf">
-        ${f.type.startsWith("image/") ? `<img src="${f.dataUrl}">` : ""}
-        <span class="pf-name">${escapeHtml(f.name)}</span>
+        ${thumb}
+        <span class="pf-name">${nameWithSize}</span>
         <button class="pf-x" data-i="${i}" title="Убрать">×</button>
-      </div>`).join("");
+      </div>`;
+    }).join("");
     wrap.querySelectorAll(".pf-x").forEach(b => {
       b.addEventListener("click", () => {
         state.pendingFiles.splice(+b.dataset.i, 1);
