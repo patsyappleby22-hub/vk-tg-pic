@@ -1813,6 +1813,59 @@ async def handle_feed(request: web.Request) -> web.Response:
     return web.json_response({"items": items, "type": type_filter})
 
 
+async def handle_feed_media(request: web.Request) -> web.Response:
+    """Serve a single media file from the cross-chat feed by its
+    Telegram file_unique_id. Looks up the bot_image_logs row,
+    verifies ownership, then proxies through _fetch_tg_media (which
+    caches on disk so repeat hits don't re-download from Telegram).
+
+    Browser-side we use loading="lazy" + preload="none" on the feed
+    cards so this endpoint only fires when a card scrolls into view
+    or the user actually clicks play, keeping VPS bandwidth bounded.
+    """
+    s = _require_session(request)
+    fuid = (request.match_info.get("fuid") or "").strip()
+    if not fuid or not _db.is_available():
+        return web.Response(status=400, text="bad id")
+    info = _db.get_image_log_by_unique_id(fuid)
+    if not info:
+        return web.Response(status=404, text="not found")
+    # Strict ownership check — only the user who generated the file
+    # can request it. Rows that fell back to autopub_posts (no user_id
+    # column) are rejected outright.
+    owner = info.get("user_id")
+    if not owner or owner != s["user_id"]:
+        return web.Response(status=403, text="forbidden")
+    file_id = info.get("file_id") or ""
+    if not file_id:
+        return web.Response(status=404, text="no file")
+    model = (info.get("model") or "").lower()
+    if "veo" in model:
+        kind = "video"
+        fetch_kind = "video"
+        ctype = "video/mp4"
+    elif "lyria" in model or "music" in model:
+        kind = "music"
+        fetch_kind = "audio"
+        ctype = "audio/mpeg"
+    else:
+        kind = "image"
+        fetch_kind = "image"
+        ctype = "image/jpeg"
+    data = await _fetch_tg_media(file_id, fuid, fetch_kind)
+    if data is None:
+        return web.Response(status=502, text="media unavailable")
+    headers = {
+        "Cache-Control": "private, max-age=86400",
+        "Content-Length": str(len(data)),
+    }
+    if request.query.get("download") in ("1", "true", "yes"):
+        ext = {"image": "jpg", "video": "mp4", "audio": "mp3"}[fetch_kind]
+        fname = f"picgenai-{kind}-{fuid[:16]}.{ext}"
+        headers["Content-Disposition"] = f'attachment; filename="{fname}"'
+    return web.Response(body=data, content_type=ctype, headers=headers)
+
+
 # ─── HTML UI ────────────────────────────────────────────────────────────────
 
 def _shell_html() -> str:
@@ -1974,6 +2027,27 @@ a:hover{opacity:.8}
 .feed-card .feed-prompt{padding:0 10px 10px;font-size:.82em;color:var(--text);
   line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;
   overflow:hidden}
+/* Media area inside a feed card. Constrained square-ish aspect so a
+   wall of cards stays visually predictable regardless of source aspect.
+   Real bytes are only requested by the browser on demand (lazy/preload). */
+.feed-media{position:relative;width:100%;aspect-ratio:1/1;background:#000;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;
+  border-bottom:1px solid var(--border);cursor:pointer}
+.feed-media img,.feed-media video{width:100%;height:100%;object-fit:cover;display:block}
+.feed-media.audio{aspect-ratio:auto;padding:14px 10px;background:var(--surface3);
+  flex-direction:column;gap:8px;cursor:default}
+.feed-media.audio audio{width:100%}
+.feed-media.audio .audio-icon{width:38px;height:38px;border-radius:50%;
+  background:var(--accent-dim);color:var(--accent-bright);
+  display:flex;align-items:center;justify-content:center}
+.feed-media.audio .audio-icon svg{width:18px;height:18px;stroke:currentColor;
+  fill:none;stroke-width:1.8}
+.feed-media .play-badge{position:absolute;inset:auto auto 8px 8px;
+  padding:3px 8px;border-radius:5px;background:rgba(0,0,0,.55);
+  color:#fff;font-size:.7em;letter-spacing:.04em;text-transform:uppercase;
+  font-weight:600;backdrop-filter:blur(4px);pointer-events:none}
+.feed-media .media-fail{color:var(--muted2);font-size:.82em;padding:18px 10px;
+  text-align:center}
 .feed-empty{color:var(--muted2);text-align:center;padding:36px 8px;font-size:.92em}
 
 /* ── Main column ── */
@@ -2978,7 +3052,39 @@ a:hover{opacity:.8}
         items.map(it => {
           const k = it.kind === "video" ? "Видео" : (it.kind === "music" ? "Музыка" : "Картинка");
           const dt = it.created_at ? new Date(it.created_at).toLocaleString("ru-RU") : "";
+          // Build the media block. Browser bandwidth is gated:
+          //   image  → <img loading="lazy">  (no fetch until on-screen)
+          //   video  → <video preload="none">(no bytes until user clicks play)
+          //   music  → <audio preload="none">(no bytes until user clicks play)
+          let media = "";
+          const fuid = it.file_unique_id || "";
+          if (fuid) {
+            const src = "/chat/api/feed-media/" + encodeURIComponent(fuid);
+            if (it.kind === "video") {
+              media =
+                '<div class="feed-media">' +
+                  '<video src="' + src + '" preload="none" controls playsinline></video>' +
+                  '<span class="play-badge">Видео</span>' +
+                '</div>';
+            } else if (it.kind === "music") {
+              media =
+                '<div class="feed-media audio">' +
+                  '<div class="audio-icon">' +
+                    '<svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/>' +
+                    '<circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>' +
+                  '</div>' +
+                  '<audio src="' + src + '" preload="none" controls></audio>' +
+                '</div>';
+            } else {
+              media =
+                '<div class="feed-media">' +
+                  '<img src="' + src + '" loading="lazy" decoding="async" alt="" ' +
+                       'onerror="this.parentNode.innerHTML=\\'<div class=media-fail>Файл недоступен</div>\\'">' +
+                '</div>';
+            }
+          }
           return '<div class="feed-card">' +
+            media +
             '<div class="feed-meta"><b>' + k + '</b><span>' + escapeHtml(it.model || "") + '</span></div>' +
             '<div class="feed-prompt">' + escapeHtml(it.prompt || "(без описания)") + '</div>' +
             '<div class="feed-meta" style="border-top:1px solid var(--border)"><span>' + dt + '</span></div>' +
@@ -3323,4 +3429,5 @@ def register_chat_routes(app: web.Application) -> None:
     app.router.add_get("/chat/api/topup", handle_topup)
     app.router.add_post("/chat/api/topup", handle_topup)
     app.router.add_get("/chat/api/feed", handle_feed)
+    app.router.add_get("/chat/api/feed-media/{fuid}", handle_feed_media)
     logger.info("Web chat routes registered at /chat")
