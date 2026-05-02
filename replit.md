@@ -45,6 +45,16 @@ An asynchronous multi-platform bot (Telegram + VK) for AI image, video, and musi
 - Bots start automatically if their respective tokens are set
 - Admin panel: `/adminmrxgyt` command in Telegram
 
+## Web Chat — Top-up integration (2026-05)
+Модалка пополнения в `/chat` теперь содержит 3 вкладки:
+- **Тарифы** — пакеты от Pally (TG) / FreeKassa (VK), кнопка «Купить за N₽» открывает оплату в новой вкладке.
+- **История платежей** — `GET /chat/api/payments` (`bot/web_chat.py:handle_payments_history` → `_db.get_user_payments` + join к `CREDIT_PACKAGES`). Показывает order_id, сумму, метку пакета, статус (Оплачено/Ожидает/Отменён).
+- **История кредитов** — `GET /chat/api/credits/history?limit&offset` (`handle_credits_history` → `_db.get_user_credit_logs`). Показывает все начисления (+зелёным) и списания (-розовым) с типом операции (Пополнение/Списание/Корректировка), gen_type, моделью, балансом после, датой.
+
+После клика «Купить» запускается `startBalancePoll()` — polling `/chat/api/me` каждые 5с до 10мин; как только баланс вырастает (вебхук Pally/Lava/FreeKassa зачислил кредиты), pill #creditsLbl обновляется и текущая открытая вкладка истории перерисовывается. Стоп-условия: модалка закрыта (`closeTopup`), баланс вырос, или истёк таймаут.
+
+CSS: `.topup-tabs/.topup-tab` (та же визуальная грамматика что `.feed-tab`), генерик `.tx-list/.tx-row/.tx-amount.up/.down/.tx-status.ok|pending|fail/.tx-empty`. Все строки русские, без эмодзи. XSS защищён `escapeHtml` на всех динамических полях.
+
 ## Web Endpoints
 - `GET /` — Landing page (PicGenAI)
 - `GET /shop-verification-WG76VJD7xl.txt` — Pally site verification

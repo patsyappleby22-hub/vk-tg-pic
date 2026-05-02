@@ -21,6 +21,9 @@ Routes:
   GET  /chat/api/gen/{gen_id}/status        → poll long-running generation
   GET  /chat/api/media/{mid}                → stream media bytes for a message
   GET  /chat/api/topup                      → credit packages for the user
+  POST /chat/api/topup                      → create payment URL for a pack
+  GET  /chat/api/credits/history            → user's credit ledger (spend+topup)
+  GET  /chat/api/payments                   → user's payment orders w/ status
   GET  /chat/api/feed                       → cross-chat generation feed
 
 Auth: 6-digit code via the bot DM (TG / VK). HMAC-signed `sid` cookie for
@@ -1833,6 +1836,64 @@ async def handle_topup(request: web.Request) -> web.Response:
                               "order_id": res.get("order_id", "")})
 
 
+# ─── Credit + payment history ──────────────────────────────────────────────
+
+async def handle_credits_history(request: web.Request) -> web.Response:
+    """List the user's credit ledger (top-ups + spends) newest-first.
+
+    Reads from `bot_credit_history` (filled by user_settings.add_credits /
+    consume_credits / set_credits and by the payment webhooks). The web
+    chat uses this to render the "История кредитов" tab inside the
+    top-up modal so users can audit every charge and refill.
+    """
+    s = _require_session(request)
+    uid = s["user_id"]
+    try:
+        limit = max(1, min(int(request.rel_url.query.get("limit") or 50), 200))
+    except Exception:
+        limit = 50
+    try:
+        offset = max(0, int(request.rel_url.query.get("offset") or 0))
+    except Exception:
+        offset = 0
+    items = _db.get_user_credit_logs(uid, limit=limit, offset=offset)
+    total = _db.count_user_credit_logs(uid)
+    return web.json_response({"items": items, "total": total,
+                              "limit": limit, "offset": offset})
+
+
+async def handle_payments_history(request: web.Request) -> web.Response:
+    """List the user's payment orders (pending + success) newest-first.
+
+    Reads from `bot_payments`. Used by the "История платежей" tab in the
+    top-up modal so the user can see whether a recent purchase actually
+    completed and how much they paid.
+    """
+    s = _require_session(request)
+    uid = s["user_id"]
+    rows = _db.get_user_payments(uid)
+    # Resolve human pack labels via whichever provider knows them, so the
+    # UI never has to hard-code "pack_30 → 30 кредитов".
+    from bot.services.payment_service import CREDIT_PACKAGES as _PALLY
+    from bot.services.freekassa_service import CREDIT_PACKAGES as _FK
+    items: list[dict[str, Any]] = []
+    for r in rows:
+        key = r.get("pack_key") or ""
+        pack = _PALLY.get(key) or _FK.get(key) or {}
+        items.append({
+            "order_id": r.get("order_id"),
+            "payment_id": r.get("payment_id") or "",
+            "pack_key": key,
+            "credits": int(pack.get("credits") or 0),
+            "label": pack.get("label") or key,
+            "amount": float(r.get("amount") or 0),
+            "status": r.get("status") or "pending",
+            "created_at": r.get("created_at") or "",
+            "completed_at": r.get("completed_at") or "",
+        })
+    return web.json_response({"items": items})
+
+
 # ─── Cross-chat generation feed ─────────────────────────────────────────────
 
 async def handle_feed(request: web.Request) -> web.Response:
@@ -2130,6 +2191,36 @@ a:hover{opacity:.8}
 .topup-warn{color:var(--muted2);font-size:.84em;text-align:center;
   padding:14px 12px;background:rgba(155,138,251,.06);border-radius:10px;
   border:1px solid var(--border)}
+/* Tab strip in the topup modal head — same visual language as feed-tabs. */
+.topup-tabs{display:flex;gap:4px;margin-left:auto;margin-right:6px}
+.topup-tab{padding:5px 10px;border-radius:7px;font-size:.78em;color:var(--muted2);
+  background:transparent;transition:all .15s;font-weight:500}
+.topup-tab:hover{color:var(--text);background:var(--surface2)}
+.topup-tab.active{color:var(--text);background:var(--accent-dim)}
+/* Generic transaction list (credits ledger + payments). One row per
+   record, with a colored amount on the right. */
+.tx-list{display:flex;flex-direction:column;gap:8px}
+.tx-row{display:flex;align-items:center;gap:12px;padding:11px 14px;
+  background:var(--surface2);border:1px solid var(--border);border-radius:10px}
+.tx-row .tx-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.tx-row .tx-title{color:var(--text);font-size:.92em;font-weight:500;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tx-row .tx-meta{color:var(--muted2);font-size:.76em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tx-row .tx-amount{font-family:'JetBrains Mono',monospace;font-weight:600;
+  font-size:.95em;flex-shrink:0;text-align:right}
+.tx-row .tx-amount.up{color:#86efac}
+.tx-row .tx-amount.down{color:#fb7185}
+.tx-row .tx-status{font-size:.72em;padding:2px 8px;border-radius:999px;
+  border:1px solid var(--border);color:var(--muted2);flex-shrink:0;
+  text-transform:uppercase;letter-spacing:.04em}
+.tx-row .tx-status.ok{color:#86efac;border-color:rgba(134,239,172,.35);
+  background:rgba(134,239,172,.08)}
+.tx-row .tx-status.pending{color:#fbbf24;border-color:rgba(251,191,36,.35);
+  background:rgba(251,191,36,.08)}
+.tx-row .tx-status.fail{color:#fb7185;border-color:rgba(251,113,133,.35);
+  background:rgba(251,113,133,.08)}
+.tx-empty{color:var(--muted2);text-align:center;padding:32px 8px;font-size:.9em}
 .feed-tabs{display:flex;gap:4px}
 .feed-tab{padding:5px 10px;border-radius:7px;font-size:.78em;color:var(--muted2);
   background:transparent;transition:all .15s}
@@ -2560,9 +2651,14 @@ a:hover{opacity:.8}
 
   <!-- Пополнение баланса -->
   <div class="modal-back" id="topupModal" style="display:none">
-    <div class="modal-card">
+    <div class="modal-card modal-wide">
       <div class="modal-head">
         <div class="modal-title">Пополнение баланса</div>
+        <div class="topup-tabs">
+          <button class="topup-tab active" data-topup="packs" type="button">Тарифы</button>
+          <button class="topup-tab" data-topup="payments" type="button">История платежей</button>
+          <button class="topup-tab" data-topup="credits" type="button">История кредитов</button>
+        </div>
         <button class="modal-x" id="topupClose" type="button">×</button>
       </div>
       <div class="modal-body" id="topupBody">
@@ -3288,10 +3384,13 @@ a:hover{opacity:.8}
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") closeOverlays();
     });
-    $("topupBtn").addEventListener("click", openTopup);
-    $("topupClose").addEventListener("click", () => $("topupModal").style.display = "none");
+    $("topupBtn").addEventListener("click", () => openTopup("packs"));
+    $("topupClose").addEventListener("click", closeTopup);
     $("topupModal").addEventListener("click", (e) => {
-      if (e.target === $("topupModal")) $("topupModal").style.display = "none";
+      if (e.target === $("topupModal")) closeTopup();
+    });
+    document.querySelectorAll(".topup-tab").forEach(t => {
+      t.addEventListener("click", () => openTopup(t.dataset.topup || "packs"));
     });
     $("feedBtn").addEventListener("click", () => openFeed(""));
     $("feedClose").addEventListener("click", () => $("feedModal").style.display = "none");
@@ -3307,10 +3406,32 @@ a:hover{opacity:.8}
     });
   }
 
-  // ── Topup ─────────────────────────────────────────────────
-  async function openTopup() {
-    $("topupBody").innerHTML = '<div class="topup-loader">Загружаем тарифы…</div>';
+  // ── Topup (tariffs + payment history + credit ledger) ──────
+  // Module-level state for the topup modal: which tab is active, and a
+  // poll handle that watches /chat/api/me for credit changes after the
+  // user kicks off a payment in a new tab. The poll auto-stops when
+  // the modal closes or after a generous timeout.
+  let _topupTab = "packs";
+  let _balancePoll = null;
+  let _balancePollUntil = 0;
+
+  function openTopup(tab) {
+    _topupTab = tab || "packs";
+    document.querySelectorAll(".topup-tab").forEach(x => {
+      x.classList.toggle("active", (x.dataset.topup || "") === _topupTab);
+    });
     $("topupModal").style.display = "flex";
+    if (_topupTab === "packs")    return loadTopupPacks();
+    if (_topupTab === "payments") return loadPaymentsHistory();
+    if (_topupTab === "credits")  return loadCreditsHistory();
+  }
+  function closeTopup() {
+    $("topupModal").style.display = "none";
+    stopBalancePoll();
+  }
+
+  async function loadTopupPacks() {
+    $("topupBody").innerHTML = '<div class="topup-loader">Загружаем тарифы…</div>';
     try {
       const r = await fetch("/chat/api/topup");
       const j = await r.json();
@@ -3369,6 +3490,7 @@ a:hover{opacity:.8}
           }
           window.open(jj.pay_url, "_blank", "noopener");
           btn.textContent = "Перейти к оплате…";
+          startBalancePoll();
           setTimeout(() => { btn.disabled = false; btn.textContent = orig; }, 4000);
         } catch (e) {
           alert("Сеть недоступна");
@@ -3377,6 +3499,140 @@ a:hover{opacity:.8}
         }
       });
     });
+  }
+
+  // Polls /chat/api/me every 5s for up to 10 min after the user opens a
+  // payment URL. As soon as the credit count grows we update the balance
+  // pill and refresh the open history tab. This is best-effort: the
+  // payment webhook is the source of truth, this just gives the user
+  // instant feedback without forcing them to reload the page.
+  function startBalancePoll() {
+    stopBalancePoll();
+    const before = (state.me && state.me.credits) || 0;
+    _balancePollUntil = Date.now() + 10 * 60 * 1000;
+    _balancePoll = setInterval(async () => {
+      if (Date.now() > _balancePollUntil) { stopBalancePoll(); return; }
+      try {
+        const me = await (await fetch("/chat/api/me")).json();
+        if (me && typeof me.credits === "number") {
+          if (me.credits !== (state.me && state.me.credits)) {
+            state.me = me;
+            $("creditsLbl").textContent = fmtCredits(me.credits);
+          }
+          if (me.credits > before) {
+            stopBalancePoll();
+            // Refresh whichever history view is currently visible so the
+            // new entry shows up the moment the webhook lands.
+            if ($("topupModal").style.display !== "none") {
+              if (_topupTab === "payments") loadPaymentsHistory();
+              else if (_topupTab === "credits") loadCreditsHistory();
+            }
+          }
+        }
+      } catch {}
+    }, 5000);
+  }
+  function stopBalancePoll() {
+    if (_balancePoll) { clearInterval(_balancePoll); _balancePoll = null; }
+  }
+
+  function _fmtTxDate(iso) {
+    if (!iso) return "";
+    try { return new Date(iso).toLocaleString("ru-RU"); }
+    catch { return iso; }
+  }
+  function _statusInfo(status) {
+    if (status === "success") return {cls: "ok",      text: "Оплачено"};
+    if (status === "pending") return {cls: "pending", text: "Ожидает"};
+    return                          {cls: "fail",    text: "Отменён"};
+  }
+  function _changeTypeName(t) {
+    if (t === "topup") return "Пополнение";
+    if (t === "spend") return "Списание";
+    if (t === "set")   return "Корректировка";
+    return t || "Изменение";
+  }
+  function _genTypeName(t) {
+    if (t === "image") return "Изображение";
+    if (t === "video") return "Видео";
+    if (t === "music") return "Музыка";
+    if (t === "chat")  return "Чат";
+    return t || "";
+  }
+
+  async function loadPaymentsHistory() {
+    $("topupBody").innerHTML = '<div class="topup-loader">Загружаем историю платежей…</div>';
+    try {
+      const r = await fetch("/chat/api/payments");
+      const j = await r.json();
+      const items = j.items || [];
+      if (!items.length) {
+        $("topupBody").innerHTML =
+          '<div class="tx-empty">Платежей пока нет. Откройте вкладку «Тарифы» чтобы пополнить баланс.</div>';
+        return;
+      }
+      $("topupBody").innerHTML =
+        '<div class="tx-list">' +
+        items.map(it => {
+          const st = _statusInfo(it.status);
+          const dt = _fmtTxDate(it.completed_at || it.created_at);
+          const credits = it.credits ? (' · +' + it.credits + ' кр.') : '';
+          const amount = (it.amount|0) + '₽';
+          return '<div class="tx-row">' +
+            '<div class="tx-main">' +
+              '<div class="tx-title">' + escapeHtml(it.label || it.pack_key || '') + credits + '</div>' +
+              '<div class="tx-meta">' + escapeHtml(dt) + ' · №' + escapeHtml(String(it.order_id || '')) + '</div>' +
+            '</div>' +
+            '<div class="tx-amount up">' + amount + '</div>' +
+            '<span class="tx-status ' + st.cls + '">' + st.text + '</span>' +
+          '</div>';
+        }).join("") +
+        '</div>';
+    } catch (e) {
+      $("topupBody").innerHTML = '<div class="topup-warn">Не удалось загрузить историю платежей.</div>';
+    }
+  }
+
+  async function loadCreditsHistory() {
+    $("topupBody").innerHTML = '<div class="topup-loader">Загружаем историю кредитов…</div>';
+    try {
+      const r = await fetch("/chat/api/credits/history?limit=100");
+      const j = await r.json();
+      const items = j.items || [];
+      if (!items.length) {
+        $("topupBody").innerHTML =
+          '<div class="tx-empty">Здесь будет история начислений и списаний кредитов.</div>';
+        return;
+      }
+      $("topupBody").innerHTML =
+        '<div class="tx-list">' +
+        items.map(it => {
+          const change = it.credits_change|0;
+          const isUp = change > 0;
+          const amt = (isUp ? '+' : '') + change + ' кр.';
+          const cls = isUp ? 'up' : 'down';
+          const typeName = _changeTypeName(it.change_type);
+          const gen = _genTypeName(it.gen_type);
+          let title = typeName;
+          if (gen) title += ' · ' + gen;
+          else if (it.note) title += ' · ' + it.note;
+          const dt = _fmtTxDate(it.created_at);
+          const balance = 'Баланс: ' + (it.balance_after|0);
+          let metaExtras = balance;
+          if (it.model)  metaExtras += ' · ' + it.model;
+          if (it.prompt) metaExtras += ' · ' + it.prompt;
+          return '<div class="tx-row">' +
+            '<div class="tx-main">' +
+              '<div class="tx-title">' + escapeHtml(title) + '</div>' +
+              '<div class="tx-meta">' + escapeHtml(dt) + ' · ' + escapeHtml(metaExtras) + '</div>' +
+            '</div>' +
+            '<div class="tx-amount ' + cls + '">' + amt + '</div>' +
+          '</div>';
+        }).join("") +
+        '</div>';
+    } catch (e) {
+      $("topupBody").innerHTML = '<div class="topup-warn">Не удалось загрузить историю кредитов.</div>';
+    }
   }
 
   // ── Cross-chat feed ──────────────────────────────────────
@@ -3810,6 +4066,8 @@ def register_chat_routes(app: web.Application) -> None:
     app.router.add_get("/chat/api/media/{mid}", handle_media)
     app.router.add_get("/chat/api/topup", handle_topup)
     app.router.add_post("/chat/api/topup", handle_topup)
+    app.router.add_get("/chat/api/credits/history", handle_credits_history)
+    app.router.add_get("/chat/api/payments", handle_payments_history)
     app.router.add_get("/chat/api/feed", handle_feed)
     app.router.add_get("/chat/api/feed-media/{fuid}", handle_feed_media)
     logger.info("Web chat routes registered at /chat")
