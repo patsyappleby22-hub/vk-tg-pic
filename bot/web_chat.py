@@ -1815,6 +1815,20 @@ a:hover{opacity:.8}
 /* ── Login screen ── */
 #login{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
   padding:20px;background:radial-gradient(circle at 30% 20%,rgba(155,138,251,.08),transparent 50%),var(--bg)}
+#splash{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:22px;
+  background:radial-gradient(circle at 30% 20%,rgba(155,138,251,.08),transparent 50%),var(--bg);
+  z-index:9999;animation:splashFade .25s ease-out}
+#splash.hidden{display:none}
+.splash-logo{font-family:'Syne',sans-serif;font-size:1.9em;font-weight:700;
+  letter-spacing:-.01em;color:var(--text)}
+.splash-logo span{color:var(--accent)}
+.splash-spinner{width:34px;height:34px;border-radius:50%;
+  border:2.5px solid rgba(155,138,251,.18);border-top-color:var(--accent);
+  animation:splashSpin .8s linear infinite}
+.splash-hint{color:var(--muted2);font-size:.88em;letter-spacing:.02em}
+@keyframes splashSpin{to{transform:rotate(360deg)}}
+@keyframes splashFade{from{opacity:0}to{opacity:1}}
 .login-card{width:100%;max-width:420px;background:var(--surface);
   border:1px solid var(--border);border-radius:18px;padding:36px 32px}
 .login-logo{font-family:'Syne',sans-serif;font-size:1.6em;font-weight:700;
@@ -2069,8 +2083,15 @@ a:hover{opacity:.8}
 </head>
 <body>
 
+<!-- SPLASH (shown until /chat/api/me resolves, prevents login-form flash) -->
+<div id="splash">
+  <div class="splash-logo">Pic<span>Gen</span>AI</div>
+  <div class="splash-spinner"></div>
+  <div class="splash-hint">Подключение…</div>
+</div>
+
 <!-- LOGIN -->
-<div id="login">
+<div id="login" class="hidden">
   <div class="login-card">
     <div class="login-logo">Pic<span>Gen</span>AI · Веб-чат</div>
     <div class="login-sub">Войдите по коду из бота. Кредиты и история — общие с Telegram и ВКонтакте.</div>
@@ -2325,53 +2346,76 @@ a:hover{opacity:.8}
 
   let pendingUserId = null;
 
-  // If we arrived via the bot's "Открыть веб-чат" inline button
-  // (?platform=&uid=), first check whether we already have a valid
-  // session — if so, just boot the app and DON'T request a new code.
-  // Otherwise auto-request a code so the user lands directly on the
-  // code-input panel and the code arrives in their bot DM on page open.
-  // We also set a flag so the trailing boot IIFE doesn't double-boot.
-  let prefillHandled = false;
-  if (pendingUserIdEarly) {
-    prefillHandled = true;
-    (async () => {
-      // 1) Already authenticated? Skip auto-request entirely.
+  // Reveal the login card (out of splash) configured for the prefill
+  // flow: code-entry panel only, while we ask the bot to send a fresh code.
+  function revealLoginPrefill() {
+    document.querySelectorAll("#loginTabs .tab").forEach(b =>
+      b.classList.toggle("active", b.dataset.platform === loginPlatform));
+    $("loginTabs").style.display = "none";
+    $("step1").style.display = "none";
+    $("step2").style.display = "block";
+    $("verifyBtn").disabled = true;
+    $("splash").classList.add("hidden");
+    $("login").classList.remove("hidden");
+  }
+
+  // Reveal the regular login card (identifier → code) — no prefill.
+  function revealLoginManual() {
+    $("splash").classList.add("hidden");
+    $("login").classList.remove("hidden");
+  }
+
+  // Single boot path. Splash stays up until we know whether the user is
+  // already authenticated; only then do we either boot the app, ask for a
+  // code (prefill), or show the manual login form. No flash, no race.
+  // Wrapped in an outer try/catch so any unexpected failure still hides
+  // the splash and shows a recoverable login form (never spin forever).
+  (async () => {
+    try {
+      // 1) Always check session first.
+      let isAuthed = false;
       try {
         const meRes = await fetch("/chat/api/me");
-        if (meRes.ok) {
-          await bootApp();
-          return;
-        }
-      } catch (e) { /* fall through to code request */ }
+        isAuthed = meRes.ok;
+      } catch (e) { /* treat as unauthenticated */ }
 
-      // 2) Not authenticated → show code-entry panel and request a code.
-      document.querySelectorAll("#loginTabs .tab").forEach(b =>
-        b.classList.toggle("active", b.dataset.platform === loginPlatform));
-      $("loginTabs").style.display = "none";
-      $("step1").style.display = "none";
-      $("step2").style.display = "block";
-      $("verifyBtn").disabled = true;
-      showOk("Запрашиваем код у бота…");
-      try {
-        const r = await fetch("/chat/api/login/request", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({platform: loginPlatform, identifier: String(pendingUserIdEarly)}),
-        });
-        const j = await r.json();
-        if (!r.ok) {
-          showError(j.error || "Не удалось отправить код. Откройте бота, нажмите /start и попробуйте снова.");
-          return;
-        }
-        pendingUserId = j.user_id;
-        $("verifyBtn").disabled = false;
-        showOk("Код отправлен в бот. Введите его в поле ниже.");
-        setTimeout(() => $("codeInput").focus(), 50);
-      } catch (e) {
-        showError("Сеть недоступна");
+      if (isAuthed) {
+        await bootApp();
+        return;
       }
-    })();
-  }
+
+      // 2) Not authenticated. Branch on whether prefill is present.
+      if (pendingUserIdEarly) {
+        revealLoginPrefill();
+        showOk("Запрашиваем код у бота…");
+        try {
+          const r = await fetch("/chat/api/login/request", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({platform: loginPlatform, identifier: String(pendingUserIdEarly)}),
+          });
+          const j = await r.json();
+          if (!r.ok) {
+            showError(j.error || "Не удалось отправить код. Откройте бота, нажмите /start и попробуйте снова.");
+            return;
+          }
+          pendingUserId = j.user_id;
+          $("verifyBtn").disabled = false;
+          showOk("Код отправлен в бот. Введите его в поле ниже.");
+          setTimeout(() => $("codeInput").focus(), 50);
+        } catch (e) {
+          showError("Сеть недоступна");
+        }
+      } else {
+        revealLoginManual();
+      }
+    } catch (fatal) {
+      // Last-resort guard: never leave the splash spinning.
+      console.error("boot failed:", fatal);
+      revealLoginManual();
+      showError("Не удалось подключиться. Попробуйте обновить страницу.");
+    }
+  })();
 
   $("reqBtn").addEventListener("click", async () => {
     clearMsgs();
@@ -2427,10 +2471,17 @@ a:hover{opacity:.8}
   async function bootApp() {
     try {
       const me = await (await fetch("/chat/api/me")).json();
-      if (me.error) { return; }
+      if (me.error) {
+        // Session went stale between /chat/api/me check and now — fall
+        // back to the login form instead of leaving the splash spinning.
+        revealLoginManual();
+        showError("Сессия истекла. Войдите снова.");
+        return;
+      }
       state.me = me;
       const cat = await (await fetch("/chat/api/catalog")).json();
       state.catalog = cat;
+      $("splash").classList.add("hidden");
       $("login").classList.add("hidden");
       $("app").classList.remove("hidden");
       $("creditsLbl").textContent = fmtCredits(me.credits);
@@ -2438,7 +2489,12 @@ a:hover{opacity:.8}
       await loadChats();
       bindModeUI();
       switchMode("chat");
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      // Network/JSON failure mid-boot — never strand the user on splash.
+      console.error("bootApp failed:", e);
+      revealLoginManual();
+      showError("Не удалось загрузить чат. Попробуйте обновить страницу.");
+    }
   }
 
   async function refreshMe() {
@@ -3071,19 +3127,8 @@ a:hover{opacity:.8}
     location.reload();
   }
 
-  // ── Boot ─────────────────────────────────────────────────
-  // For pages opened WITHOUT a ?platform=&uid= prefill: simply check
-  // existing session and boot if authenticated. The prefill branch above
-  // does its own /chat/api/me check, so we skip this when prefill ran
-  // to avoid a double-boot race.
-  if (!prefillHandled) {
-    (async () => {
-      try {
-        const r = await fetch("/chat/api/me");
-        if (r.ok) { await bootApp(); }
-      } catch {}
-    })();
-  }
+  // (Boot is handled by the unified IIFE above which also drives the
+  //  splash → login/app transition. No second boot path needed.)
 })();
 </script>
 </body>
