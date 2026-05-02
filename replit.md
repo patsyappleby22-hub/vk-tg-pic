@@ -139,3 +139,4 @@ Admin section "Рассылки" with full lifecycle: drafts → schedule → se
 - Scheduler: `bot.broadcasts.scheduler.broadcast_loop` (tick=5s) — picks due broadcasts, materializes audience, drains queue at `rate_per_sec`, honors pause/cancel.
 - Media: `data/broadcast_media` (env `BROADCAST_MEDIA_DIR`), 50MB cap, ext-allowlisted.
 - Schedule input is MSK; converted to UTC before DB write.
+- Custom date/time picker (in `_compose_html`): replaces native `<input type="datetime-local">` with a dark themed popup (calendar grid Mon-first, hour/minute spinners ±5, presets +15м/+1ч/+3ч/Завтра 09:00/12:00/+неделя). Hidden `#bc-when-dt` keeps `YYYY-MM-DDTHH:MM` (MSK). On edit pages with prefilled schedule, `syncWhenFromHidden()` IIFE auto-switches `#bc-when` to `schedule` mode so launch hits `/schedule` and not `/send_now`.

@@ -447,8 +447,18 @@ def _compose_html(b: dict | None) -> str:
         </div>
         <div id="bc-when-dt-wrap" style="display:none">
           <label class="bc-lbl">Дата и время (МСК)</label>
-          <input id="bc-when-dt" class="bc-inp" type="datetime-local"
-                 value="{sched_local}">
+          <button type="button" id="bc-dtp-trigger" class="bc-dtp-trigger">
+            <span id="bc-dtp-display">Выбрать дату и время</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                 stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="18" rx="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+          </button>
+          <input id="bc-when-dt" type="hidden" value="{sched_local}">
         </div>
         <div></div>
       </div>
@@ -493,6 +503,58 @@ def _compose_html(b: dict | None) -> str:
   </div>
 </div>
 
+<!-- ── Custom date/time picker popup ──────────────────────────────────── -->
+<div id="bc-dtp" class="bc-dtp" hidden>
+  <div class="bc-dtp-backdrop" id="bc-dtp-backdrop"></div>
+  <div class="bc-dtp-panel" role="dialog" aria-label="Выбор даты и времени">
+    <div class="bc-dtp-head">
+      <button type="button" class="bc-dtp-nav" id="bc-dtp-prev" aria-label="Предыдущий месяц">‹</button>
+      <div class="bc-dtp-title" id="bc-dtp-title">—</div>
+      <button type="button" class="bc-dtp-nav" id="bc-dtp-next" aria-label="Следующий месяц">›</button>
+    </div>
+
+    <div class="bc-dtp-dow">
+      <span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span>
+      <span>Пт</span><span class="bc-dtp-we">Сб</span><span class="bc-dtp-we">Вс</span>
+    </div>
+    <div class="bc-dtp-grid" id="bc-dtp-grid"></div>
+
+    <div class="bc-dtp-time">
+      <div class="bc-dtp-time-lbl">Время (МСК)</div>
+      <div class="bc-dtp-time-row">
+        <div class="bc-dtp-spin">
+          <button type="button" class="bc-dtp-spin-btn" id="bc-dtp-h-up" aria-label="Час +">▲</button>
+          <input id="bc-dtp-h" class="bc-dtp-spin-inp" type="text" inputmode="numeric"
+                 maxlength="2" value="12" aria-label="Часы">
+          <button type="button" class="bc-dtp-spin-btn" id="bc-dtp-h-dn" aria-label="Час −">▼</button>
+        </div>
+        <div class="bc-dtp-colon">:</div>
+        <div class="bc-dtp-spin">
+          <button type="button" class="bc-dtp-spin-btn" id="bc-dtp-m-up" aria-label="Минуты +">▲</button>
+          <input id="bc-dtp-m" class="bc-dtp-spin-inp" type="text" inputmode="numeric"
+                 maxlength="2" value="00" aria-label="Минуты">
+          <button type="button" class="bc-dtp-spin-btn" id="bc-dtp-m-dn" aria-label="Минуты −">▼</button>
+        </div>
+        <div class="bc-dtp-presets">
+          <button type="button" class="bc-dtp-preset" data-preset="+15m">+15 мин</button>
+          <button type="button" class="bc-dtp-preset" data-preset="+1h">+1 час</button>
+          <button type="button" class="bc-dtp-preset" data-preset="+3h">+3 часа</button>
+          <button type="button" class="bc-dtp-preset" data-preset="tomorrow-9">Завтра 09:00</button>
+          <button type="button" class="bc-dtp-preset" data-preset="tomorrow-12">Завтра 12:00</button>
+          <button type="button" class="bc-dtp-preset" data-preset="+7d">Через неделю</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="bc-dtp-foot">
+      <span class="bc-dtp-summary" id="bc-dtp-summary">—</span>
+      <div style="flex:1"></div>
+      <button type="button" class="btn btn-ghost" id="bc-dtp-cancel">Отмена</button>
+      <button type="button" class="btn btn-primary" id="bc-dtp-ok">Готово</button>
+    </div>
+  </div>
+</div>
+
 <style>
   .bc-grid{{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px}}
   .bc-card{{background:var(--surface);border:1px solid var(--border);
@@ -519,10 +581,103 @@ def _compose_html(b: dict | None) -> str:
     border-radius:10px;padding:12px;font-size:.88em;color:var(--text);
     white-space:pre-wrap;word-break:break-word;min-height:80px}}
   .bc-btn-row{{display:grid;grid-template-columns:1fr 1fr 40px;gap:6px;margin-bottom:6px}}
+
+  /* ── Date/time picker trigger ─────────────────────────────────────── */
+  .bc-dtp-trigger{{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    width:100%;padding:9px 12px;background:var(--bg);
+    border:1px solid var(--border);border-radius:8px;
+    color:var(--text);font:inherit;font-size:.95em;
+    text-align:left;cursor:pointer;transition:border-color .15s
+  }}
+  .bc-dtp-trigger:hover{{border-color:var(--accent)}}
+  .bc-dtp-trigger svg{{color:var(--accent-bright);flex-shrink:0}}
+  .bc-dtp-trigger.is-empty span{{color:var(--muted2)}}
+
+  /* ── Picker popup ─────────────────────────────────────────────────── */
+  .bc-dtp[hidden]{{display:none}}
+  .bc-dtp{{position:fixed;inset:0;z-index:1000;
+    display:flex;align-items:center;justify-content:center}}
+  .bc-dtp-backdrop{{position:absolute;inset:0;background:rgba(0,0,0,.55);
+    backdrop-filter:blur(4px)}}
+  .bc-dtp-panel{{position:relative;width:min(380px,calc(100% - 32px));
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:16px;padding:18px;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+    animation:bc-dtp-in .18s ease-out}}
+  @keyframes bc-dtp-in{{
+    from{{opacity:0;transform:translateY(8px) scale(.98)}}
+    to{{opacity:1;transform:none}}
+  }}
+  .bc-dtp-head{{display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:14px}}
+  .bc-dtp-title{{font-family:Syne,Inter,sans-serif;font-weight:600;
+    font-size:1.05em;color:var(--text);text-transform:capitalize}}
+  .bc-dtp-nav{{width:32px;height:32px;display:flex;align-items:center;
+    justify-content:center;background:transparent;border:1px solid var(--border);
+    color:var(--muted);border-radius:8px;font-size:1.3em;line-height:1;
+    cursor:pointer;transition:all .15s}}
+  .bc-dtp-nav:hover{{color:var(--text);border-color:var(--accent)}}
+  .bc-dtp-dow{{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;
+    margin-bottom:6px}}
+  .bc-dtp-dow span{{text-align:center;font-size:.72em;color:var(--muted2);
+    text-transform:uppercase;letter-spacing:.05em;padding:6px 0;font-weight:600}}
+  .bc-dtp-dow .bc-dtp-we{{color:#a08aff}}
+  .bc-dtp-grid{{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}}
+  .bc-dtp-day{{aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+    background:transparent;border:1px solid transparent;border-radius:8px;
+    color:var(--text);font-size:.9em;font:inherit;font-weight:500;cursor:pointer;
+    transition:all .12s}}
+  .bc-dtp-day:hover:not(:disabled):not(.is-selected){{
+    background:rgba(155,138,251,.12);border-color:rgba(155,138,251,.3)}}
+  .bc-dtp-day:disabled{{color:var(--muted2);opacity:.35;cursor:not-allowed}}
+  .bc-dtp-day.is-other{{color:var(--muted2);opacity:.45}}
+  .bc-dtp-day.is-today{{border-color:rgba(155,138,251,.5);font-weight:700}}
+  .bc-dtp-day.is-selected{{background:var(--accent);color:#fff;font-weight:700;
+    border-color:var(--accent)}}
+  .bc-dtp-day.is-we{{color:#b9a8ff}}
+  .bc-dtp-day.is-we.is-selected{{color:#fff}}
+
+  .bc-dtp-time{{margin-top:14px;padding-top:14px;
+    border-top:1px solid var(--border)}}
+  .bc-dtp-time-lbl{{font-size:.72em;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.05em;margin-bottom:8px;font-weight:600}}
+  .bc-dtp-time-row{{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap}}
+  .bc-dtp-spin{{display:flex;flex-direction:column;align-items:stretch;
+    background:var(--bg);border:1px solid var(--border);border-radius:10px;
+    overflow:hidden;width:64px}}
+  .bc-dtp-spin-btn{{height:24px;background:transparent;border:none;color:var(--muted);
+    font-size:.65em;cursor:pointer;transition:all .15s;line-height:1}}
+  .bc-dtp-spin-btn:hover{{background:rgba(155,138,251,.15);color:var(--accent-bright)}}
+  .bc-dtp-spin-inp{{height:38px;background:transparent;border:none;
+    color:var(--text);text-align:center;font-size:1.4em;font-weight:600;
+    font-family:'JetBrains Mono',Menlo,monospace;outline:none;width:100%;
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border)}}
+  .bc-dtp-colon{{font-size:1.6em;font-weight:600;color:var(--muted);
+    align-self:center;line-height:1;padding:0 2px;font-family:'JetBrains Mono',monospace}}
+  .bc-dtp-presets{{display:flex;flex-wrap:wrap;gap:5px;flex:1;
+    margin-left:6px;align-content:flex-start}}
+  .bc-dtp-preset{{padding:5px 10px;background:transparent;
+    border:1px solid var(--border);border-radius:7px;color:var(--muted);
+    font:inherit;font-size:.78em;cursor:pointer;transition:all .15s;white-space:nowrap}}
+  .bc-dtp-preset:hover{{color:var(--accent-bright);border-color:var(--accent);
+    background:rgba(155,138,251,.08)}}
+
+  .bc-dtp-foot{{display:flex;align-items:center;gap:8px;margin-top:16px;
+    padding-top:14px;border-top:1px solid var(--border)}}
+  .bc-dtp-summary{{font-size:.85em;color:var(--accent-bright);
+    font-family:'JetBrains Mono',Menlo,monospace}}
+  .bc-dtp-foot .btn{{padding:7px 14px;font-size:.88em}}
+
   @media(max-width:980px){{
     .bc-grid{{grid-template-columns:1fr}}
     .bc-sticky{{position:static}}
     .bc-row3,.bc-row4{{grid-template-columns:1fr 1fr}}
+  }}
+  @media(max-width:480px){{
+    .bc-dtp-panel{{padding:14px}}
+    .bc-dtp-presets{{margin-left:0;margin-top:4px;width:100%}}
+    .bc-dtp-time-row{{justify-content:flex-start}}
   }}
 </style>
 
@@ -670,6 +825,15 @@ $('bc-when').addEventListener('change', e => {{
   $('bc-when-dt-wrap').style.display = (e.target.value === 'schedule') ? '' : 'none';
 }});
 
+/* If hidden datetime is prefilled (edit case), force "schedule" mode and reveal wrap. */
+(function syncWhenFromHidden() {{
+  const hv = $('bc-when-dt').value;
+  if (hv && /^\\d{{4}}-\\d{{2}}-\\d{{2}}T\\d{{2}}:\\d{{2}}$/.test(hv)) {{
+    $('bc-when').value = 'schedule';
+    $('bc-when-dt-wrap').style.display = '';
+  }}
+}})();
+
 $('bc-estimate').addEventListener('click', async () => {{
   const r = await fetch('/admin/api/broadcasts/0/estimate', {{
     method:'POST', headers:{{'Content-Type':'application/json'}},
@@ -746,6 +910,242 @@ function flash(msg) {{
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 2200);
 }}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Date/time picker (МСК) — custom widget for #bc-when-dt
+   Hidden input format: YYYY-MM-DDTHH:MM (Moscow local time)
+   ──────────────────────────────────────────────────────────────────── */
+(function initDtp() {{
+  const MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь',
+    'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+
+  const trigger = $('bc-dtp-trigger');
+  const display = $('bc-dtp-display');
+  const hidden  = $('bc-when-dt');
+  const popup   = $('bc-dtp');
+  const backdrop= $('bc-dtp-backdrop');
+  const titleEl = $('bc-dtp-title');
+  const gridEl  = $('bc-dtp-grid');
+  const hEl     = $('bc-dtp-h');
+  const mEl     = $('bc-dtp-m');
+  const sumEl   = $('bc-dtp-summary');
+  if (!trigger || !hidden || !popup) return;
+
+  /* Moscow "now" derived from browser UTC + 3h offset */
+  function mskNow() {{
+    const n = new Date();
+    return new Date(n.getTime() + (n.getTimezoneOffset() + 180) * 60000);
+  }}
+  function pad(n) {{ return String(n).padStart(2, '0'); }}
+  function fmtIso(d, h, m) {{
+    return `${{d.getFullYear()}}-${{pad(d.getMonth()+1)}}-${{pad(d.getDate())}}T${{pad(h)}}:${{pad(m)}}`;
+  }}
+  function parseIso(s) {{
+    const m = /^(\\d{{4}})-(\\d{{2}})-(\\d{{2}})T(\\d{{2}}):(\\d{{2}})$/.exec(s || '');
+    if (!m) return null;
+    return {{
+      date: new Date(+m[1], +m[2]-1, +m[3]),
+      h: +m[4], m: +m[5]
+    }};
+  }}
+  function fmtHuman(d, h, m) {{
+    return `${{pad(d.getDate())}} ${{MONTHS[d.getMonth()].toLowerCase()}} ${{d.getFullYear()}}, ${{pad(h)}}:${{pad(m)}}`;
+  }}
+
+  /* Widget state */
+  let viewYear = mskNow().getFullYear();
+  let viewMonth = mskNow().getMonth();
+  let selDate = null;       /* Date object (date-only) */
+  let selH = 12, selM = 0;
+
+  function syncTrigger() {{
+    if (hidden.value) {{
+      const p = parseIso(hidden.value);
+      if (p) {{
+        display.textContent = fmtHuman(p.date, p.h, p.m);
+        trigger.classList.remove('is-empty');
+      }}
+    }} else {{
+      display.textContent = 'Выбрать дату и время';
+      trigger.classList.add('is-empty');
+    }}
+  }}
+
+  function loadFromHidden() {{
+    const p = parseIso(hidden.value);
+    if (p) {{
+      selDate = p.date;
+      selH = p.h; selM = p.m;
+      viewYear = p.date.getFullYear();
+      viewMonth = p.date.getMonth();
+    }} else {{
+      const now = mskNow();
+      const hint = new Date(now.getTime() + 60 * 60000);
+      selDate = new Date(hint.getFullYear(), hint.getMonth(), hint.getDate());
+      selH = hint.getHours();
+      selM = Math.ceil(hint.getMinutes() / 5) * 5;
+      if (selM >= 60) {{ selM = 0; selH = (selH + 1) % 24; }}
+      viewYear = selDate.getFullYear();
+      viewMonth = selDate.getMonth();
+    }}
+    hEl.value = pad(selH);
+    mEl.value = pad(selM);
+    updateSummary();
+  }}
+
+  function renderGrid() {{
+    titleEl.textContent = `${{MONTHS[viewMonth]}} ${{viewYear}}`;
+    gridEl.innerHTML = '';
+    const first = new Date(viewYear, viewMonth, 1);
+    /* offset to Monday-first (JS getDay: Sun=0..Sat=6) */
+    let offset = first.getDay() - 1;
+    if (offset < 0) offset = 6;
+    const start = new Date(viewYear, viewMonth, 1 - offset);
+    const today = mskNow();
+    today.setHours(0,0,0,0);
+
+    for (let i = 0; i < 42; i++) {{
+      const d = new Date(start.getTime() + i * 86400000);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'bc-dtp-day';
+      btn.textContent = d.getDate();
+      const dow = d.getDay(); /* 0=Sun, 6=Sat */
+      if (dow === 0 || dow === 6) btn.classList.add('is-we');
+      if (d.getMonth() !== viewMonth) btn.classList.add('is-other');
+      if (d.getTime() === today.getTime()) btn.classList.add('is-today');
+      if (d < today) btn.disabled = true;
+      if (selDate &&
+          d.getFullYear() === selDate.getFullYear() &&
+          d.getMonth() === selDate.getMonth() &&
+          d.getDate() === selDate.getDate()) {{
+        btn.classList.add('is-selected');
+      }}
+      btn.addEventListener('click', () => {{
+        if (btn.disabled) return;
+        selDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        if (d.getMonth() !== viewMonth) {{
+          viewYear = d.getFullYear();
+          viewMonth = d.getMonth();
+        }}
+        renderGrid();
+        updateSummary();
+      }});
+      gridEl.appendChild(btn);
+    }}
+  }}
+
+  function clampTime() {{
+    let h = parseInt(hEl.value, 10);
+    let m = parseInt(mEl.value, 10);
+    if (!Number.isFinite(h)) h = selH;
+    if (!Number.isFinite(m)) m = selM;
+    h = Math.max(0, Math.min(23, h));
+    m = Math.max(0, Math.min(59, m));
+    selH = h; selM = m;
+    hEl.value = pad(h);
+    mEl.value = pad(m);
+  }}
+
+  function updateSummary() {{
+    if (!selDate) {{ sumEl.textContent = '—'; return; }}
+    sumEl.textContent = fmtHuman(selDate, selH, selM) + ' МСК';
+  }}
+
+  function applyPreset(key) {{
+    const now = mskNow();
+    let target;
+    if (key === '+15m') target = new Date(now.getTime() + 15 * 60000);
+    else if (key === '+1h') target = new Date(now.getTime() + 60 * 60000);
+    else if (key === '+3h') target = new Date(now.getTime() + 3 * 60 * 60000);
+    else if (key === '+7d') {{
+      target = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7,
+                        now.getHours(), now.getMinutes());
+    }}
+    else if (key === 'tomorrow-9') {{
+      target = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 9, 0);
+    }}
+    else if (key === 'tomorrow-12') {{
+      target = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 12, 0);
+    }}
+    if (!target) return;
+    selDate = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+    selH = target.getHours();
+    selM = target.getMinutes();
+    viewYear = selDate.getFullYear();
+    viewMonth = selDate.getMonth();
+    hEl.value = pad(selH);
+    mEl.value = pad(selM);
+    renderGrid();
+    updateSummary();
+  }}
+
+  function open() {{
+    loadFromHidden();
+    renderGrid();
+    popup.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }}
+  function close() {{
+    popup.hidden = true;
+    document.body.style.overflow = '';
+  }}
+  function commit() {{
+    clampTime();
+    if (!selDate) {{ close(); return; }}
+    hidden.value = fmtIso(selDate, selH, selM);
+    syncTrigger();
+    close();
+  }}
+
+  /* Wiring */
+  trigger.addEventListener('click', open);
+  backdrop.addEventListener('click', close);
+  $('bc-dtp-cancel').addEventListener('click', close);
+  $('bc-dtp-ok').addEventListener('click', commit);
+  $('bc-dtp-prev').addEventListener('click', () => {{
+    viewMonth--;
+    if (viewMonth < 0) {{ viewMonth = 11; viewYear--; }}
+    renderGrid();
+  }});
+  $('bc-dtp-next').addEventListener('click', () => {{
+    viewMonth++;
+    if (viewMonth > 11) {{ viewMonth = 0; viewYear++; }}
+    renderGrid();
+  }});
+
+  function step(field, delta, max) {{
+    let v = parseInt(field.value, 10);
+    if (!Number.isFinite(v)) v = 0;
+    v = (v + delta + (max + 1)) % (max + 1);
+    field.value = pad(v);
+    clampTime();
+    updateSummary();
+  }}
+  $('bc-dtp-h-up').addEventListener('click', () => step(hEl, 1, 23));
+  $('bc-dtp-h-dn').addEventListener('click', () => step(hEl, -1, 23));
+  $('bc-dtp-m-up').addEventListener('click', () => step(mEl, 5, 59));
+  $('bc-dtp-m-dn').addEventListener('click', () => step(mEl, -5, 59));
+  hEl.addEventListener('input', () => {{ clampTime(); updateSummary(); }});
+  mEl.addEventListener('input', () => {{ clampTime(); updateSummary(); }});
+  hEl.addEventListener('blur', () => {{ clampTime(); updateSummary(); }});
+  mEl.addEventListener('blur', () => {{ clampTime(); updateSummary(); }});
+
+  document.querySelectorAll('.bc-dtp-preset').forEach(b => {{
+    b.addEventListener('click', () => applyPreset(b.dataset.preset));
+  }});
+
+  document.addEventListener('keydown', (e) => {{
+    if (popup.hidden) return;
+    if (e.key === 'Escape') {{ e.preventDefault(); close(); }}
+    else if (e.key === 'Enter' &&
+             e.target.tagName !== 'INPUT') {{
+      e.preventDefault(); commit();
+    }}
+  }});
+
+  syncTrigger();
+}})();
 </script>
 """
 
