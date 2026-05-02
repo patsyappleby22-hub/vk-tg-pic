@@ -2428,12 +2428,51 @@ a:hover{opacity:.8}
     me: null, catalog: null,
     chats: [], currentChatId: null, messages: [],
     mode: "chat", model: "",
+    // Per-mode chosen model so switching modes restores the previous pick.
+    modelByMode: {},
     aspect: "1:1", duration: 8, resolution: "720p", audio: true, search: false,
     pendingFiles: [],   // [{name, type, size, dataUrl, blob}]
     sending: false,
     activeGen: null,
     polling: null,
   };
+
+  // ── Settings persistence (per-browser via localStorage) ──
+  // Saves the user's last-used mode, per-mode model, and generation
+  // params so the chat reopens with the same configuration. Save is
+  // best-effort (ignored when storage is unavailable, e.g. private mode).
+  const SETTINGS_KEY = "picgenai.chat.settings.v1";
+  function loadSettings() {
+    try {
+      const raw = localStorage.getItem(SETTINGS_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw) || {};
+      if (typeof s.mode === "string" && ["chat","image","video","music"].includes(s.mode)) state.mode = s.mode;
+      if (s.modelByMode && typeof s.modelByMode === "object") state.modelByMode = s.modelByMode;
+      if (typeof s.aspect === "string") state.aspect = s.aspect;
+      if (Number.isFinite(+s.duration)) state.duration = +s.duration;
+      if (typeof s.resolution === "string") state.resolution = s.resolution;
+      if (typeof s.audio === "boolean") state.audio = s.audio;
+      if (typeof s.search === "boolean") state.search = s.search;
+    } catch {}
+  }
+  function saveSettings() {
+    try {
+      // Remember the current model under its mode bucket before saving,
+      // so per-mode picks survive page reloads.
+      if (state.mode && state.model) state.modelByMode[state.mode] = state.model;
+      const s = {
+        mode: state.mode,
+        modelByMode: state.modelByMode,
+        aspect: state.aspect,
+        duration: state.duration,
+        resolution: state.resolution,
+        audio: state.audio,
+        search: state.search,
+      };
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+    } catch {}
+  }
 
   function showError(msg) {
     const el = $("loginErr");
@@ -2667,7 +2706,11 @@ a:hover{opacity:.8}
       $("userLbl").textContent = (me.platform === "vk" ? "VK · " : "TG · ") + (me.first_name || me.user_id);
       await loadChats();
       bindModeUI();
-      switchMode("chat");
+      // Restore persisted settings (mode/model/params), then activate
+      // the chosen mode. switchMode() will pick the per-mode model from
+      // state.modelByMode if one was previously saved.
+      loadSettings();
+      switchMode(state.mode || "chat");
     } catch (e) {
       // Network/JSON failure mid-boot — never strand the user on splash.
       console.error("bootApp failed:", e);
@@ -2905,20 +2948,26 @@ a:hover{opacity:.8}
     });
     $("modelSelect").addEventListener("change", () => {
       state.model = $("modelSelect").value;
+      state.modelByMode[state.mode] = state.model;
       reflectModelOptions();
       updateCost();
+      saveSettings();
     });
-    $("aspectSelect").addEventListener("change", () => { state.aspect = $("aspectSelect").value; updateCost(); });
-    $("durationSelect").addEventListener("change", () => { state.duration = +$("durationSelect").value; updateCost(); });
-    $("resolutionSelect").addEventListener("change", () => { state.resolution = $("resolutionSelect").value; updateCost(); });
+    $("aspectSelect").addEventListener("change", () => { state.aspect = $("aspectSelect").value; updateCost(); saveSettings(); });
+    $("durationSelect").addEventListener("change", () => { state.duration = +$("durationSelect").value; updateCost(); saveSettings(); });
+    $("resolutionSelect").addEventListener("change", () => { state.resolution = $("resolutionSelect").value; updateCost(); saveSettings(); });
     $("audioToggle").addEventListener("click", () => {
       state.audio = !state.audio;
       $("audioToggle").classList.toggle("on", state.audio);
+      $("audioToggle").textContent = state.audio ? "Со звуком" : "Без звука";
       updateCost();
+      saveSettings();
     });
     $("searchToggle").addEventListener("click", () => {
       state.search = !state.search;
       $("searchToggle").classList.toggle("on", state.search);
+      $("searchToggle").textContent = state.search ? "Поиск ✓" : "Поиск";
+      saveSettings();
     });
     $("attachBtn").addEventListener("click", () => $("fileInput").click());
     $("fileInput").addEventListener("change", e => addFiles(e.target.files));
@@ -3123,27 +3172,35 @@ a:hover{opacity:.8}
     const cat = state.catalog;
     const sel = $("modelSelect");
     let entries = [];
+    let defaultModel = "";
     if (m === "chat") {
       entries = Object.entries(cat.chat.models).map(([k,v]) => [k, v.label]);
-      state.model = cat.chat.default;
+      defaultModel = cat.chat.default;
     } else if (m === "image") {
       entries = Object.entries(cat.image.models).map(([k,v]) => [k, v.label]);
-      state.model = entries[0]?.[0] || "";
+      defaultModel = entries[0]?.[0] || "";
     } else if (m === "video") {
       entries = Object.entries(cat.video.models).map(([k,v]) => [k, v.label]);
-      state.model = "veo-3.1-fast-generate-001";
-      if (!cat.video.models[state.model]) state.model = entries[0]?.[0] || "";
+      defaultModel = cat.video.models["veo-3.1-fast-generate-001"]
+        ? "veo-3.1-fast-generate-001" : (entries[0]?.[0] || "");
     } else if (m === "music") {
       entries = Object.entries(cat.music.models).map(([k,v]) => [k, v.label]);
-      state.model = "lyria-3-clip-preview";
-      if (!cat.music.models[state.model]) state.model = entries[0]?.[0] || "";
+      defaultModel = cat.music.models["lyria-3-clip-preview"]
+        ? "lyria-3-clip-preview" : (entries[0]?.[0] || "");
     }
+    // Prefer the user's last picked model for this mode if it still
+    // exists in the catalog; otherwise fall back to the mode default.
+    const validKeys = new Set(entries.map(e => e[0]));
+    const remembered = state.modelByMode[m];
+    state.model = (remembered && validKeys.has(remembered)) ? remembered : defaultModel;
     sel.innerHTML = entries.map(([k,l]) => `<option value="${k}"${k===state.model?" selected":""}>${escapeHtml(l)}</option>`).join("");
     state.model = sel.value || state.model;
+    state.modelByMode[m] = state.model;
     reflectModelOptions();
     updateCost();
     const fileAccept = m === "video" ? "image/*,video/mp4" : "image/*";
     $("fileInput").accept = fileAccept;
+    saveSettings();
   }
 
   function reflectModelOptions() {
