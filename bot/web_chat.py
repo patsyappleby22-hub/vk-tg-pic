@@ -1231,6 +1231,13 @@ async def _run_video(uid: int, user_first: str, cid: int,
     _gens_gc()
 
     async def _runner():
+        # Unified credit-safety pattern: a single `confirmed` flag plus a
+        # finally-block release. Any early return / raised exception on the
+        # path before confirm_credits() is set guarantees the reservation is
+        # unfrozen exactly once. release_credits is idempotent (clamped to
+        # zero), so even if confirm_credits already ran, a stray release in
+        # finally is a no-op rather than a balance leak.
+        confirmed = False
         try:
             _gen_update(gen_id, status="running", label="Генерация видео…", pct=5)
 
@@ -1254,13 +1261,11 @@ async def _run_video(uid: int, user_first: str, cid: int,
                 )
             except Exception as exc:
                 logger.warning("web video gen: %s", exc)
-                release_credits(uid, cost)
                 _gen_update(gen_id, status="error",
                             error="Не удалось сгенерировать видео. Попробуйте ещё раз.")
                 return
 
             if not video_bytes:
-                release_credits(uid, cost)
                 _gen_update(gen_id, status="error", error="Модель не вернула видео")
                 return
 
@@ -1271,12 +1276,12 @@ async def _run_video(uid: int, user_first: str, cid: int,
                 user_name=user_first, platform="web", model=model,
             )
             if not res:
-                release_credits(uid, cost)
                 _gen_update(gen_id, status="error", error="Не удалось сохранить результат")
                 return
             file_id, fuid = res
             confirm_credits(uid, cost, user_first, platform="web",
                             prompt=text, model=model, gen_type="video")
+            confirmed = True
             asst_id = _db.web_msg_add(
                 chat_id=cid, role="assistant", mode="video",
                 content_text="", model=model,
@@ -1291,10 +1296,18 @@ async def _run_video(uid: int, user_first: str, cid: int,
                         label="Готово", msg_id=asst_id)
         except Exception as exc:
             logger.exception("web video runner crashed")
-            release_credits(uid, cost)
             _gen_update(gen_id, status="error", error=str(exc)[:200] or "Ошибка")
+        finally:
+            if not confirmed:
+                release_credits(uid, cost)
 
-    asyncio.create_task(_runner())
+    # Schedule the runner; if create_task itself fails for any reason,
+    # release the reservation immediately so credits never leak.
+    try:
+        asyncio.create_task(_runner())
+    except Exception:
+        release_credits(uid, cost)
+        raise
     return web.json_response({
         "ok": True, "gen_id": gen_id,
         "user_msg_id": user_msg_id,
@@ -1332,6 +1345,10 @@ async def _run_music(uid: int, user_first: str, cid: int,
     _gens_gc()
 
     async def _runner():
+        # Same credit-safety pattern as the video runner: single `confirmed`
+        # flag + finally-block release. Guarantees the reservation is freed
+        # exactly once on every error/return path before confirm_credits().
+        confirmed = False
         try:
             _gen_update(gen_id, status="running", label="Генерация музыки…", pct=10)
             try:
@@ -1342,12 +1359,10 @@ async def _run_music(uid: int, user_first: str, cid: int,
                 )
             except Exception as exc:
                 logger.warning("web music gen: %s", exc)
-                release_credits(uid, cost)
                 _gen_update(gen_id, status="error",
                             error="Не удалось сгенерировать музыку. Попробуйте ещё раз.")
                 return
             if not audio_bytes:
-                release_credits(uid, cost)
                 _gen_update(gen_id, status="error", error="Модель не вернула аудио")
                 return
             _gen_update(gen_id, pct=90, label="Загрузка результата…")
@@ -1357,12 +1372,12 @@ async def _run_music(uid: int, user_first: str, cid: int,
                 user_name=user_first, platform="web", model=model,
             )
             if not res:
-                release_credits(uid, cost)
                 _gen_update(gen_id, status="error", error="Не удалось сохранить результат")
                 return
             file_id, fuid = res
             confirm_credits(uid, cost, user_first, platform="web",
                             prompt=text, model=model, gen_type="music")
+            confirmed = True
             asst_id = _db.web_msg_add(
                 chat_id=cid, role="assistant", mode="music",
                 content_text="", model=model,
@@ -1373,10 +1388,16 @@ async def _run_music(uid: int, user_first: str, cid: int,
                         label="Готово", msg_id=asst_id)
         except Exception as exc:
             logger.exception("web music runner crashed")
-            release_credits(uid, cost)
             _gen_update(gen_id, status="error", error=str(exc)[:200] or "Ошибка")
+        finally:
+            if not confirmed:
+                release_credits(uid, cost)
 
-    asyncio.create_task(_runner())
+    try:
+        asyncio.create_task(_runner())
+    except Exception:
+        release_credits(uid, cost)
+        raise
     return web.json_response({
         "ok": True, "gen_id": gen_id,
         "user_msg_id": user_msg_id,
