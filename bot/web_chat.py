@@ -2746,9 +2746,11 @@ a:hover{opacity:.8}
     html = html.replace(/\\u200BPGMATH(\\d+)END\\u200B/g, (_, i) => stash[+i]);
     return window.DOMPurify.sanitize(html, {ADD_ATTR: ["target", "rel"]});
   }
-  // Run KaTeX over rendered messages. Single `$...$` is intentionally NOT a
-  // delimiter — currency strings like "$10 vs $20" would otherwise get
-  // mis-parsed. Use `$$...$$`, backslash-paren, or backslash-bracket for math.
+  // Run KaTeX over rendered messages. Single `$...$` IS enabled because
+  // Gemini and most chat LLMs emit inline math that way — disabling it
+  // makes 90% of formulas show up as raw text. Currency strings can
+  // occasionally clash but `throwOnError:false` keeps the chat alive
+  // and `errorColor` leaves the original text mostly readable.
   function renderMathIn(el) {
     if (!el || !window.renderMathInElement) return;
     try {
@@ -2756,9 +2758,11 @@ a:hover{opacity:.8}
         delimiters: [
           {left: "$$", right: "$$", display: true},
           {left: "\\\\[", right: "\\\\]", display: true},
-          {left: "\\\\(", right: "\\\\)", display: false}
+          {left: "\\\\(", right: "\\\\)", display: false},
+          {left: "$", right: "$", display: false}
         ],
         throwOnError: false,
+        errorColor: "#fb7185",
         ignoredTags: ["script", "noscript", "style", "textarea", "pre", "code"]
       });
     } catch (e) { /* never let math crash the chat */ }
