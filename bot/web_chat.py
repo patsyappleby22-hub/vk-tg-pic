@@ -1922,8 +1922,9 @@ def _shell_html() -> str:
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
   --bg:#050507;--surface:#0a0a0e;--surface2:#0f0f14;--surface3:#15151c;
-  --border:rgba(255,255,255,.06);--border-md:rgba(255,255,255,.10);
-  --text:#ededf2;--muted:#5e5e76;--muted2:#8a8aa6;
+  --surface-glass:rgba(10,10,14,.55);--surface-glass2:rgba(15,15,20,.7);
+  --border:rgba(255,255,255,.055);--border-md:rgba(255,255,255,.09);
+  --text:#ededf2;--muted:#52526a;--muted2:#7a7a96;
   --accent:#9b8afb;--accent-bright:#b8acff;
   --accent-dim:rgba(155,138,251,.07);--accent-glow:rgba(155,138,251,.18);
   --green:#6ee7b7;--red:#fb7185;--yellow:#fcd34d;
@@ -1933,6 +1934,31 @@ html,body{height:100%}
 body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
   background:var(--bg);color:var(--text);overflow:hidden;
   -webkit-font-smoothing:antialiased;font-weight:400}
+
+/* ── Ambient ── orbiting brand blobs + film grain, exactly like the landing.
+   Sit behind everything; sidebar/main use rgba surfaces so they peek through. */
+.bg-orbs{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.bg-orbs .orb{position:absolute;border-radius:50%;filter:blur(80px)}
+.bg-orbs .orb-1{width:600px;height:600px;top:-160px;left:50%;
+  transform:translateX(-50%);
+  background:radial-gradient(circle,rgba(100,80,210,.14) 0%,transparent 70%);
+  animation:orbFloat1 8s ease-in-out infinite}
+.bg-orbs .orb-2{width:400px;height:400px;bottom:-120px;right:-80px;
+  background:radial-gradient(circle,rgba(80,60,180,.09) 0%,transparent 70%);
+  animation:orbFloat2 10s ease-in-out infinite reverse}
+.bg-orbs .orb-3{width:300px;height:300px;top:32%;left:-100px;
+  background:radial-gradient(circle,rgba(120,100,230,.07) 0%,transparent 70%);
+  animation:orbFloat3 12s ease-in-out infinite 2s}
+@keyframes orbFloat1{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-30px)}}
+@keyframes orbFloat2{0%,100%{transform:translateY(0)}50%{transform:translateY(-20px)}}
+@keyframes orbFloat3{0%,100%{transform:translateY(0)}50%{transform:translateY(20px)}}
+/* Noise sits at the same depth as the orbs (z-index:0) so it grains the
+   bare background; sidebar/main (z-index:1) and modals (z-index:60) stay
+   above it. Glass surfaces are translucent, so the grain still bleeds
+   through them — keeping the Aurora "filmic" feel without trapping modals. */
+.bg-noise{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.6;
+  mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E")}
 button,input,textarea,select{font-family:inherit;color:inherit;background:none;border:none;outline:none}
 button{cursor:pointer}
 a{color:var(--accent);text-decoration:none}
@@ -1988,17 +2014,28 @@ a:hover{opacity:.8}
 #app.hidden{display:none}
 #login.hidden{display:none}
 
-.sidebar{width:268px;background:var(--surface);border-right:1px solid var(--border);
-  display:flex;flex-direction:column;flex-shrink:0}
+.sidebar{width:268px;background:var(--surface-glass);
+  border-right:1px solid var(--border);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  display:flex;flex-direction:column;flex-shrink:0;position:relative;z-index:1}
 .sb-head{padding:18px 18px 14px;display:flex;align-items:center;gap:10px;
-  border-bottom:1px solid var(--border)}
-.sb-logo{font-family:'Syne',sans-serif;font-size:1.05em;font-weight:700;letter-spacing:-.01em}
+  border-bottom:1px solid var(--border);position:relative}
+.sb-logo-mark{position:relative;display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;flex-shrink:0}
+.sb-logo-mark svg{position:relative;width:18px;height:18px;color:var(--accent-bright);
+  stroke:currentColor;fill:none;stroke-width:1.6}
+.sb-logo-mark::before{content:'';position:absolute;inset:-6px;border-radius:50%;
+  background:var(--accent-glow);filter:blur(8px);z-index:0}
+.sb-logo{font-family:'Syne',sans-serif;font-size:1.05em;font-weight:700;letter-spacing:.01em}
 .sb-logo span{color:var(--accent)}
 .sb-new{margin:14px 18px 6px;padding:10px 14px;border-radius:10px;
-  background:var(--accent-dim);border:1px solid rgba(155,138,251,.18);
-  color:var(--text);font-size:.86em;font-weight:500;display:flex;align-items:center;gap:8px;
-  justify-content:center;transition:all .15s}
-.sb-new:hover{background:var(--accent-glow)}
+  background:var(--accent);border:1px solid transparent;
+  color:#fff;font-size:.86em;font-weight:600;display:flex;align-items:center;gap:8px;
+  justify-content:center;transition:background .2s,transform .15s,box-shadow .2s;
+  box-shadow:0 14px 32px rgba(155,138,251,.22),inset 0 1px 0 rgba(255,255,255,.12);
+  letter-spacing:.01em}
+.sb-new:hover{background:var(--accent-bright);transform:translateY(-1px);
+  box-shadow:0 18px 40px rgba(155,138,251,.28),inset 0 1px 0 rgba(255,255,255,.18)}
 .sb-list{flex:1;overflow-y:auto;padding:10px 8px 12px}
 .sb-item{display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:8px;
   color:var(--muted2);font-size:.86em;cursor:pointer;transition:all .15s;
@@ -2015,14 +2052,45 @@ a:hover{opacity:.8}
 .sb-credits{display:flex;justify-content:space-between;align-items:center;
   font-size:.82em;color:var(--muted2)}
 .sb-credits b{color:var(--accent-bright);font-family:'Syne',sans-serif;font-weight:600;font-size:1.18em}
-.sb-user{display:flex;align-items:center;gap:8px;color:var(--muted2);font-size:.82em}
+/* .sb-logout is still used by the login screen "Изменить" back button. */
 .sb-logout{font-size:.78em;color:var(--muted2);padding:4px 0;text-align:left}
 .sb-logout:hover{color:var(--red)}
 .sb-empty{color:var(--muted);font-size:.84em;padding:14px 12px;text-align:center}
-.sb-feed{margin:0 18px 6px}
-.sb-topup{padding:8px 12px;border-radius:8px;background:var(--accent);color:#0e0c1c;
-  font-weight:600;font-size:.82em;transition:filter .15s}
-.sb-topup:hover{filter:brightness(1.08)}
+.sb-feed{margin:0 18px 6px;background:var(--surface-glass2);
+  border:1px solid var(--border);color:var(--text);
+  box-shadow:none;font-weight:500}
+.sb-feed:hover{background:var(--accent-dim);border-color:rgba(155,138,251,.2);
+  transform:none;box-shadow:none}
+.sb-foot{background:var(--surface-glass2)}
+.sb-credits-card{padding:12px 14px;border-radius:14px;
+  background:linear-gradient(160deg,rgba(155,138,251,.07),rgba(15,15,20,.6));
+  border:1px solid rgba(155,138,251,.18);
+  display:flex;flex-direction:column;gap:9px}
+.sb-credits-card .sb-credits{margin:0}
+.sb-credits-card .sb-credits b{font-family:'JetBrains Mono',monospace;font-size:.95em;
+  color:var(--accent-bright);font-weight:500;letter-spacing:.02em}
+.sb-topup{padding:8px 12px;border-radius:9px;
+  background:rgba(255,255,255,.04);color:var(--text);
+  border:1px solid var(--border-md);
+  font-weight:500;font-size:.82em;transition:all .15s;letter-spacing:.01em}
+.sb-topup:hover{background:var(--accent-dim);border-color:rgba(155,138,251,.3);
+  filter:none;color:var(--accent-bright)}
+.sb-user-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.sb-avatar{width:32px;height:32px;border-radius:50%;flex-shrink:0;
+  background:linear-gradient(135deg,var(--accent),#6b5dd1);
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;font-family:'Syne',sans-serif;font-weight:600;font-size:.86em;
+  box-shadow:0 6px 18px rgba(155,138,251,.25)}
+.sb-user-meta{flex:1;display:flex;flex-direction:column;line-height:1.2;min-width:0}
+.sb-user-meta .sb-user-name{color:var(--text);font-size:.84em;font-weight:500;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-user-meta .sb-user-handle{color:var(--muted);font-size:.74em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-logout-icon{width:30px;height:30px;border-radius:8px;display:flex;
+  align-items:center;justify-content:center;color:var(--muted);transition:all .15s;
+  flex-shrink:0}
+.sb-logout-icon:hover{color:var(--red);background:rgba(251,113,133,.07)}
+.sb-logout-icon svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7}
 
 /* ── Modals (topup, feed) ── */
 .modal-back{position:fixed;inset:0;background:rgba(8,6,18,.7);display:flex;
@@ -2090,11 +2158,19 @@ a:hover{opacity:.8}
 .feed-empty{color:var(--muted2);text-align:center;padding:36px 8px;font-size:.92em}
 
 /* ── Main column ── */
-.main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+.main{flex:1;display:flex;flex-direction:column;min-width:0;background:transparent;
+  position:relative;z-index:1}
 .main-head{padding:14px 24px;border-bottom:1px solid var(--border);
-  display:flex;align-items:center;gap:14px}
+  display:flex;align-items:center;gap:14px;
+  background:rgba(5,5,7,.55);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
 .main-title{font-family:'Syne',sans-serif;font-size:1.05em;font-weight:600;
-  flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:-.005em}
+.main-title-mode{display:inline-block;margin-left:10px;padding:2px 9px;
+  border-radius:5px;font-family:'Inter',sans-serif;font-size:.62em;font-weight:600;
+  letter-spacing:.08em;text-transform:uppercase;
+  background:rgba(155,138,251,.10);color:var(--accent-bright);
+  border:1px solid rgba(155,138,251,.25);vertical-align:middle}
 .main-actions{display:flex;gap:8px}
 .btn-icon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;
   justify-content:center;color:var(--muted2);transition:all .15s}
@@ -2118,20 +2194,33 @@ a:hover{opacity:.8}
 .msg{display:flex;gap:14px;max-width:920px;width:100%;margin:0 auto}
 .msg-avatar{width:32px;height:32px;border-radius:50%;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
-  font-size:.78em;font-weight:600;letter-spacing:.02em}
-.msg.user .msg-avatar{background:var(--surface3);color:var(--text)}
-.msg.assistant .msg-avatar{background:var(--accent-dim);color:var(--accent-bright);
-  border:1px solid rgba(155,138,251,.2)}
+  font-size:.78em;font-weight:600;letter-spacing:.02em;position:relative}
+.msg.user .msg-avatar{background:linear-gradient(135deg,var(--accent),#6b5dd1);
+  color:#fff;box-shadow:0 6px 18px rgba(155,138,251,.22);
+  font-family:'Syne',sans-serif}
+.msg.assistant .msg-avatar{background:var(--accent-dim);
+  border:1px solid rgba(155,138,251,.25);color:transparent}
+.msg.assistant .msg-avatar::before{content:'';position:absolute;inset:-2px;
+  border-radius:50%;background:var(--accent-glow);filter:blur(8px);opacity:.6;z-index:0}
+.msg.assistant .msg-avatar svg{position:relative;z-index:1;width:16px;height:16px;
+  color:var(--accent-bright);stroke:currentColor;fill:none;stroke-width:1.7}
 .msg-body{flex:1;min-width:0}
 .msg-meta{display:flex;align-items:center;gap:8px;font-size:.78em;color:var(--muted);margin-bottom:4px}
 .msg-author{color:var(--text);font-weight:500}
 .msg-mode{padding:1px 7px;border-radius:5px;background:var(--surface2);
   color:var(--muted2);text-transform:uppercase;letter-spacing:.06em;font-size:.92em}
-.msg-mode.image{color:#a5d6ff}
+.msg-mode.image{color:var(--accent-bright)}
 .msg-mode.video{color:#ffb8d6}
 .msg-mode.music{color:#fcd34d}
 .msg-content{color:var(--text);font-size:.95em;line-height:1.65;
-  white-space:pre-wrap;word-wrap:break-word}
+  white-space:pre-wrap;word-wrap:break-word;font-weight:300}
+.msg.user .msg-content{padding:11px 16px;border-radius:14px 14px 14px 4px;
+  background:linear-gradient(160deg,rgba(155,138,251,.16),rgba(155,138,251,.06));
+  border:1px solid rgba(155,138,251,.22);
+  display:inline-block;max-width:100%}
+.msg.assistant .msg-content{padding:11px 16px;border-radius:14px 14px 4px 14px;
+  background:var(--surface-glass2);border:1px solid var(--border);
+  color:#dcdce4}
 .msg-content p{margin:0 0 8px}
 .msg-content p:last-child{margin:0}
 .msg-content code{font-family:'JetBrains Mono',monospace;font-size:.88em;
@@ -2162,20 +2251,29 @@ a:hover{opacity:.8}
 .progress-bar{height:3px;background:var(--surface2);border-radius:2px;overflow:hidden;margin-top:6px}
 .progress-bar > div{height:100%;background:var(--accent);transition:width .3s}
 
-.input-wrap{padding:12px 24px 18px;border-top:1px solid var(--border);background:var(--bg)}
-.input-card{max-width:920px;margin:0 auto;background:var(--surface);
-  border:1px solid var(--border);border-radius:14px;
-  padding:10px 12px 8px;transition:border-color .15s}
-.input-card:focus-within{border-color:var(--accent-glow)}
+.input-wrap{padding:12px 24px 18px;border-top:1px solid var(--border);
+  background:rgba(5,5,7,.55);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+.input-card{max-width:920px;margin:0 auto;background:rgba(10,10,14,.85);
+  border:1px solid var(--border-md);border-radius:16px;
+  padding:10px 12px 8px;transition:border-color .15s,box-shadow .15s;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.02)}
+.input-card:focus-within{border-color:rgba(155,138,251,.35);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.02),0 0 0 4px rgba(155,138,251,.06)}
 .input-row{display:flex;gap:8px;align-items:flex-end}
 .input-text{flex:1;min-height:40px;max-height:200px;padding:8px 10px;
-  font-size:.95em;line-height:1.5;resize:none;overflow-y:auto}
+  font-size:.95em;line-height:1.5;resize:none;overflow-y:auto;font-weight:300}
 .input-text::placeholder{color:var(--muted)}
 .input-actions{display:flex;gap:6px;align-items:center;padding-bottom:6px}
-.btn-send{padding:9px 14px;background:var(--accent);color:#1a0e3d;border-radius:9px;
-  font-weight:600;font-size:.88em;display:flex;align-items:center;gap:6px}
-.btn-send:hover{background:var(--accent-bright)}
-.btn-send[disabled]{opacity:.4;cursor:not-allowed}
+.btn-send{padding:9px 14px;background:var(--accent);color:#fff;border-radius:10px;
+  font-weight:600;font-size:.84em;display:flex;align-items:center;gap:6px;
+  letter-spacing:.01em;
+  box-shadow:0 12px 28px rgba(155,138,251,.25),inset 0 1px 0 rgba(255,255,255,.12);
+  transition:background .2s,transform .15s,box-shadow .2s}
+.btn-send:hover{background:var(--accent-bright);transform:translateY(-1px);
+  box-shadow:0 16px 36px rgba(155,138,251,.32),inset 0 1px 0 rgba(255,255,255,.18)}
+.btn-send[disabled]{opacity:.4;cursor:not-allowed;transform:none;
+  box-shadow:0 8px 18px rgba(155,138,251,.10)}
 .btn-attach{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;
   justify-content:center;color:var(--muted2);transition:all .15s}
 .btn-attach:hover{background:var(--surface2);color:var(--text)}
@@ -2190,18 +2288,22 @@ a:hover{opacity:.8}
 .pf-x:hover{color:var(--red)}
 
 .input-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
-  padding:6px 4px 0;border-top:1px solid var(--border);margin-top:6px}
-.mode-pill{padding:5px 10px;border-radius:6px;font-size:.78em;
+  padding:8px 4px 0;border-top:1px solid var(--border);margin-top:6px}
+.mode-pill{padding:5px 11px;border-radius:7px;font-size:.78em;
   color:var(--muted2);border:1px solid transparent;transition:all .15s;font-weight:500}
-.mode-pill:hover{background:var(--surface2);color:var(--text)}
-.mode-pill.active{background:var(--accent-dim);color:var(--text);border-color:rgba(155,138,251,.18)}
+.mode-pill:hover{background:var(--surface-glass2);color:var(--text)}
+.mode-pill.active{background:rgba(155,138,251,.12);color:var(--text);
+  border-color:rgba(155,138,251,.22)}
 .tb-spacer{flex:1}
-.tb-select{padding:5px 10px;border-radius:6px;background:var(--surface2);
-  border:1px solid var(--border);color:var(--text);font-size:.78em;cursor:pointer}
+.tb-select{padding:6px 12px;border-radius:8px;background:var(--surface-glass2);
+  border:1px solid var(--border);color:var(--text);font-size:.78em;cursor:pointer;
+  transition:border-color .15s}
 .tb-select:hover{border-color:var(--border-md)}
-.tb-toggle{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;
-  font-size:.78em;color:var(--muted2);background:var(--surface2);border:1px solid var(--border)}
-.tb-toggle.on{color:var(--accent-bright);border-color:rgba(155,138,251,.25);background:var(--accent-dim)}
+.tb-toggle{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:8px;
+  font-size:.78em;color:var(--text);background:var(--surface-glass2);border:1px solid var(--border);
+  transition:all .15s}
+.tb-toggle:hover{border-color:var(--border-md)}
+.tb-toggle.on{color:var(--accent-bright);border-color:rgba(155,138,251,.3);background:var(--accent-dim)}
 .tb-cost{font-size:.76em;color:var(--muted2)}
 .tb-cost b{color:var(--accent-bright);font-weight:500}
 
@@ -2281,10 +2383,11 @@ a:hover{opacity:.8}
   .mobile-status .ms-cost{color:var(--accent-bright);margin-left:auto}
 }
 
-::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--border-md);border-radius:4px}
-::-webkit-scrollbar-thumb:hover{background:var(--accent-glow)}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.06);border-radius:999px}
+::-webkit-scrollbar-thumb:hover{background:rgba(155,138,251,.25)}
+::selection{background:rgba(155,138,251,.28);color:#fff}
 </style>
 </head>
 <body>
@@ -2338,9 +2441,20 @@ a:hover{opacity:.8}
 
 <!-- APP -->
 <div id="app" class="hidden">
+  <!-- Ambient brand background: subtle floating orbs + film grain.
+       Pinned to viewport (z-index:0/9998); sidebar/main are translucent
+       glass surfaces on top so the colour bleeds through gently. -->
+  <div class="bg-orbs" aria-hidden="true">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
   <div class="scrim" id="scrim"></div>
   <aside class="sidebar" id="sidebar">
     <div class="sb-head">
+      <span class="sb-logo-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 3l1.6 4.2L18 9l-4.4 1.8L12 15l-1.6-4.2L6 9l4.4-1.8L12 3z"/><path d="M19 14l.7 1.8L21.5 16l-1.8.7L19 18l-.7-1.3L16.5 16l1.8-.2L19 14z"/></svg>
+      </span>
       <div class="sb-logo">Pic<span>Gen</span>AI</div>
     </div>
     <button class="sb-new" id="newChatBtn">
@@ -2353,12 +2467,23 @@ a:hover{opacity:.8}
     </button>
     <div class="sb-list" id="chatsList"></div>
     <div class="sb-foot">
-      <div class="sb-credits"><span>Баланс</span><b id="creditsLbl">—</b></div>
-      <button class="sb-topup" id="topupBtn" type="button">Пополнить</button>
-      <div class="sb-user" id="userLbl"></div>
-      <button class="sb-logout" id="logoutBtn">Выйти</button>
+      <div class="sb-credits-card">
+        <div class="sb-credits"><span>Баланс</span><b id="creditsLbl">—</b></div>
+        <button class="sb-topup" id="topupBtn" type="button">Пополнить</button>
+      </div>
+      <div class="sb-user-row">
+        <div class="sb-avatar" id="userAvatar">PG</div>
+        <div class="sb-user-meta">
+          <span class="sb-user-name" id="userName"></span>
+          <span class="sb-user-handle" id="userHandle"></span>
+        </div>
+        <button class="sb-logout-icon" id="logoutBtn" title="Выйти" aria-label="Выйти">
+          <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+        </button>
+      </div>
     </div>
   </aside>
+  <div class="bg-noise" aria-hidden="true"></div>
 
   <!-- Пополнение баланса -->
   <div class="modal-back" id="topupModal" style="display:none">
@@ -2742,7 +2867,11 @@ a:hover{opacity:.8}
       $("login").classList.add("hidden");
       $("app").classList.remove("hidden");
       $("creditsLbl").textContent = fmtCredits(me.credits);
-      $("userLbl").textContent = (me.platform === "vk" ? "VK · " : "TG · ") + (me.first_name || me.user_id);
+      const displayName = me.first_name || String(me.user_id);
+      const platformTag = me.platform === "vk" ? "VK" : "TG";
+      $("userName").textContent = displayName;
+      $("userHandle").textContent = platformTag + " · " + me.user_id;
+      $("userAvatar").textContent = displayName.slice(0,2).toUpperCase();
       await loadChats();
       bindModeUI();
       // Restore persisted settings (mode/model/params), then activate
@@ -2939,9 +3068,12 @@ a:hover{opacity:.8}
   function renderMessage(msg) {
     const isUser = msg.role === "user";
     const author = isUser ? (state.me?.first_name || "Вы") : "PicGenAI";
-    const initials = isUser
+    // Assistant gets a glowing Sparkles mark; user gets initials inside a
+    // lavender gradient circle. Both styled in the .msg.* CSS rules above.
+    const sparkSvg = `<svg viewBox="0 0 24 24"><path d="M12 3l1.6 4.2L18 9l-4.4 1.8L12 15l-1.6-4.2L6 9l4.4-1.8L12 3z"/><path d="M19 14l.7 1.8L21.5 16l-1.8.7L19 18l-.7-1.3L16.5 16l1.8-.2L19 14z"/></svg>`;
+    const avatarInner = isUser
       ? (state.me?.first_name || "В").slice(0,2).toUpperCase()
-      : "AI";
+      : sparkSvg;
     const modeLbl = {chat:"чат", image:"изображение", video:"видео", music:"музыка"}[msg.mode] || msg.mode;
     let media = "";
     // Download button — shown for every assistant-generated media result.
@@ -2969,7 +3101,7 @@ a:hover{opacity:.8}
     const content = msg.content_text ? `<div class="msg-content">${renderText(msg.content_text)}</div>` : "";
     return `
       <div class="msg ${isUser?"user":"assistant"}">
-        <div class="msg-avatar">${initials}</div>
+        <div class="msg-avatar">${avatarInner}</div>
         <div class="msg-body">
           <div class="msg-meta">
             <span class="msg-author">${escapeHtml(author)}</span>
