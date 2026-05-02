@@ -2076,11 +2076,12 @@ a:hover{opacity:.8}
 .pf-x{color:var(--muted2);padding:2px;line-height:0}
 .pf-x:hover{color:var(--red)}
 
-.input-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+.input-modes{display:flex;gap:6px;flex-wrap:wrap;align-items:center;
   padding:6px 4px 0;border-top:1px solid var(--border);margin-top:6px}
+.input-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+  padding:6px 4px 0;margin-top:6px}
 .settings-head,.settings-label{display:none}
 .settings-section{display:contents}
-.tb-modes{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .tb-params{display:flex;gap:6px;align-items:center;flex-wrap:wrap;
   flex:1;justify-content:flex-end;min-width:0}
 .mode-pill{padding:5px 10px;border-radius:6px;font-size:.78em;
@@ -2124,6 +2125,55 @@ a:hover{opacity:.8}
     padding-right:max(12px,env(safe-area-inset-right,0));
     padding-bottom:max(14px,calc(env(safe-area-inset-bottom,0) + 8px))}
   .starter-grid{grid-template-columns:1fr}
+
+  /* Mode pills stay always visible (frequently switched) but turn into a
+     compact horizontally-scrollable row so they don't wrap and crowd the
+     composer card. */
+  .input-modes{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;
+    padding:8px 2px 4px;gap:6px;margin-top:4px;
+    border-top:1px solid var(--border)}
+  .input-modes::-webkit-scrollbar{display:none}
+  .input-modes .mode-pill{padding:11px 16px;font-size:.9em;
+    min-height:44px;display:inline-flex;align-items:center;
+    border:1px solid var(--border);background:var(--surface2);
+    border-radius:10px;flex-shrink:0}
+  .input-modes .mode-pill.active{background:var(--accent-dim);
+    border-color:rgba(155,138,251,.35);color:var(--text)}
+
+  /* Generation parameters slide out from the right side (drawer). The
+     gear button (.mobile-toggle#settingsBtn) opens it; the scrim and the
+     header × close it. Only infrequently-changed controls live here. */
+  .input-toolbar{position:fixed;top:0;right:0;bottom:0;
+    width:min(86vw,340px);z-index:40;
+    background:var(--surface);border-left:1px solid var(--border);
+    border-top:none;margin-top:0;
+    transform:translateX(100%);transition:transform .22s ease;
+    box-shadow:-14px 0 40px rgba(0,0,0,.45);
+    display:flex;flex-direction:column;align-items:stretch;gap:0;
+    padding:0 0 max(16px,env(safe-area-inset-bottom,0));
+    padding-right:env(safe-area-inset-right,0);
+    overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .input-toolbar.open{transform:translateX(0)}
+  .settings-head{display:flex;align-items:center;gap:10px;
+    padding:14px 16px;border-bottom:1px solid var(--border);
+    position:sticky;top:0;background:var(--surface);z-index:1}
+  .settings-title{flex:1;font-family:'Syne',sans-serif;font-weight:600;
+    font-size:1.02em;color:var(--text)}
+  .settings-section{display:flex;flex-direction:column;gap:8px;
+    padding:14px 16px;border-bottom:1px solid var(--border)}
+  .settings-section:last-of-type{border-bottom:none}
+  .settings-label{display:block;font-size:.74em;color:var(--muted2);
+    text-transform:uppercase;letter-spacing:.08em;font-weight:500}
+  .tb-params{display:flex;flex-direction:column;align-items:stretch;
+    gap:8px;flex:initial;justify-content:initial;flex-wrap:initial}
+  .tb-params .tb-select{width:100%;padding:11px 12px;font-size:.95em;
+    border-radius:10px;background:var(--surface2)}
+  .tb-params .tb-toggle{width:100%;padding:11px 12px;font-size:.92em;
+    border-radius:10px;justify-content:center}
+  .tb-cost{padding:14px 16px;text-align:center;font-size:.86em;
+    color:var(--muted2);border-top:1px solid var(--border)}
+  .tb-cost b{font-size:1.1em}
 }
 
 @media (max-width: 768px){
@@ -2148,44 +2198,6 @@ a:hover{opacity:.8}
   .btn-attach{width:38px;height:38px}
   .btn-send{padding:10px 12px;min-width:44px}
   .btn-send span{display:none}
-  /* Settings turn into a right-side slide-out drawer on mobile. */
-  .input-toolbar{position:fixed;top:0;right:0;bottom:0;
-    width:min(86vw,340px);z-index:40;
-    background:var(--surface);border-left:1px solid var(--border);
-    border-top:none;margin-top:0;
-    transform:translateX(100%);transition:transform .22s ease;
-    box-shadow:-14px 0 40px rgba(0,0,0,.45);
-    display:flex;flex-direction:column;align-items:stretch;gap:0;
-    padding:0 0 max(16px,env(safe-area-inset-bottom,0));
-    padding-right:env(safe-area-inset-right,0);
-    overflow-y:auto;-webkit-overflow-scrolling:touch}
-  .input-toolbar.open{transform:translateX(0)}
-  .settings-head{display:flex;align-items:center;gap:10px;
-    padding:14px 16px;border-bottom:1px solid var(--border);
-    position:sticky;top:0;background:var(--surface);z-index:1}
-  .settings-title{flex:1;font-family:'Syne',sans-serif;font-weight:600;
-    font-size:1.02em;color:var(--text)}
-  .settings-section{display:flex;flex-direction:column;gap:8px;
-    padding:14px 16px;border-bottom:1px solid var(--border)}
-  .settings-section:last-of-type{border-bottom:none}
-  .settings-label{display:block;font-size:.74em;color:var(--muted2);
-    text-transform:uppercase;letter-spacing:.08em;font-weight:500}
-  .tb-modes{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;
-    flex-wrap:initial}
-  .tb-modes .mode-pill{padding:11px 12px;font-size:.92em;
-    border:1px solid var(--border);background:var(--surface2);
-    text-align:center;border-radius:10px}
-  .tb-modes .mode-pill.active{background:var(--accent-dim);
-    border-color:rgba(155,138,251,.35);color:var(--text)}
-  .tb-params{display:flex;flex-direction:column;align-items:stretch;
-    gap:8px;flex:initial;justify-content:initial;flex-wrap:initial}
-  .tb-params .tb-select{width:100%;padding:11px 12px;font-size:.95em;
-    border-radius:10px;background:var(--surface2)}
-  .tb-params .tb-toggle{width:100%;padding:11px 12px;font-size:.92em;
-    border-radius:10px;justify-content:center}
-  .tb-cost{padding:14px 16px;text-align:center;font-size:.86em;
-    color:var(--muted2);border-top:1px solid var(--border)}
-  .tb-cost b{font-size:1.1em}
   .modal-card{width:96vw;max-width:96vw;
     border-radius:14px 14px 0 0;max-height:92vh;align-self:flex-end;
     margin-bottom:env(safe-area-inset-bottom,0)}
@@ -2353,19 +2365,18 @@ a:hover{opacity:.8}
             </button>
           </div>
         </div>
+        <!-- Mode pills: always visible (frequently switched). -->
+        <div class="input-modes">
+          <button class="mode-pill active" data-mode="chat">Чат</button>
+          <button class="mode-pill" data-mode="image">Изображение</button>
+          <button class="mode-pill" data-mode="video">Видео</button>
+          <button class="mode-pill" data-mode="music">Музыка</button>
+        </div>
+        <!-- Generation parameters: collapse into a right-side drawer on mobile. -->
         <div class="input-toolbar" id="inputToolbar">
           <div class="settings-head">
-            <div class="settings-title">Настройки генерации</div>
+            <div class="settings-title">Параметры генерации</div>
             <button class="modal-x" id="settingsClose" type="button" aria-label="Закрыть">×</button>
-          </div>
-          <div class="settings-section">
-            <div class="settings-label">Режим</div>
-            <div class="tb-modes">
-              <button class="mode-pill active" data-mode="chat">Чат</button>
-              <button class="mode-pill" data-mode="image">Изображение</button>
-              <button class="mode-pill" data-mode="video">Видео</button>
-              <button class="mode-pill" data-mode="music">Музыка</button>
-            </div>
           </div>
           <div class="settings-section settings-params">
             <div class="settings-label">Параметры</div>
