@@ -190,6 +190,13 @@ async def main():
     except ImportError as _e:
         logger.warning("autopub module not available, skipping scheduler: %s", _e)
 
+    # Broadcasts scheduler (mass mailing)
+    try:
+        from bot.broadcasts.scheduler import broadcast_loop
+        tasks.append(asyncio.create_task(broadcast_loop()))
+    except Exception as _e:
+        logger.warning("broadcasts module not available, skipping scheduler: %s", _e)
+
     if not tasks:
         logger.error("No bot tokens set — set TELEGRAM_BOT_TOKEN and/or VK_BOT_TOKEN")
         return

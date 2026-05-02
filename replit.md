@@ -128,3 +128,14 @@ Managed via `requirements.txt` with pip. Key packages:
 - aiogram>=3.15, vkbottle>=4.8, google-genai installed with Lyria-capable 1.52+ runtime
 - pydantic-settings>=2.7, Pillow>=11.0, aiohttp>=3.9
 - psycopg2-binary>=2.9
+
+## Broadcasts (рассылка)
+Admin section "Рассылки" with full lifecycle: drafts → schedule → sending → done/cancelled.
+- Tables: `bot_broadcasts`, `bot_broadcast_recipients` (UNIQUE bid+uid+plat), `bot_broadcast_clicks`, `bot_broadcast_templates`.
+- Audience builder filters by platform (tg/vk/all), credits range, generations range, paid/unpaid, active days, include/exclude IDs, exclude_blocked.
+- Senders: TG via aiogram (FSInputFile, retry on flood, blocked detection, file_id caching); VK via direct HTTP API (`messages.send`) with `keyboard` JSON inline buttons.
+- Personalization tokens: `{name}`, `{credits}`, `{user_id}`.
+- Click tracking: `/r/{bid}/{uid}/{plat}/{idx}` redirect with atomic counter inc.
+- Scheduler: `bot.broadcasts.scheduler.broadcast_loop` (tick=5s) — picks due broadcasts, materializes audience, drains queue at `rate_per_sec`, honors pause/cancel.
+- Media: `data/broadcast_media` (env `BROADCAST_MEDIA_DIR`), 50MB cap, ext-allowlisted.
+- Schedule input is MSK; converted to UTC before DB write.

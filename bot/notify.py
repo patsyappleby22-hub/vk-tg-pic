@@ -31,6 +31,11 @@ def set_bot(bot: Any) -> None:
     _tg_bot = bot
 
 
+def get_tg_bot() -> Any:
+    """Return the registered aiogram Bot instance (or None if TG disabled)."""
+    return _tg_bot
+
+
 async def notify_payment(user_id: int, credits: int, amount: float,
                          pack_label: str, source: str = "tg") -> None:
     text = _PAYMENT_TEXT.format(label=pack_label, amount=amount, credits=credits)

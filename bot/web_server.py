@@ -413,4 +413,6 @@ def create_web_app() -> web.Application:
     app.router.add_post("/api/freekassa/notification", handle_freekassa_notification)
     from bot.web_admin import register_admin_routes
     register_admin_routes(app)
+    from bot.web_broadcasts import register_broadcast_routes
+    register_broadcast_routes(app)
     return app

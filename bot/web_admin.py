@@ -189,12 +189,15 @@ def _layout(title: str, content: str, active: str = "") -> str:
     ico_autopub   = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11v2a2 2 0 0 0 2 2h2l5 4V5L7 9H5a2 2 0 0 0-2 2zM16 8a5 5 0 0 1 0 8M19 5a8 8 0 0 1 0 14"/></svg>'
     ico_logout    = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>'
 
+    ico_broadcast = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11v2a2 2 0 0 0 2 2h1l4 5V4L6 9H5a2 2 0 0 0-2 2zM14 8a4 4 0 0 1 0 8M17 5a7 7 0 0 1 0 14"/></svg>'
+
     nav_items = [
-        ("dashboard", "/admin/dashboard", ico_dashboard, "Дашборд",      "Дашборд"),
-        ("users",     "/admin/users",     ico_users,     "Пользователи", "Юзеры"),
-        ("payments",  "/admin/payments",  ico_payments,  "Платежи",      "Платежи"),
-        ("apikeys",   "/admin/api-keys",  ico_apikeys,   "API ключи",    "Ключи"),
-        ("autopub",   "/admin/autopub",   ico_autopub,   "Автопост",     "Автопост"),
+        ("dashboard",  "/admin/dashboard",  ico_dashboard, "Дашборд",      "Дашборд"),
+        ("users",      "/admin/users",      ico_users,     "Пользователи", "Юзеры"),
+        ("payments",   "/admin/payments",   ico_payments,  "Платежи",      "Платежи"),
+        ("apikeys",    "/admin/api-keys",   ico_apikeys,   "API ключи",    "Ключи"),
+        ("broadcasts", "/admin/broadcasts", ico_broadcast, "Рассылки",     "Рассылки"),
+        ("autopub",    "/admin/autopub",    ico_autopub,   "Автопост",     "Автопост"),
     ]
     sidebar_nav = ""
     bottom_nav = ""
