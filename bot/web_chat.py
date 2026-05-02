@@ -2429,24 +2429,26 @@ a:hover{opacity:.8}
     border:1px solid rgba(155,138,251,.18);font-size:.88em;
     color:var(--text);text-align:center}
 
-  /* Compact "mode-icon · cost" chip — sits as a thin overlay on the
-     top edge of the input card so it doesn't steal vertical space from
-     the textarea. Tap to open the settings drawer. */
-  .mobile-status{display:inline-flex;align-items:center;gap:6px;
-    margin:0 0 6px;padding:3px 9px;font-size:.72em;color:var(--muted2);
+  /* Compact mode-icon + credits chip, pinned to the right edge of the
+     input card so it never overlaps the textarea placeholder. Tap to
+     open the settings drawer. The outer .mobile-status is just a flex
+     row used for right-alignment; the actual visible pill is .ms-pill. */
+  .mobile-status{display:flex;justify-content:flex-end;
+    margin:0 0 6px;padding:0;background:none;border:none}
+  .mobile-status:empty{display:none}
+  .ms-pill{display:inline-flex;align-items:center;gap:6px;
+    padding:3px 9px;font-size:.72em;color:var(--muted2);
     background:var(--surface2);border:1px solid var(--border);
     border-radius:999px;line-height:1.4;cursor:pointer;
-    max-width:100%;width:auto;align-self:flex-start;
     transition:border-color .15s,color .15s}
-  .mobile-status:hover{border-color:var(--border-md);color:var(--text)}
-  .mobile-status:empty{display:none}
-  .mobile-status .ms-icon{width:13px;height:13px;flex-shrink:0;
+  .ms-pill:hover{border-color:var(--border-md);color:var(--text)}
+  .ms-pill .ms-icon{width:13px;height:13px;flex-shrink:0;
     color:var(--accent-bright);display:inline-flex}
-  .mobile-status .ms-icon svg{width:100%;height:100%;stroke:currentColor;
+  .ms-pill .ms-icon svg{width:100%;height:100%;stroke:currentColor;
     fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-  .mobile-status .ms-cost{color:var(--accent-bright);font-weight:500;
-    margin-left:2px;white-space:nowrap}
-  .mobile-status .ms-cost b{font-weight:600}
+  .ms-pill .ms-cost{color:var(--accent-bright);font-weight:500;
+    white-space:nowrap}
+  .ms-pill .ms-cost b{font-weight:600}
   /* Slightly tighter input-card on mobile so the chip + textarea fit
      comfortably without the placeholder getting clipped. */
   .input-card{padding:8px 10px 6px}
@@ -3581,15 +3583,15 @@ a:hover{opacity:.8}
     };
     const names = {chat:"Чат",image:"Изображение",video:"Видео",music:"Музыка"};
     const icon = icons[state.mode] || "";
-    const name = escapeHtml(names[state.mode] || "");
     const costHtml = $("costLbl").innerHTML || "";
     if (!icon && !costHtml) { mob.innerHTML = ""; return; }
-    mob.setAttribute("title", names[state.mode] || "");
-    mob.setAttribute("aria-label", "Режим: " + (names[state.mode] || "") + ". Открыть настройки.");
+    const label = "Режим: " + (names[state.mode] || "") + ". Открыть настройки.";
     mob.innerHTML =
-      '<span class="ms-icon">' + icon + '</span>' +
-      '<span class="ms-name">' + name + '</span>' +
-      (costHtml ? '<span class="ms-cost">' + costHtml + '</span>' : '');
+      '<span class="ms-pill" title="' + escapeHtml(names[state.mode] || "") + '" ' +
+            'aria-label="' + escapeHtml(label) + '">' +
+        '<span class="ms-icon">' + icon + '</span>' +
+        (costHtml ? '<span class="ms-cost">' + costHtml + '</span>' : '') +
+      '</span>';
   }
 
   function autosizeText() {
