@@ -2326,24 +2326,40 @@ a:hover{opacity:.8}
   let pendingUserId = null;
 
   // If we arrived via the bot's "Открыть веб-чат" inline button
-  // (?platform=&uid=), automatically request a fresh login code so the
-  // user lands directly on the code-input panel and the code arrives in
-  // their bot DM the moment this page opens.
+  // (?platform=&uid=), first check whether we already have a valid
+  // session — if so, just boot the app and DON'T request a new code.
+  // Otherwise auto-request a code so the user lands directly on the
+  // code-input panel and the code arrives in their bot DM on page open.
+  // We also set a flag so the trailing boot IIFE doesn't double-boot.
+  let prefillHandled = false;
   if (pendingUserIdEarly) {
-    document.querySelectorAll("#loginTabs .tab").forEach(b =>
-      b.classList.toggle("active", b.dataset.platform === loginPlatform));
-    $("loginTabs").style.display = "none";
-    $("step1").style.display = "none";
-    $("step2").style.display = "block";
-    $("verifyBtn").disabled = true;
-    showOk("Запрашиваем код у бота…");
-    fetch("/chat/api/login/request", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({platform: loginPlatform, identifier: String(pendingUserIdEarly)}),
-    }).then(r => r.json().then(j => ({ok: r.ok, j})))
-      .then(({ok, j}) => {
-        if (!ok) {
+    prefillHandled = true;
+    (async () => {
+      // 1) Already authenticated? Skip auto-request entirely.
+      try {
+        const meRes = await fetch("/chat/api/me");
+        if (meRes.ok) {
+          await bootApp();
+          return;
+        }
+      } catch (e) { /* fall through to code request */ }
+
+      // 2) Not authenticated → show code-entry panel and request a code.
+      document.querySelectorAll("#loginTabs .tab").forEach(b =>
+        b.classList.toggle("active", b.dataset.platform === loginPlatform));
+      $("loginTabs").style.display = "none";
+      $("step1").style.display = "none";
+      $("step2").style.display = "block";
+      $("verifyBtn").disabled = true;
+      showOk("Запрашиваем код у бота…");
+      try {
+        const r = await fetch("/chat/api/login/request", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({platform: loginPlatform, identifier: String(pendingUserIdEarly)}),
+        });
+        const j = await r.json();
+        if (!r.ok) {
           showError(j.error || "Не удалось отправить код. Откройте бота, нажмите /start и попробуйте снова.");
           return;
         }
@@ -2351,8 +2367,10 @@ a:hover{opacity:.8}
         $("verifyBtn").disabled = false;
         showOk("Код отправлен в бот. Введите его в поле ниже.");
         setTimeout(() => $("codeInput").focus(), 50);
-      })
-      .catch(() => showError("Сеть недоступна"));
+      } catch (e) {
+        showError("Сеть недоступна");
+      }
+    })();
   }
 
   $("reqBtn").addEventListener("click", async () => {
@@ -3054,12 +3072,18 @@ a:hover{opacity:.8}
   }
 
   // ── Boot ─────────────────────────────────────────────────
-  (async () => {
-    try {
-      const r = await fetch("/chat/api/me");
-      if (r.ok) { await bootApp(); }
-    } catch {}
-  })();
+  // For pages opened WITHOUT a ?platform=&uid= prefill: simply check
+  // existing session and boot if authenticated. The prefill branch above
+  // does its own /chat/api/me check, so we skip this when prefill ran
+  // to avoid a double-boot race.
+  if (!prefillHandled) {
+    (async () => {
+      try {
+        const r = await fetch("/chat/api/me");
+        if (r.ok) { await bootApp(); }
+      } catch {}
+    })();
+  }
 })();
 </script>
 </body>
