@@ -103,8 +103,12 @@ _CODE_TTL = 300  # seconds — how long a 6-digit code is valid
 _CODE_MAX_ATTEMPTS = 5
 _CODE_RATE_LIMIT_PER_USER = 3      # per 10 minutes per user
 _CODE_RATE_LIMIT_WINDOW = 10       # minutes
-_CODE_GLOBAL_PER_IP = 12           # per hour per IP
-_CODE_GLOBAL_WINDOW = 60           # minutes
+# Per-IP throttle is the second-layer brute-force defence. We deliberately
+# keep it generous so normal users (page reloads, testing several
+# accounts, sharing an office NAT) are not blocked — only true bursts
+# (dozens of codes per minute from one source) get throttled.
+_CODE_GLOBAL_PER_IP = 30           # successfully-sent codes per IP per window
+_CODE_GLOBAL_WINDOW = 10           # minutes
 
 _MAX_CHATS_PER_USER = 50
 _MAX_MESSAGES_PER_CHAT = 200
@@ -492,16 +496,18 @@ async def handle_login_request(request: web.Request) -> web.Response:
             {"error": f"Слишком часто. Подождите {_CODE_RATE_LIMIT_WINDOW} минут перед следующей попыткой."},
             status=429,
         )
-    # Second-layer brute-force defence: cap total login traffic from one IP
-    # so attackers can't spray many user_ids from the same source.
+    # Second-layer brute-force defence: cap real code-sends from one IP
+    # so attackers can't spray many user_ids from the same source. Only
+    # `code_sent` events are counted — failures/rate_limit logs must not
+    # feed back into the limit (otherwise every miss accelerates the lock).
     if ip:
         ip_recent = _db.web_login_log_count_by_ip(ip, _CODE_GLOBAL_WINDOW)
         if ip_recent >= _CODE_GLOBAL_PER_IP:
             _db.web_login_log(uid, platform, "rate_limit_ip", ip, ua,
                               f"ip_recent={ip_recent}")
             return web.json_response(
-                {"error": "Слишком много попыток входа с этого адреса. "
-                          "Подождите час и повторите."},
+                {"error": f"Слишком много отправленных кодов с этого адреса. "
+                          f"Подождите {_CODE_GLOBAL_WINDOW} минут и повторите."},
                 status=429,
             )
 

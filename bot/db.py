@@ -2449,9 +2449,13 @@ def web_msg_get(msg_id: int) -> dict | None:
 
 
 def web_login_log_count_by_ip(ip: str, window_minutes: int) -> int:
-    """Count login-related events for a given client IP in last N minutes.
+    """Count successfully-sent codes from a given client IP in last N minutes.
+
     Used as second-layer brute-force defence when many user_ids are tried
-    from a single IP."""
+    from a single IP. Counts ONLY `code_sent` events — including failures
+    or rate_limit hits would create a positive-feedback loop where each
+    blocked attempt accelerates the lock.
+    """
     if not _DATABASE_URL or not ip:
         return 0
     try:
@@ -2460,7 +2464,7 @@ def web_login_log_count_by_ip(ip: str, window_minutes: int) -> int:
             cur.execute(
                 "SELECT COUNT(*) FROM bot_web_login_log "
                 "WHERE ip=%s AND created_at > NOW() - (%s || ' minutes')::INTERVAL "
-                "AND event IN ('code_sent','rate_limit','resolve_fail','send_fail')",
+                "AND event='code_sent'",
                 (ip[:64], int(window_minutes)),
             )
             row = cur.fetchone()
