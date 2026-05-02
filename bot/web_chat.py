@@ -2429,13 +2429,27 @@ a:hover{opacity:.8}
     border:1px solid rgba(155,138,251,.18);font-size:.88em;
     color:var(--text);text-align:center}
 
-  /* Tiny "mode · cost" hint above the input so the user always sees the
-     current selection without opening the drawer. */
-  .mobile-status{display:flex;flex-wrap:wrap;align-items:center;gap:6px;
-    margin:0 0 8px;padding:6px 10px;font-size:.78em;color:var(--muted2);
-    background:var(--surface2);border:1px solid var(--border);border-radius:8px}
-  .mobile-status b{color:var(--text);font-weight:600}
-  .mobile-status .ms-cost{color:var(--accent-bright);margin-left:auto}
+  /* Compact "mode-icon · cost" chip — sits as a thin overlay on the
+     top edge of the input card so it doesn't steal vertical space from
+     the textarea. Tap to open the settings drawer. */
+  .mobile-status{display:inline-flex;align-items:center;gap:6px;
+    margin:0 0 6px;padding:3px 9px;font-size:.72em;color:var(--muted2);
+    background:var(--surface2);border:1px solid var(--border);
+    border-radius:999px;line-height:1.4;cursor:pointer;
+    max-width:100%;width:auto;align-self:flex-start;
+    transition:border-color .15s,color .15s}
+  .mobile-status:hover{border-color:var(--border-md);color:var(--text)}
+  .mobile-status:empty{display:none}
+  .mobile-status .ms-icon{width:13px;height:13px;flex-shrink:0;
+    color:var(--accent-bright);display:inline-flex}
+  .mobile-status .ms-icon svg{width:100%;height:100%;stroke:currentColor;
+    fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .mobile-status .ms-cost{color:var(--accent-bright);font-weight:500;
+    margin-left:2px;white-space:nowrap}
+  .mobile-status .ms-cost b{font-weight:600}
+  /* Slightly tighter input-card on mobile so the chip + textarea fit
+     comfortably without the placeholder getting clipped. */
+  .input-card{padding:8px 10px 6px}
 }
 
 ::-webkit-scrollbar{width:6px;height:6px}
@@ -3262,6 +3276,9 @@ a:hover{opacity:.8}
     $("logoutBtn").addEventListener("click", logout);
     $("menuBtn").addEventListener("click", openSidebar);
     $("settingsBtn").addEventListener("click", openSettings);
+    // Tapping the mobile status chip is the same as the gear button — it's
+    // the most natural target for "I want to change the current mode".
+    $("mobileStatus").addEventListener("click", openSettings);
     $("settingsClose").addEventListener("click", closeOverlays);
     $("scrim").addEventListener("click", closeOverlays);
     document.addEventListener("keydown", (e) => {
@@ -3548,16 +3565,31 @@ a:hover{opacity:.8}
     updateMobileStatus();
   }
 
-  // Updates the small "mode · cost" pill above the input on mobile so the
-  // user always sees the current selection without opening the drawer.
+  // Updates the small icon-chip above the input on mobile so the user
+  // always sees the current mode + cost without opening the drawer.
+  // Mode is rendered as an icon (saves horizontal room — see the user
+  // request to free up the bottom strip and avoid clipping the textarea
+  // placeholder). The whole chip is clickable and opens settings.
   function updateMobileStatus(){
     const mob = $("mobileStatus");
     if (!mob) return;
+    const icons = {
+      chat:  '<svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>',
+      image: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>',
+      video: '<svg viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>',
+      music: '<svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
+    };
     const names = {chat:"Чат",image:"Изображение",video:"Видео",music:"Музыка"};
-    const modeName = names[state.mode] || "";
+    const icon = icons[state.mode] || "";
+    const name = escapeHtml(names[state.mode] || "");
     const costHtml = $("costLbl").innerHTML || "";
-    mob.innerHTML = '<b>' + escapeHtml(modeName) + '</b>' +
-                    (costHtml ? '<span class="ms-cost">' + costHtml + '</span>' : '');
+    if (!icon && !costHtml) { mob.innerHTML = ""; return; }
+    mob.setAttribute("title", names[state.mode] || "");
+    mob.setAttribute("aria-label", "Режим: " + (names[state.mode] || "") + ". Открыть настройки.");
+    mob.innerHTML =
+      '<span class="ms-icon">' + icon + '</span>' +
+      '<span class="ms-name">' + name + '</span>' +
+      (costHtml ? '<span class="ms-cost">' + costHtml + '</span>' : '');
   }
 
   function autosizeText() {
