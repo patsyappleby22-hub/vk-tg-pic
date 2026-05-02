@@ -202,179 +202,223 @@ def _layout(title: str, content: str, active: str = "") -> str:
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{title} — PicGenAI Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
-  *{{margin:0;padding:0;box-sizing:border-box}}
+  *,*::before,*::after{{margin:0;padding:0;box-sizing:border-box}}
   :root{{
-    --bg:#08070e;--surface:#0f0e1a;--border:rgba(167,139,250,.15);
-    --accent:#a78bfa;--accent2:#60a5fa;--text:#e4e4ef;--muted:#8888a8;
-    --green:#34d399;--red:#f87171;--yellow:#fbbf24;--orange:#fb923c;
+    --bg:#050507;--surface:#0a0a0e;--surface2:#0f0f14;
+    --border:rgba(255,255,255,.055);--border-md:rgba(255,255,255,.09);
+    --text:#ededf2;--muted:#52526a;--muted2:#7a7a96;
+    --accent:#9b8afb;--accent-bright:#b8acff;
+    --accent-dim:rgba(155,138,251,.07);--accent-glow:rgba(155,138,251,.18);
+    --green:#6ee7b7;--red:#fb7185;--yellow:#fcd34d;--orange:#fdba74;
   }}
-  body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  html{{scroll-behavior:smooth}}
+  body{{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
     background:var(--bg);color:var(--text);min-height:100vh;display:flex;
-    flex-direction:column}}
-  a{{color:var(--accent);text-decoration:none}}
-  a:hover{{opacity:.8}}
+    flex-direction:column;-webkit-font-smoothing:antialiased;font-weight:400}}
+  body::after{{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+    opacity:.5;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E")}}
+  a{{color:var(--accent);text-decoration:none;transition:opacity .2s}}
+  a:hover{{opacity:.78}}
 
   /* ── Desktop layout ── */
-  .layout{{display:flex;flex:1;min-height:0}}
-  .sidebar{{width:220px;background:var(--surface);border-right:1px solid var(--border);
-    padding:24px 0;display:flex;flex-direction:column;flex-shrink:0}}
-  .sidebar-logo{{padding:0 20px 24px;font-size:1.15em;font-weight:700;
-    background:linear-gradient(135deg,var(--accent),var(--accent2));
-    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  .layout{{display:flex;flex:1;min-height:0;position:relative;z-index:1}}
+  .sidebar{{width:236px;background:var(--surface);
+    border-right:1px solid var(--border);
+    padding:28px 0 20px;display:flex;flex-direction:column;flex-shrink:0}}
+  .sidebar-logo{{padding:0 22px 28px;font-family:'Syne',sans-serif;
+    font-size:1.05em;font-weight:700;letter-spacing:.01em;color:var(--text);
     white-space:nowrap;overflow:hidden}}
-  .nav-link{{display:flex;align-items:center;gap:10px;padding:10px 20px;
-    color:var(--muted);font-size:.95em;border-left:3px solid transparent;
-    transition:.15s;white-space:nowrap}}
-  .nav-link:hover{{color:var(--text);background:rgba(167,139,250,.06);opacity:1}}
-  .nav-link.active{{color:var(--accent);border-left-color:var(--accent);
-    background:rgba(167,139,250,.08)}}
-  .nav-icon{{font-size:1.1em;flex-shrink:0}}
-  .sidebar-bottom{{margin-top:auto;padding:20px}}
-  .logout-btn{{display:block;padding:9px 16px;background:rgba(248,113,113,.1);
-    border:1px solid rgba(248,113,113,.2);border-radius:8px;color:var(--red);
-    text-align:center;font-size:.9em}}
-  .logout-btn:hover{{background:rgba(248,113,113,.2);opacity:1}}
+  .sidebar-logo span{{color:var(--accent)}}
+  .nav-link{{display:flex;align-items:center;gap:11px;padding:11px 22px;
+    color:var(--muted2);font-size:.86em;font-weight:400;letter-spacing:.01em;
+    border-left:2px solid transparent;transition:color .2s,background .2s,border-color .2s;
+    white-space:nowrap}}
+  .nav-link:hover{{color:var(--text);background:var(--accent-dim);opacity:1}}
+  .nav-link.active{{color:var(--text);border-left-color:var(--accent);
+    background:var(--accent-dim)}}
+  .nav-icon{{font-size:1em;flex-shrink:0;opacity:.85}}
+  .sidebar-bottom{{margin-top:auto;padding:18px 22px 0;
+    border-top:1px solid var(--border)}}
+  .logout-btn{{display:block;padding:9px 14px;background:rgba(251,113,133,.06);
+    border:1px solid rgba(251,113,133,.18);border-radius:8px;color:var(--red);
+    text-align:center;font-size:.82em;font-weight:500;letter-spacing:.02em;
+    transition:all .2s}}
+  .logout-btn:hover{{background:rgba(251,113,133,.12);
+    border-color:rgba(251,113,133,.3);opacity:1}}
 
   /* ── Main content ── */
-  .main{{flex:1;padding:32px;overflow-x:auto;min-width:0}}
-  .page-title{{font-size:1.6em;font-weight:700;margin-bottom:24px;
-    background:linear-gradient(135deg,var(--accent),var(--accent2));
-    -webkit-background-clip:text;-webkit-text-fill-color:transparent}}
+  .main{{flex:1;padding:40px 44px;overflow-x:auto;min-width:0}}
+  .page-title{{font-family:'Syne',sans-serif;font-size:1.85em;font-weight:600;
+    letter-spacing:-.01em;margin-bottom:28px;color:var(--text)}}
 
   /* ── Cards ── */
-  .cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
-    gap:16px;margin-bottom:28px}}
+  .cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+    gap:14px;margin-bottom:32px}}
   .card{{background:var(--surface);border:1px solid var(--border);
-    border-radius:14px;padding:20px}}
-  .card-label{{color:var(--muted);font-size:.82em;margin-bottom:6px}}
-  .card-value{{font-size:1.9em;font-weight:700}}
+    border-radius:14px;padding:22px;transition:border-color .2s,background .2s}}
+  .card:hover{{border-color:var(--border-md);background:var(--surface2)}}
+  .card-label{{color:var(--muted2);font-size:.72em;font-weight:500;
+    text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px}}
+  .card-value{{font-family:'Syne',sans-serif;font-size:1.85em;font-weight:600;
+    letter-spacing:-.01em;color:var(--text)}}
   .card-value.green{{color:var(--green)}}
-  .card-value.purple{{color:var(--accent)}}
-  .card-value.blue{{color:var(--accent2)}}
+  .card-value.purple{{color:var(--accent-bright)}}
+  .card-value.blue{{color:var(--accent-bright)}}
   .card-value.yellow{{color:var(--yellow)}}
   .card-value.red{{color:var(--red)}}
 
   /* ── Tables ── */
   .table-wrap{{background:var(--surface);border:1px solid var(--border);
     border-radius:14px;overflow:auto;-webkit-overflow-scrolling:touch}}
-  table{{width:100%;border-collapse:collapse;font-size:.9em}}
-  thead th{{padding:12px 16px;text-align:left;color:var(--muted);
-    font-weight:600;font-size:.8em;text-transform:uppercase;letter-spacing:.05em;
-    border-bottom:1px solid var(--border);white-space:nowrap}}
-  tbody td{{padding:11px 16px;border-bottom:1px solid rgba(255,255,255,.04);
-    white-space:nowrap}}
+  table{{width:100%;border-collapse:collapse;font-size:.88em}}
+  thead th{{padding:14px 18px;text-align:left;color:var(--muted2);
+    font-weight:500;font-size:.7em;text-transform:uppercase;letter-spacing:.08em;
+    border-bottom:1px solid var(--border);white-space:nowrap;
+    background:rgba(255,255,255,.015)}}
+  tbody td{{padding:13px 18px;border-bottom:1px solid var(--border);
+    white-space:nowrap;color:var(--text);font-weight:400}}
   tbody tr:last-child td{{border-bottom:none}}
-  tbody tr:hover{{background:rgba(167,139,250,.04)}}
-  .badge{{display:inline-block;padding:3px 9px;border-radius:20px;
-    font-size:.78em;font-weight:600;white-space:nowrap}}
-  .badge-green{{background:rgba(52,211,153,.12);color:var(--green)}}
-  .badge-red{{background:rgba(248,113,113,.12);color:var(--red)}}
-  .badge-yellow{{background:rgba(251,191,36,.12);color:var(--yellow)}}
-  .badge-blue{{background:rgba(96,165,250,.12);color:var(--accent2)}}
-  .badge-purple{{background:rgba(167,139,250,.12);color:var(--accent)}}
+  tbody tr{{transition:background .15s}}
+  tbody tr:hover{{background:var(--accent-dim)}}
+  .badge{{display:inline-block;padding:3px 10px;border-radius:100px;
+    font-size:.72em;font-weight:500;white-space:nowrap;letter-spacing:.02em;
+    border:1px solid transparent}}
+  .badge-green{{background:rgba(110,231,183,.08);color:var(--green);
+    border-color:rgba(110,231,183,.18)}}
+  .badge-red{{background:rgba(251,113,133,.08);color:var(--red);
+    border-color:rgba(251,113,133,.18)}}
+  .badge-yellow{{background:rgba(252,211,77,.08);color:var(--yellow);
+    border-color:rgba(252,211,77,.18)}}
+  .badge-blue{{background:var(--accent-dim);color:var(--accent-bright);
+    border-color:var(--accent-glow)}}
+  .badge-purple{{background:var(--accent-dim);color:var(--accent-bright);
+    border-color:var(--accent-glow)}}
 
   /* ── Toolbar ── */
-  .toolbar{{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center}}
-  .search-input{{background:var(--surface);border:1px solid var(--border);
-    border-radius:8px;padding:8px 14px;color:var(--text);font-size:.9em;
-    min-width:0;flex:1 1 200px;outline:none}}
-  .search-input:focus{{border-color:var(--accent)}}
-  select{{background:var(--surface);border:1px solid var(--border);
-    border-radius:8px;padding:8px 12px;color:var(--text);font-size:.9em;
-    flex:1 1 140px;min-width:0}}
+  .toolbar{{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center}}
+  .search-input{{background:var(--surface);border:1px solid var(--border-md);
+    border-radius:8px;padding:9px 14px;color:var(--text);font-size:.88em;
+    font-family:inherit;min-width:0;flex:1 1 220px;outline:none;transition:border-color .2s}}
+  .search-input::placeholder{{color:var(--muted)}}
+  .search-input:focus{{border-color:var(--accent-glow)}}
+  select{{background:var(--surface);border:1px solid var(--border-md);
+    border-radius:8px;padding:9px 12px;color:var(--text);font-size:.88em;
+    font-family:inherit;flex:1 1 140px;min-width:0;outline:none;cursor:pointer}}
+  select:focus{{border-color:var(--accent-glow)}}
 
   /* ── Buttons ── */
-  .btn{{display:inline-block;padding:8px 18px;border-radius:8px;border:none;
-    cursor:pointer;font-size:.9em;font-weight:600;transition:.15s;
-    white-space:nowrap;text-align:center}}
-  .btn-primary{{background:linear-gradient(135deg,#7c3aed,#6366f1);color:#fff}}
-  .btn-primary:hover{{opacity:.85}}
-  .btn-danger{{background:rgba(248,113,113,.15);color:var(--red);
-    border:1px solid rgba(248,113,113,.25)}}
-  .btn-danger:hover{{background:rgba(248,113,113,.25)}}
-  .btn-success{{background:rgba(52,211,153,.15);color:var(--green);
-    border:1px solid rgba(52,211,153,.25)}}
-  .btn-success:hover{{background:rgba(52,211,153,.25)}}
-  .btn-muted{{background:rgba(255,255,255,.06);color:var(--muted);
-    border:1px solid var(--border)}}
-  .btn-muted:hover{{background:rgba(255,255,255,.1);color:var(--text)}}
-  .btn-sm{{padding:5px 12px;font-size:.82em}}
+  .btn{{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    padding:9px 18px;border-radius:8px;border:1px solid transparent;
+    cursor:pointer;font-size:.85em;font-weight:500;font-family:inherit;
+    letter-spacing:.01em;transition:all .2s;white-space:nowrap;text-align:center}}
+  .btn-primary{{background:var(--accent);color:#0a0a0e;font-weight:600}}
+  .btn-primary:hover{{background:var(--accent-bright);transform:translateY(-1px)}}
+  .btn-danger{{background:rgba(251,113,133,.08);color:var(--red);
+    border-color:rgba(251,113,133,.22)}}
+  .btn-danger:hover{{background:rgba(251,113,133,.16);
+    border-color:rgba(251,113,133,.4)}}
+  .btn-success{{background:rgba(110,231,183,.08);color:var(--green);
+    border-color:rgba(110,231,183,.22)}}
+  .btn-success:hover{{background:rgba(110,231,183,.16);
+    border-color:rgba(110,231,183,.4)}}
+  .btn-muted{{background:rgba(255,255,255,.03);color:var(--text);
+    border-color:var(--border-md)}}
+  .btn-muted:hover{{background:var(--accent-dim);border-color:var(--accent-glow)}}
+  .btn-sm{{padding:6px 13px;font-size:.78em}}
 
   /* ── Detail grid ── */
-  .section-heading{{font-size:1.05em;font-weight:600;color:var(--accent);
-    margin:28px 0 14px}}
-  .detail-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  .section-heading{{font-family:'Syne',sans-serif;font-size:1.05em;
+    font-weight:600;color:var(--text);margin:32px 0 14px;letter-spacing:-.005em}}
+  .detail-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
     gap:12px;margin-bottom:24px}}
   .detail-card{{background:var(--surface);border:1px solid var(--border);
     border-radius:12px;padding:16px}}
-  .detail-card-label{{color:var(--muted);font-size:.8em;margin-bottom:4px}}
-  .detail-card-value{{font-size:1.05em;font-weight:600;word-break:break-all}}
+  .detail-card-label{{color:var(--muted2);font-size:.7em;font-weight:500;
+    text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}}
+  .detail-card-value{{font-size:1em;font-weight:500;word-break:break-all;color:var(--text)}}
   .actions-row{{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px}}
 
   /* ── Image list ── */
-  .img-empty{{color:var(--muted);text-align:center;padding:24px;
-    border:1px dashed var(--border);border-radius:10px;margin-bottom:24px}}
+  .img-empty{{color:var(--muted2);text-align:center;padding:28px;
+    border:1px dashed var(--border-md);border-radius:12px;margin-bottom:24px;
+    font-size:.9em}}
 
   /* Lightbox */
-  .lightbox{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);
+  .lightbox{{display:none;position:fixed;inset:0;background:rgba(5,5,7,.95);
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
     z-index:200;align-items:center;justify-content:center;padding:16px;flex-direction:column}}
   .lightbox.open{{display:flex}}
-  .lightbox img{{max-width:90vw;max-height:80vh;border-radius:8px;object-fit:contain}}
-  .lightbox-caption{{color:#ccc;font-size:.9em;margin-top:12px;max-width:600px;
-    text-align:center;line-height:1.4}}
-  .lightbox-close{{position:absolute;top:16px;right:20px;font-size:2em;
-    color:#fff;cursor:pointer;line-height:1}}
+  .lightbox img{{max-width:90vw;max-height:80vh;border-radius:10px;object-fit:contain}}
+  .lightbox-caption{{color:var(--muted2);font-size:.88em;margin-top:14px;max-width:600px;
+    text-align:center;line-height:1.5}}
+  .lightbox-close{{position:absolute;top:18px;right:22px;font-size:1.6em;
+    color:var(--text);cursor:pointer;line-height:1;opacity:.7;transition:opacity .2s}}
+  .lightbox-close:hover{{opacity:1}}
 
   /* ── Modal ── */
-  .modal-overlay{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);
+  .modal-overlay{{display:none;position:fixed;inset:0;background:rgba(5,5,7,.82);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
     z-index:100;align-items:center;justify-content:center;padding:16px}}
   .modal-overlay.open{{display:flex}}
-  .modal{{background:#14122a;border:1px solid var(--border);border-radius:16px;
-    padding:24px;width:100%;max-width:400px}}
-  .modal h3{{margin-bottom:16px;font-size:1.1em}}
-  .modal input{{width:100%;background:var(--surface);border:1px solid var(--border);
-    border-radius:8px;padding:9px 14px;color:var(--text);font-size:.95em;
-    margin-bottom:14px;outline:none}}
-  .modal input:focus{{border-color:var(--accent)}}
+  .modal{{background:var(--surface);border:1px solid var(--border-md);
+    border-radius:16px;padding:28px;width:100%;max-width:420px}}
+  .modal h3{{margin-bottom:18px;font-family:'Syne',sans-serif;
+    font-size:1.1em;font-weight:600;letter-spacing:-.005em}}
+  .modal input{{width:100%;background:var(--bg);border:1px solid var(--border-md);
+    border-radius:8px;padding:10px 14px;color:var(--text);font-size:.92em;
+    font-family:inherit;margin-bottom:14px;outline:none;transition:border-color .2s}}
+  .modal input:focus{{border-color:var(--accent-glow)}}
   .modal-btns{{display:flex;gap:10px;justify-content:flex-end}}
 
   /* ── Pagination ── */
-  .pagination{{display:flex;gap:6px;margin-top:16px;flex-wrap:wrap}}
-  .page-btn{{padding:6px 12px;border-radius:7px;background:var(--surface);
-    border:1px solid var(--border);color:var(--muted);font-size:.85em}}
-  .page-btn:hover,.page-btn.cur{{background:rgba(167,139,250,.15);color:var(--accent);
-    border-color:rgba(167,139,250,.4)}}
+  .pagination{{display:flex;gap:6px;margin-top:18px;flex-wrap:wrap}}
+  .page-btn{{padding:7px 13px;border-radius:7px;background:var(--surface);
+    border:1px solid var(--border);color:var(--muted2);font-size:.82em;
+    font-family:inherit;transition:all .15s;cursor:pointer}}
+  .page-btn:hover,.page-btn.cur{{background:var(--accent-dim);
+    color:var(--accent-bright);border-color:var(--accent-glow)}}
 
-  /* ── Form inputs (used by autopub settings, etc.) ── */
-  .form-label{{display:block;font-size:.82em;color:var(--muted);margin-bottom:5px;font-weight:500}}
-  .form-input{{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;
-    padding:9px 12px;color:var(--text);font-size:.9em;outline:none;box-sizing:border-box;
-    font-family:inherit;resize:vertical}}
-  .form-input:focus{{border-color:var(--accent);box-shadow:0 0 0 2px rgba(167,139,250,.15)}}
+  /* ── Form inputs ── */
+  .form-label{{display:block;font-size:.72em;color:var(--muted2);
+    font-weight:500;text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px}}
+  .form-input{{width:100%;background:var(--surface);border:1px solid var(--border-md);
+    border-radius:8px;padding:10px 13px;color:var(--text);font-size:.9em;outline:none;
+    box-sizing:border-box;font-family:inherit;resize:vertical;transition:border-color .2s}}
+  .form-input::placeholder{{color:var(--muted)}}
+  .form-input:focus{{border-color:var(--accent-glow);
+    box-shadow:0 0 0 3px rgba(155,138,251,.08)}}
 
   /* ── Alert ── */
-  .alert{{padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:.9em}}
-  .alert-success{{background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.2);
-    color:var(--green)}}
-  .alert-error{{background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.2);
-    color:var(--red)}}
+  .alert{{padding:13px 16px;border-radius:10px;margin-bottom:18px;
+    font-size:.88em;border:1px solid transparent}}
+  .alert-success{{background:rgba(110,231,183,.06);
+    border-color:rgba(110,231,183,.2);color:var(--green)}}
+  .alert-error{{background:rgba(251,113,133,.06);
+    border-color:rgba(251,113,133,.2);color:var(--red)}}
 
   /* ── Autopub post card ── */
-  .post-card{{display:grid;grid-template-columns:190px 1fr;gap:14px;margin-bottom:14px}}
+  .post-card{{display:grid;grid-template-columns:200px 1fr;gap:16px;margin-bottom:14px;
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:12px;padding:14px}}
   .pc-img{{min-width:0}}
   .post-card-btns{{display:flex;flex-wrap:wrap;gap:6px}}
   .form-grid-2{{display:grid;grid-template-columns:1fr 1fr;gap:16px}}
   .autopub-tabs{{display:flex;gap:0;border-bottom:1px solid var(--border);
-    margin-bottom:20px;overflow-x:auto;-webkit-overflow-scrolling:touch;
+    margin-bottom:22px;overflow-x:auto;-webkit-overflow-scrolling:touch;
     scrollbar-width:none}}
   .autopub-tabs::-webkit-scrollbar{{display:none}}
-  .autopub-tabs a{{padding:10px 18px;text-decoration:none;white-space:nowrap;
-    font-size:.9em;border-bottom:2px solid transparent;flex-shrink:0}}
-  .autopub-tabs a.tab-active{{border-bottom-color:var(--accent)}}
+  .autopub-tabs a{{padding:11px 18px;text-decoration:none;white-space:nowrap;
+    font-size:.86em;color:var(--muted2);border-bottom:2px solid transparent;
+    flex-shrink:0;transition:color .2s,border-color .2s;font-weight:500}}
+  .autopub-tabs a:hover{{color:var(--text);opacity:1}}
+  .autopub-tabs a.tab-active{{border-bottom-color:var(--accent);color:var(--text)}}
   .autopub-header{{display:flex;align-items:center;gap:12px;
-    margin-bottom:20px;flex-wrap:wrap}}
-  .gen-hint{{font-size:.8em;color:var(--muted)}}
+    margin-bottom:22px;flex-wrap:wrap}}
+  .gen-hint{{font-size:.78em;color:var(--muted2)}}
 
   /* ── Bottom nav (mobile only) ── */
   .bottom-nav{{display:none}}
@@ -384,33 +428,35 @@ def _layout(title: str, content: str, active: str = "") -> str:
     .sidebar{{display:none}}
     .bottom-nav{{
       display:flex;position:fixed;bottom:0;left:0;right:0;z-index:50;
-      background:var(--surface);border-top:1px solid var(--border);
+      background:rgba(10,10,14,.92);backdrop-filter:blur(20px);
+      -webkit-backdrop-filter:blur(20px);
+      border-top:1px solid var(--border);
       padding:6px 0 env(safe-area-inset-bottom,6px)
     }}
     .bot-link{{
       flex:1;display:flex;flex-direction:column;align-items:center;
-      gap:3px;padding:6px 4px;color:var(--muted);font-size:.7em;
+      gap:3px;padding:6px 4px;color:var(--muted2);font-size:.66em;
+      font-weight:500;letter-spacing:.02em;
       border-top:2px solid transparent;transition:.15s
     }}
-    .bot-link>span:first-child{{font-size:1.4em;line-height:1}}
-    .bot-link.active{{color:var(--accent);border-top-color:var(--accent)}}
+    .bot-link>span:first-child{{font-size:1.3em;line-height:1;opacity:.85}}
+    .bot-link.active{{color:var(--accent-bright);border-top-color:var(--accent)}}
+    .bot-link.active>span:first-child{{opacity:1}}
     .bot-logout{{
       flex:1;display:flex;flex-direction:column;align-items:center;
-      gap:3px;padding:6px 4px;color:var(--red);font-size:.7em
+      gap:3px;padding:6px 4px;color:var(--red);font-size:.66em;font-weight:500
     }}
-    .bot-logout>span:first-child{{font-size:1.4em;line-height:1}}
-    .main{{padding:12px;padding-bottom:80px}}
-    .page-title{{font-size:1.3em}}
+    .bot-logout>span:first-child{{font-size:1.3em;line-height:1}}
+    .main{{padding:20px 16px;padding-bottom:84px}}
+    .page-title{{font-size:1.45em;margin-bottom:20px}}
     .cards{{grid-template-columns:repeat(2,1fr);gap:10px}}
-    .card{{padding:14px}}
+    .card{{padding:16px}}
     .card-value{{font-size:1.5em}}
     .detail-grid{{grid-template-columns:repeat(2,1fr)}}
-    .actions-row .btn{{font-size:.82em;padding:7px 12px}}
+    .actions-row .btn{{font-size:.8em;padding:8px 13px}}
     .toolbar{{flex-direction:column;align-items:stretch}}
     .search-input{{width:100%;flex:none}}
     select{{width:100%;flex:none}}
-
-    /* autopub mobile */
     .post-card{{grid-template-columns:1fr}}
     .post-card .pc-img img{{max-height:220px;width:100%;object-fit:cover;
       border-radius:8px}}
@@ -421,7 +467,7 @@ def _layout(title: str, content: str, active: str = "") -> str:
       text-align:center}}
     .autopub-header h2{{font-size:1.2em}}
     .gen-hint{{display:none}}
-    .autopub-tabs a{{padding:8px 12px;font-size:.82em}}
+    .autopub-tabs a{{padding:9px 12px;font-size:.8em}}
     .hist-mobile-hide{{display:none}}
     .hist-table-wrap{{display:none !important}}
     .hist-mob-list{{display:block !important}}
@@ -433,10 +479,10 @@ def _layout(title: str, content: str, active: str = "") -> str:
 <body>
 <div class="layout">
   <nav class="sidebar">
-    <div class="sidebar-logo">⚡ PicGenAI</div>
+    <div class="sidebar-logo">PicGen<span>AI</span></div>
     {sidebar_nav}
     <div class="sidebar-bottom">
-      <a href="/admin/logout" class="logout-btn">🚪 Выйти</a>
+      <a href="/admin/logout" class="logout-btn">Выйти</a>
     </div>
   </nav>
   <main class="main">
@@ -466,8 +512,7 @@ def _login_page_html(step: str, token: str, error: str) -> str:
       maxlength="6" placeholder="000000" autofocus autocomplete="one-time-code">
     <input type="hidden" name="tok" value="{token}">
     <button type="submit">Подтвердить</button>
-    <a href="/admin/login" style="display:block;text-align:center;margin-top:14px;
-      color:#8888a8;font-size:.85em">← Ввести пароль заново</a>"""
+    <a href="/admin/login" class="back-link">← Ввести пароль заново</a>"""
     else:
         subtitle = "Панель управления"
         form_body = """
@@ -475,43 +520,85 @@ def _login_page_html(step: str, token: str, error: str) -> str:
     <input type="password" name="password" placeholder="••••••••" autofocus>
     <button type="submit">Войти</button>"""
 
+    step_label = "Шаг 2 из 2 — 2FA" if step == "2fa" else "Шаг 1 из 2 — Пароль"
     return f"""<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Вход — PicGenAI Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
-  *{{margin:0;padding:0;box-sizing:border-box}}
-  body{{font-family:-apple-system,sans-serif;background:#08070e;color:#e4e4ef;
-    min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}}
-  .box{{background:#0f0e1a;border:1px solid rgba(167,139,250,.2);border-radius:20px;
-    padding:40px;width:100%;max-width:360px}}
-  h1{{font-size:1.5em;margin-bottom:6px;background:linear-gradient(135deg,#a78bfa,#60a5fa);
-    -webkit-background-clip:text;-webkit-text-fill-color:transparent}}
-  .sub{{color:#8888a8;font-size:.9em;margin-bottom:24px}}
-  label{{display:block;color:#8888a8;font-size:.82em;margin-bottom:6px}}
-  input[type=password],input[type=text]{{width:100%;background:#08070e;
-    border:1px solid rgba(167,139,250,.2);border-radius:10px;padding:11px 14px;
-    color:#e4e4ef;font-size:.95em;margin-bottom:18px;outline:none;
-    letter-spacing:.15em;text-align:center;font-size:1.3em}}
-  input[type=password]{{letter-spacing:normal;font-size:.95em;text-align:left}}
-  input:focus{{border-color:#a78bfa}}
-  button{{width:100%;padding:12px;background:linear-gradient(135deg,#7c3aed,#6366f1);
-    border:none;border-radius:10px;color:#fff;font-size:1em;font-weight:700;
-    cursor:pointer;margin-bottom:4px}}
-  button:hover{{opacity:.9}}
-  .alert{{padding:10px 14px;border-radius:8px;margin-bottom:16px;font-size:.88em;
-    background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.2);color:#f87171}}
-  .step-badge{{display:inline-block;padding:3px 10px;border-radius:20px;font-size:.78em;
-    margin-bottom:18px;background:rgba(167,139,250,.1);color:#a78bfa;border:1px solid rgba(167,139,250,.2)}}
+  *,*::before,*::after{{margin:0;padding:0;box-sizing:border-box}}
+  :root{{
+    --bg:#050507;--surface:#0a0a0e;--border:rgba(255,255,255,.055);
+    --border-md:rgba(255,255,255,.09);--text:#ededf2;--muted:#52526a;
+    --muted2:#7a7a96;--accent:#9b8afb;--accent-bright:#b8acff;
+    --accent-dim:rgba(155,138,251,.07);--accent-glow:rgba(155,138,251,.18);
+    --red:#fb7185;
+  }}
+  body{{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);
+    color:var(--text);min-height:100vh;display:flex;align-items:center;
+    justify-content:center;padding:16px;overflow:hidden;position:relative;
+    -webkit-font-smoothing:antialiased}}
+  body::after{{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
+    opacity:.5;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E")}}
+  .orb{{position:fixed;border-radius:50%;filter:blur(80px);pointer-events:none;z-index:0}}
+  .orb-1{{width:520px;height:520px;top:-120px;left:50%;transform:translateX(-50%);
+    background:radial-gradient(circle,rgba(100,80,210,.14) 0%,transparent 70%);
+    animation:orbFloat 9s ease-in-out infinite}}
+  .orb-2{{width:340px;height:340px;bottom:-80px;right:-80px;
+    background:radial-gradient(circle,rgba(80,60,180,.1) 0%,transparent 70%);
+    animation:orbFloat2 11s ease-in-out infinite reverse}}
+  @keyframes orbFloat{{0%,100%{{transform:translateX(-50%) translateY(0)}}50%{{transform:translateX(-50%) translateY(-26px)}}}}
+  @keyframes orbFloat2{{0%,100%{{transform:translateY(0)}}50%{{transform:translateY(-22px)}}}}
+  .box{{position:relative;z-index:1;background:rgba(10,10,14,.78);
+    backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+    border:1px solid var(--border-md);border-radius:18px;
+    padding:42px 38px;width:100%;max-width:380px;
+    animation:fadeUp .7s ease both}}
+  @keyframes fadeUp{{from{{opacity:0;transform:translateY(18px)}}to{{opacity:1;transform:translateY(0)}}}}
+  h1{{font-family:'Syne',sans-serif;font-size:1.45em;font-weight:600;
+    letter-spacing:-.01em;margin-bottom:6px;color:var(--text)}}
+  h1 span{{color:var(--accent)}}
+  .sub{{color:var(--muted2);font-size:.88em;margin-bottom:22px;font-weight:400}}
+  label{{display:block;color:var(--muted2);font-size:.7em;font-weight:500;
+    text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}}
+  input[type=password],input[type=text]{{width:100%;background:var(--bg);
+    border:1px solid var(--border-md);border-radius:10px;padding:12px 16px;
+    color:var(--text);font-size:.95em;font-family:inherit;
+    margin-bottom:18px;outline:none;transition:border-color .2s,box-shadow .2s}}
+  input[type=text]{{letter-spacing:.4em;text-align:center;font-size:1.25em;font-weight:500}}
+  input[type=password]{{letter-spacing:normal;text-align:left;font-size:.95em}}
+  input::placeholder{{color:var(--muted);letter-spacing:normal}}
+  input:focus{{border-color:var(--accent-glow);
+    box-shadow:0 0 0 3px rgba(155,138,251,.1)}}
+  button{{width:100%;padding:13px;background:var(--accent);
+    border:none;border-radius:10px;color:#0a0a0e;font-size:.92em;font-weight:600;
+    font-family:inherit;letter-spacing:.01em;cursor:pointer;
+    transition:background .2s,transform .15s;margin-bottom:4px}}
+  button:hover{{background:var(--accent-bright);transform:translateY(-1px)}}
+  .alert{{padding:11px 14px;border-radius:9px;margin-bottom:16px;font-size:.86em;
+    background:rgba(251,113,133,.06);border:1px solid rgba(251,113,133,.2);
+    color:var(--red)}}
+  .step-badge{{display:inline-block;padding:4px 11px;border-radius:100px;
+    font-size:.7em;font-weight:500;text-transform:uppercase;letter-spacing:.08em;
+    margin-bottom:20px;background:var(--accent-dim);color:var(--accent-bright);
+    border:1px solid var(--accent-glow)}}
+  .back-link{{display:block;text-align:center;margin-top:16px;
+    color:var(--muted2);font-size:.82em;transition:color .2s}}
+  .back-link:hover{{color:var(--text);opacity:1}}
 </style>
 </head>
 <body>
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
 <div class="box">
-  <h1>⚡ PicGenAI Admin</h1>
+  <h1>PicGen<span>AI</span> Admin</h1>
   <div class="sub">{subtitle}</div>
-  <div class="step-badge">{"🔐 Шаг 2 из 2 — 2FA" if step == "2fa" else "🔑 Шаг 1 из 2 — Пароль"}</div>
+  <div class="step-badge">{step_label}</div>
   {error_html}
   <form method="post">
     {form_body}
