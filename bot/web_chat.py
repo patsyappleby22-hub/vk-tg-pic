@@ -2078,35 +2078,128 @@ a:hover{opacity:.8}
 
 .input-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
   padding:6px 4px 0;border-top:1px solid var(--border);margin-top:6px}
+.settings-head,.settings-label{display:none}
+.settings-section{display:contents}
+.tb-modes{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tb-params{display:flex;gap:6px;align-items:center;flex-wrap:wrap;
+  flex:1;justify-content:flex-end;min-width:0}
 .mode-pill{padding:5px 10px;border-radius:6px;font-size:.78em;
-  color:var(--muted2);border:1px solid transparent;transition:all .15s;font-weight:500}
+  color:var(--muted2);border:1px solid transparent;transition:all .15s;font-weight:500;
+  flex-shrink:0;white-space:nowrap}
 .mode-pill:hover{background:var(--surface2);color:var(--text)}
 .mode-pill.active{background:var(--accent-dim);color:var(--text);border-color:rgba(155,138,251,.18)}
-.tb-spacer{flex:1}
 .tb-select{padding:5px 10px;border-radius:6px;background:var(--surface2);
-  border:1px solid var(--border);color:var(--text);font-size:.78em;cursor:pointer}
+  border:1px solid var(--border);color:var(--text);font-size:.78em;cursor:pointer;
+  flex-shrink:0;max-width:100%}
 .tb-select:hover{border-color:var(--border-md)}
 .tb-toggle{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;
-  font-size:.78em;color:var(--muted2);background:var(--surface2);border:1px solid var(--border)}
+  font-size:.78em;color:var(--muted2);background:var(--surface2);border:1px solid var(--border);
+  flex-shrink:0;white-space:nowrap}
 .tb-toggle.on{color:var(--accent-bright);border-color:rgba(155,138,251,.25);background:var(--accent-dim)}
-.tb-cost{font-size:.76em;color:var(--muted2)}
+.tb-cost{font-size:.76em;color:var(--muted2);flex-shrink:0}
 .tb-cost b{color:var(--accent-bright);font-weight:500}
 
 .mobile-toggle{display:none}
 .scrim{display:none}
 
 @media (max-width: 880px){
-  .sidebar{position:fixed;inset:0 auto 0 0;width:280px;z-index:30;
-    transform:translateX(-100%);transition:transform .2s}
+  .sidebar{position:fixed;inset:0 auto 0 0;width:min(86vw,320px);z-index:30;
+    transform:translateX(-100%);transition:transform .22s ease;
+    box-shadow:0 14px 40px rgba(0,0,0,.45);
+    padding-left:env(safe-area-inset-left,0)}
   .sidebar.open{transform:translateX(0)}
-  .scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:29;
-    opacity:0;pointer-events:none;transition:opacity .2s}
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:29;
+    opacity:0;pointer-events:none;transition:opacity .22s;
+    -webkit-tap-highlight-color:transparent}
   .scrim.show{opacity:1;pointer-events:auto;display:block}
   .mobile-toggle{display:flex}
-  .main-head{padding:12px 14px}
-  .messages{padding:14px 14px 10px}
-  .input-wrap{padding:10px 12px 14px}
+  .main-head{padding:12px 14px;
+    padding-left:max(14px,env(safe-area-inset-left,0));
+    padding-right:max(14px,env(safe-area-inset-right,0))}
+  .messages{padding:14px 14px 10px;
+    padding-left:max(14px,env(safe-area-inset-left,0));
+    padding-right:max(14px,env(safe-area-inset-right,0))}
+  .input-wrap{padding:10px 12px 14px;
+    padding-left:max(12px,env(safe-area-inset-left,0));
+    padding-right:max(12px,env(safe-area-inset-right,0));
+    padding-bottom:max(14px,calc(env(safe-area-inset-bottom,0) + 8px))}
   .starter-grid{grid-template-columns:1fr}
+}
+
+@media (max-width: 768px){
+  .main-head{padding:10px 12px;gap:10px}
+  .main-title{font-size:.96em}
+  .main-actions{gap:4px}
+  .btn-icon{width:36px;height:36px}
+  .messages{padding:12px 12px 8px;gap:14px}
+  .msg{gap:10px}
+  .msg-avatar{width:28px;height:28px;font-size:.72em}
+  .msg-content{font-size:.93em}
+  .msg-image,.msg-video{max-height:60vh}
+  .empty-state{padding:24px 12px}
+  .empty-state h2{font-size:1.25em}
+  .empty-state p{font-size:.88em}
+  .input-wrap{padding:8px 10px 12px;
+    padding-bottom:max(12px,calc(env(safe-area-inset-bottom,0) + 6px))}
+  .input-card{padding:8px 10px 6px;border-radius:12px}
+  .input-row{gap:6px;align-items:flex-end}
+  .input-text{font-size:16px;min-height:38px;padding:8px 6px}
+  .input-actions{gap:4px;padding-bottom:4px}
+  .btn-attach{width:38px;height:38px}
+  .btn-send{padding:10px 12px;min-width:44px}
+  .btn-send span{display:none}
+  /* Settings turn into a right-side slide-out drawer on mobile. */
+  .input-toolbar{position:fixed;top:0;right:0;bottom:0;
+    width:min(86vw,340px);z-index:40;
+    background:var(--surface);border-left:1px solid var(--border);
+    border-top:none;margin-top:0;
+    transform:translateX(100%);transition:transform .22s ease;
+    box-shadow:-14px 0 40px rgba(0,0,0,.45);
+    display:flex;flex-direction:column;align-items:stretch;gap:0;
+    padding:0 0 max(16px,env(safe-area-inset-bottom,0));
+    padding-right:env(safe-area-inset-right,0);
+    overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .input-toolbar.open{transform:translateX(0)}
+  .settings-head{display:flex;align-items:center;gap:10px;
+    padding:14px 16px;border-bottom:1px solid var(--border);
+    position:sticky;top:0;background:var(--surface);z-index:1}
+  .settings-title{flex:1;font-family:'Syne',sans-serif;font-weight:600;
+    font-size:1.02em;color:var(--text)}
+  .settings-section{display:flex;flex-direction:column;gap:8px;
+    padding:14px 16px;border-bottom:1px solid var(--border)}
+  .settings-section:last-of-type{border-bottom:none}
+  .settings-label{display:block;font-size:.74em;color:var(--muted2);
+    text-transform:uppercase;letter-spacing:.08em;font-weight:500}
+  .tb-modes{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;
+    flex-wrap:initial}
+  .tb-modes .mode-pill{padding:11px 12px;font-size:.92em;
+    border:1px solid var(--border);background:var(--surface2);
+    text-align:center;border-radius:10px}
+  .tb-modes .mode-pill.active{background:var(--accent-dim);
+    border-color:rgba(155,138,251,.35);color:var(--text)}
+  .tb-params{display:flex;flex-direction:column;align-items:stretch;
+    gap:8px;flex:initial;justify-content:initial;flex-wrap:initial}
+  .tb-params .tb-select{width:100%;padding:11px 12px;font-size:.95em;
+    border-radius:10px;background:var(--surface2)}
+  .tb-params .tb-toggle{width:100%;padding:11px 12px;font-size:.92em;
+    border-radius:10px;justify-content:center}
+  .tb-cost{padding:14px 16px;text-align:center;font-size:.86em;
+    color:var(--muted2);border-top:1px solid var(--border)}
+  .tb-cost b{font-size:1.1em}
+  .modal-card{width:96vw;max-width:96vw;
+    border-radius:14px 14px 0 0;max-height:92vh;align-self:flex-end;
+    margin-bottom:env(safe-area-inset-bottom,0)}
+  .modal-back{align-items:flex-end}
+  .modal-head{padding:12px 14px;flex-wrap:wrap}
+  .modal-body{padding:14px}
+  .feed-tabs{flex-wrap:wrap;width:100%;order:3;gap:6px}
+  .feed-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+  .topup-row{padding:12px 14px;gap:10px}
+  .login-card{padding:24px 20px;border-radius:14px}
+  .login-logo{font-size:1.4em}
+  .login-sub{font-size:.88em;margin-bottom:20px}
+  .field input,.tabs .tab,#codeInput{font-size:16px}
+  .btn-primary{padding:13px 18px}
 }
 
 ::-webkit-scrollbar{width:8px;height:8px}
@@ -2167,6 +2260,7 @@ a:hover{opacity:.8}
 <!-- APP -->
 <div id="app" class="hidden">
   <div class="scrim" id="scrim"></div>
+  <div class="scrim" id="settingsScrim"></div>
   <aside class="sidebar" id="sidebar">
     <div class="sb-head">
       <div class="sb-logo">Pic<span>Gen</span>AI</div>
@@ -2227,6 +2321,9 @@ a:hover{opacity:.8}
       </button>
       <div class="main-title" id="mainTitle">PicGenAI</div>
       <div class="main-actions">
+        <button class="btn-icon mobile-toggle" id="settingsBtn" title="Настройки генерации">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
         <button class="btn-icon" id="renameBtn" title="Переименовать">
           <svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
         </button>
@@ -2256,18 +2353,31 @@ a:hover{opacity:.8}
             </button>
           </div>
         </div>
-        <div class="input-toolbar">
-          <button class="mode-pill active" data-mode="chat">Чат</button>
-          <button class="mode-pill" data-mode="image">Изображение</button>
-          <button class="mode-pill" data-mode="video">Видео</button>
-          <button class="mode-pill" data-mode="music">Музыка</button>
-          <div class="tb-spacer"></div>
-          <select class="tb-select" id="modelSelect"></select>
-          <select class="tb-select" id="aspectSelect" style="display:none"></select>
-          <select class="tb-select" id="durationSelect" style="display:none"></select>
-          <select class="tb-select" id="resolutionSelect" style="display:none"></select>
-          <button class="tb-toggle" id="audioToggle" style="display:none">Со звуком</button>
-          <button class="tb-toggle" id="searchToggle" style="display:none">Поиск</button>
+        <div class="input-toolbar" id="inputToolbar">
+          <div class="settings-head">
+            <div class="settings-title">Настройки генерации</div>
+            <button class="modal-x" id="settingsClose" type="button" aria-label="Закрыть">×</button>
+          </div>
+          <div class="settings-section">
+            <div class="settings-label">Режим</div>
+            <div class="tb-modes">
+              <button class="mode-pill active" data-mode="chat">Чат</button>
+              <button class="mode-pill" data-mode="image">Изображение</button>
+              <button class="mode-pill" data-mode="video">Видео</button>
+              <button class="mode-pill" data-mode="music">Музыка</button>
+            </div>
+          </div>
+          <div class="settings-section settings-params">
+            <div class="settings-label">Параметры</div>
+            <div class="tb-params">
+              <select class="tb-select" id="modelSelect"></select>
+              <select class="tb-select" id="aspectSelect" style="display:none"></select>
+              <select class="tb-select" id="durationSelect" style="display:none"></select>
+              <select class="tb-select" id="resolutionSelect" style="display:none"></select>
+              <button class="tb-toggle" id="audioToggle" style="display:none">Со звуком</button>
+              <button class="tb-toggle" id="searchToggle" style="display:none">Поиск</button>
+            </div>
+          </div>
           <span class="tb-cost" id="costLbl"></span>
         </div>
         <input type="file" id="fileInput" multiple accept="image/*,video/mp4" style="display:none">
@@ -2788,6 +2898,9 @@ a:hover{opacity:.8}
     $("logoutBtn").addEventListener("click", logout);
     $("menuBtn").addEventListener("click", openSidebar);
     $("scrim").addEventListener("click", closeSidebar);
+    $("settingsBtn").addEventListener("click", openSettings);
+    $("settingsClose").addEventListener("click", closeSettings);
+    $("settingsScrim").addEventListener("click", closeSettings);
     $("topupBtn").addEventListener("click", openTopup);
     $("topupClose").addEventListener("click", () => $("topupModal").style.display = "none");
     $("topupModal").addEventListener("click", (e) => {
@@ -2915,6 +3028,8 @@ a:hover{opacity:.8}
   }
   function openSidebar(){ $("sidebar").classList.add("open"); $("scrim").classList.add("show"); }
   function closeSidebar(){ $("sidebar").classList.remove("open"); $("scrim").classList.remove("show"); }
+  function openSettings(){ $("inputToolbar").classList.add("open"); $("settingsScrim").classList.add("show"); }
+  function closeSettings(){ $("inputToolbar").classList.remove("open"); $("settingsScrim").classList.remove("show"); }
 
   function switchMode(m) {
     state.mode = m;
