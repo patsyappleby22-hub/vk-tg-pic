@@ -2106,6 +2106,9 @@ a:hover{opacity:.8}
     opacity:0;pointer-events:none;transition:opacity .2s}
   .scrim.show{opacity:1;pointer-events:auto;display:block}
   .mobile-toggle{display:flex;align-items:center;justify-content:center}
+  /* Rename/Archive/Delete are hidden on mobile — they'd crowd the header.
+     The same actions remain reachable from the chat list (long-press / hover). */
+  .desktop-only{display:none !important}
   .main-head{padding:12px 14px}
   .messages{padding:14px 14px 10px}
   .input-wrap{padding:10px 12px 14px}
@@ -2286,13 +2289,13 @@ a:hover{opacity:.8}
         <button class="btn-icon mobile-toggle" id="settingsBtn" title="Настройки">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </button>
-        <button class="btn-icon" id="renameBtn" title="Переименовать">
+        <button class="btn-icon desktop-only" id="renameBtn" title="Переименовать">
           <svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
         </button>
-        <button class="btn-icon" id="archiveBtn" title="Архивировать">
+        <button class="btn-icon desktop-only" id="archiveBtn" title="Архивировать">
           <svg viewBox="0 0 24 24"><path d="M3 4h18v4H3zM5 8v12h14V8M10 12h4"/></svg>
         </button>
-        <button class="btn-icon" id="deleteBtn" title="Удалить">
+        <button class="btn-icon desktop-only" id="deleteBtn" title="Удалить">
           <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
         </button>
       </div>
