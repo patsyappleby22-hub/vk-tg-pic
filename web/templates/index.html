@@ -11,14 +11,18 @@
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
         :root {
-            --bg: #060608;
-            --surface: #0c0c10;
-            --border: rgba(255,255,255,0.06);
-            --border-hover: rgba(255,255,255,0.12);
-            --text: #f0f0f5;
-            --muted: #5a5a72;
+            --bg: #050507;
+            --surface: #0a0a0e;
+            --surface2: #0f0f14;
+            --border: rgba(255,255,255,0.055);
+            --border-md: rgba(255,255,255,0.09);
+            --text: #ededf2;
+            --muted: #52526a;
+            --muted2: #7a7a96;
             --accent: #9b8afb;
-            --accent-dim: rgba(155,138,251,0.08);
+            --accent-bright: #b8acff;
+            --accent-dim: rgba(155,138,251,0.07);
+            --accent-glow: rgba(155,138,251,0.18);
         }
 
         html { scroll-behavior: smooth; }
@@ -34,15 +38,31 @@
 
         a { color: inherit; text-decoration: none; }
 
-        /* ─── Noise overlay ─── */
-        body::before {
+        /* ─── Animations ─── */
+        .fade-up {
+            opacity: 0;
+            transform: translateY(28px);
+            transition: opacity 0.7s ease, transform 0.7s ease;
+        }
+        .fade-up.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .fade-up-delay-1 { transition-delay: 0.1s; }
+        .fade-up-delay-2 { transition-delay: 0.2s; }
+        .fade-up-delay-3 { transition-delay: 0.3s; }
+        .fade-up-delay-4 { transition-delay: 0.4s; }
+        .fade-up-delay-5 { transition-delay: 0.5s; }
+
+        /* ─── Noise ─── */
+        body::after {
             content: '';
             position: fixed;
             inset: 0;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
             pointer-events: none;
-            z-index: 0;
-            opacity: 0.5;
+            z-index: 9999;
+            opacity: 0.6;
         }
 
         /* ─── Header ─── */
@@ -50,54 +70,61 @@
             position: fixed;
             top: 0; left: 0; right: 0;
             z-index: 100;
-            padding: 20px 40px;
+            padding: 18px 48px;
             display: flex;
             align-items: center;
             justify-content: space-between;
+            transition: background 0.4s, border-color 0.4s;
             border-bottom: 1px solid transparent;
-            transition: border-color 0.3s, background 0.3s;
         }
         header.scrolled {
+            background: rgba(5,5,7,0.82);
             border-color: var(--border);
-            background: rgba(6,6,8,0.85);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
         }
         .logo {
             font-family: 'Syne', sans-serif;
-            font-size: 1.1em;
+            font-size: 1.05em;
             font-weight: 700;
-            letter-spacing: 0.02em;
+            letter-spacing: 0.01em;
             color: var(--text);
+            flex-shrink: 0;
         }
         .logo span { color: var(--accent); }
-        nav { display: flex; gap: 32px; align-items: center; }
+        nav {
+            display: flex;
+            gap: 36px;
+        }
         nav a {
-            font-size: 0.875em;
+            font-size: 0.83em;
             color: var(--muted);
-            transition: color 0.2s;
             font-weight: 400;
+            letter-spacing: 0.02em;
+            transition: color 0.2s;
         }
         nav a:hover { color: var(--text); }
-        .header-cta {
+        .header-btn {
             display: inline-flex;
             align-items: center;
             gap: 8px;
             padding: 9px 20px;
             border-radius: 8px;
-            border: 1px solid var(--border-hover);
-            background: rgba(255,255,255,0.04);
-            color: var(--text) !important;
-            font-size: 0.875em;
+            border: 1px solid var(--border-md);
+            background: rgba(255,255,255,0.03);
+            color: var(--text);
+            font-size: 0.83em;
             font-weight: 500;
             transition: all 0.2s;
+            white-space: nowrap;
         }
-        .header-cta:hover {
+        .header-btn:hover {
             border-color: rgba(155,138,251,0.3);
             background: var(--accent-dim);
-            color: var(--text) !important;
         }
-        @media (max-width: 680px) {
+        .header-btn svg { width: 15px; height: 15px; fill: currentColor; flex-shrink: 0; }
+
+        @media (max-width: 720px) {
             header { padding: 16px 20px; }
             nav { display: none; }
         }
@@ -111,62 +138,81 @@
             align-items: center;
             justify-content: center;
             text-align: center;
-            padding: 120px 24px 80px;
+            padding: 140px 24px 100px;
             overflow: hidden;
         }
 
-        .hero-glow {
+        /* Animated gradient orbs */
+        .orb {
             position: absolute;
-            top: 10%;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 700px;
-            height: 700px;
-            background: radial-gradient(circle at center, rgba(100,80,200,0.12) 0%, transparent 65%);
+            border-radius: 50%;
+            filter: blur(80px);
             pointer-events: none;
         }
-        .hero-glow-2 {
-            position: absolute;
-            bottom: -10%;
-            right: -10%;
-            width: 500px;
-            height: 500px;
-            background: radial-gradient(circle at center, rgba(80,60,180,0.06) 0%, transparent 70%);
-            pointer-events: none;
+        .orb-1 {
+            width: 600px; height: 600px;
+            top: -100px; left: 50%;
+            transform: translateX(-50%);
+            background: radial-gradient(circle, rgba(100,80,210,0.14) 0%, transparent 70%);
+            animation: orbFloat 8s ease-in-out infinite;
+        }
+        .orb-2 {
+            width: 400px; height: 400px;
+            bottom: 0; right: -80px;
+            background: radial-gradient(circle, rgba(80,60,180,0.09) 0%, transparent 70%);
+            animation: orbFloat 10s ease-in-out infinite reverse;
+        }
+        .orb-3 {
+            width: 300px; height: 300px;
+            top: 30%; left: -60px;
+            background: radial-gradient(circle, rgba(120,100,230,0.07) 0%, transparent 70%);
+            animation: orbFloat 12s ease-in-out infinite 2s;
+        }
+        @keyframes orbFloat {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            50% { transform: translateX(-50%) translateY(-30px); }
+        }
+        .orb-2 { animation: orbFloat2 10s ease-in-out infinite reverse; }
+        .orb-3 { animation: orbFloat3 12s ease-in-out infinite 2s; }
+        @keyframes orbFloat2 {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+        @keyframes orbFloat3 {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(20px); }
         }
 
-        .hero-eyebrow {
+        .hero-badge {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 6px 14px;
+            padding: 5px 14px;
             border-radius: 100px;
-            border: 1px solid var(--border);
-            color: var(--muted);
-            font-size: 0.78em;
+            border: 1px solid var(--border-md);
+            color: var(--muted2);
+            font-size: 0.72em;
             font-weight: 400;
-            letter-spacing: 0.06em;
+            letter-spacing: 0.07em;
             text-transform: uppercase;
-            margin-bottom: 40px;
+            margin-bottom: 44px;
             position: relative;
         }
-        .hero-eyebrow::before {
-            content: '';
-            width: 5px; height: 5px;
+        .badge-dot {
+            width: 6px; height: 6px;
             border-radius: 50%;
             background: var(--accent);
-            flex-shrink: 0;
-            box-shadow: 0 0 6px var(--accent);
-            animation: pulse 2.5s ease-in-out infinite;
+            box-shadow: 0 0 8px var(--accent);
+            animation: badgePulse 2.8s ease-in-out infinite;
         }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
+        @keyframes badgePulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--accent); }
+            50% { opacity: 0.35; box-shadow: 0 0 3px var(--accent); }
         }
 
         .hero h1 {
             font-family: 'Syne', sans-serif;
-            font-size: clamp(3.2em, 9vw, 7em);
+            font-size: clamp(3em, 8.5vw, 6.8em);
             font-weight: 800;
             line-height: 0.95;
             letter-spacing: -0.03em;
@@ -174,433 +220,628 @@
             margin-bottom: 32px;
             position: relative;
         }
-        .hero h1 em {
-            font-style: normal;
-            background: linear-gradient(135deg, #c4b5fd 0%, #818cf8 50%, #a5b4fc 100%);
+        .hero h1 .line-accent {
+            background: linear-gradient(110deg, #c4b5fd 0%, #9b8afb 45%, #a5b4fc 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
 
         .hero-desc {
-            color: var(--muted);
+            color: var(--muted2);
             font-size: 1.05em;
             line-height: 1.75;
-            max-width: 480px;
-            margin: 0 auto 52px;
+            max-width: 460px;
+            margin: 0 auto 56px;
             font-weight: 300;
         }
 
-        .hero-actions {
+        .hero-ctas {
             display: flex;
             gap: 12px;
             justify-content: center;
             flex-wrap: wrap;
-            position: relative;
+            margin-bottom: 80px;
         }
 
-        .btn-primary {
+        .btn-main {
             display: inline-flex;
             align-items: center;
-            gap: 10px;
+            gap: 9px;
             padding: 14px 28px;
             border-radius: 10px;
             background: var(--accent);
             color: #fff;
-            font-size: 0.95em;
+            font-size: 0.93em;
             font-weight: 600;
             font-family: 'Inter', sans-serif;
-            transition: all 0.25s ease;
+            transition: all 0.3s;
             letter-spacing: 0.01em;
         }
-        .btn-primary:hover {
-            background: #b4a5ff;
-            transform: translateY(-2px);
-            box-shadow: 0 16px 40px rgba(155,138,251,0.25);
+        .btn-main:hover {
+            background: var(--accent-bright);
+            transform: translateY(-3px);
+            box-shadow: 0 20px 50px rgba(155,138,251,0.28);
         }
-        .btn-secondary {
+        .btn-ghost {
             display: inline-flex;
             align-items: center;
-            gap: 10px;
+            gap: 9px;
             padding: 14px 28px;
             border-radius: 10px;
-            border: 1px solid var(--border-hover);
-            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border-md);
+            background: rgba(255,255,255,0.025);
             color: var(--text);
-            font-size: 0.95em;
-            font-weight: 500;
+            font-size: 0.93em;
+            font-weight: 400;
             font-family: 'Inter', sans-serif;
-            transition: all 0.25s ease;
+            transition: all 0.3s;
         }
-        .btn-secondary:hover {
-            border-color: rgba(155,138,251,0.25);
+        .btn-ghost:hover {
+            border-color: rgba(155,138,251,0.22);
             background: var(--accent-dim);
-            transform: translateY(-2px);
+            transform: translateY(-3px);
         }
-        .btn-icon {
-            width: 18px; height: 18px;
-            fill: currentColor;
-            flex-shrink: 0;
-        }
+        .btn-ico { width: 17px; height: 17px; fill: currentColor; flex-shrink: 0; }
 
-        /* ─── Scroll hint ─── */
-        .scroll-hint {
+        /* Scroll indicator */
+        .scroll-ind {
             position: absolute;
-            bottom: 36px;
+            bottom: 40px;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
+        }
+        .scroll-mouse {
+            width: 22px; height: 34px;
+            border: 1.5px solid var(--border-md);
+            border-radius: 11px;
+            position: relative;
+        }
+        .scroll-wheel {
+            width: 3px; height: 6px;
+            background: var(--accent);
+            border-radius: 2px;
+            position: absolute;
+            top: 6px; left: 50%;
+            transform: translateX(-50%);
+            animation: scrollWheel 2s ease-in-out infinite;
+        }
+        @keyframes scrollWheel {
+            0% { top: 6px; opacity: 1; }
+            100% { top: 20px; opacity: 0; }
+        }
+        .scroll-text {
+            font-size: 0.65em;
             color: var(--muted);
-            font-size: 0.72em;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.1em;
             text-transform: uppercase;
-        }
-        .scroll-line {
-            width: 1px;
-            height: 40px;
-            background: linear-gradient(to bottom, var(--muted), transparent);
-            animation: scrollDown 2s ease-in-out infinite;
-        }
-        @keyframes scrollDown {
-            0% { transform: scaleY(0); transform-origin: top; }
-            50% { transform: scaleY(1); transform-origin: top; }
-            51% { transform: scaleY(1); transform-origin: bottom; }
-            100% { transform: scaleY(0); transform-origin: bottom; }
         }
 
         /* ─── Divider ─── */
-        .section-divider {
-            width: 100%;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, var(--border), transparent);
+        hr.div {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 0;
         }
 
-        /* ─── Metrics ─── */
+        /* ─── Metrics strip ─── */
         .metrics {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 0;
-            max-width: 860px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            max-width: 920px;
             margin: 0 auto;
-            padding: 60px 24px;
+            padding: 56px 24px;
+        }
+        @media (max-width: 700px) {
+            .metrics { grid-template-columns: repeat(2, 1fr); gap: 0; }
         }
         .metric {
-            flex: 1;
             text-align: center;
-            padding: 20px;
+            padding: 24px 16px;
             position: relative;
         }
         .metric + .metric::before {
             content: '';
             position: absolute;
-            left: 0; top: 20%; bottom: 20%;
+            left: 0; top: 16px; bottom: 16px;
             width: 1px;
             background: var(--border);
         }
-        .metric-value {
+        @media (max-width: 700px) {
+            .metric:nth-child(2)::before { display: block; }
+            .metric:nth-child(3)::before { display: none; }
+        }
+        .metric-val {
             font-family: 'Syne', sans-serif;
-            font-size: 2.6em;
+            font-size: 2.4em;
             font-weight: 700;
             color: var(--text);
             line-height: 1;
             margin-bottom: 8px;
+            letter-spacing: -0.02em;
         }
-        .metric-label {
-            font-size: 0.78em;
+        .metric-lbl {
+            font-size: 0.75em;
             color: var(--muted);
             font-weight: 400;
-            letter-spacing: 0.04em;
+            letter-spacing: 0.03em;
+            line-height: 1.4;
         }
 
-        /* ─── Capabilities ─── */
+        /* ─── Section ─── */
         .section {
-            max-width: 1000px;
+            max-width: 1040px;
             margin: 0 auto;
-            padding: 80px 24px;
+            padding: 88px 24px;
         }
-        .section-header {
-            margin-bottom: 52px;
-        }
-        .section-label {
-            font-size: 0.72em;
+        .sec-eyebrow {
+            font-size: 0.7em;
             font-weight: 500;
-            letter-spacing: 0.12em;
+            letter-spacing: 0.13em;
             text-transform: uppercase;
             color: var(--accent);
+            margin-bottom: 18px;
+            opacity: 0.8;
+        }
+        .sec-title {
+            font-family: 'Syne', sans-serif;
+            font-size: clamp(1.7em, 3.5vw, 2.5em);
+            font-weight: 700;
+            line-height: 1.12;
+            letter-spacing: -0.025em;
+            color: var(--text);
+            max-width: 500px;
             margin-bottom: 16px;
         }
-        .section-title {
-            font-family: 'Syne', sans-serif;
-            font-size: clamp(1.8em, 4vw, 2.6em);
-            font-weight: 700;
-            line-height: 1.15;
-            letter-spacing: -0.02em;
-            color: var(--text);
-            max-width: 520px;
+        .sec-title.wide { max-width: 100%; text-align: center; }
+        .sec-sub {
+            font-size: 0.9em;
+            color: var(--muted2);
+            line-height: 1.7;
+            max-width: 420px;
+            font-weight: 300;
         }
-        .section-title.centered {
-            text-align: center;
-            max-width: 100%;
-        }
+        .sec-sub.centered { text-align: center; max-width: 100%; }
+        .sec-header { margin-bottom: 56px; }
+        .sec-header.centered { text-align: center; }
+        .sec-header.centered .sec-eyebrow { display: block; text-align: center; }
 
-        .caps-grid {
+        /* ─── Capabilities grid ─── */
+        .caps {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 1px;
             background: var(--border);
             border: 1px solid var(--border);
-            border-radius: 16px;
+            border-radius: 18px;
             overflow: hidden;
         }
-        @media (max-width: 700px) { .caps-grid { grid-template-columns: 1fr; } }
-        .cap-item {
+        @media (max-width: 720px) { .caps { grid-template-columns: 1fr; } }
+        .cap {
             background: var(--bg);
             padding: 36px 28px;
-            transition: background 0.25s;
+            transition: background 0.3s;
         }
-        .cap-item:hover { background: var(--surface); }
-        .cap-icon {
-            width: 40px; height: 40px;
-            margin-bottom: 20px;
+        .cap:hover { background: rgba(155,138,251,0.03); }
+        .cap-ico {
+            width: 38px; height: 38px;
             color: var(--accent);
-            opacity: 0.85;
+            opacity: 0.75;
+            margin-bottom: 22px;
         }
         .cap-title {
+            font-family: 'Syne', sans-serif;
+            font-size: 0.97em;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 10px;
+        }
+        .cap-body {
+            font-size: 0.84em;
+            color: var(--muted2);
+            line-height: 1.65;
+            font-weight: 300;
+        }
+
+        /* ─── Spotlight row (alternating text + visual) ─── */
+        .spotlight {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 64px;
+            align-items: center;
+            padding: 72px 24px;
+            max-width: 1040px;
+            margin: 0 auto;
+        }
+        .spotlight.flip { direction: rtl; }
+        .spotlight.flip > * { direction: ltr; }
+        @media (max-width: 760px) {
+            .spotlight, .spotlight.flip { grid-template-columns: 1fr; direction: ltr; gap: 36px; padding: 48px 24px; }
+        }
+        .spot-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.7em;
+            font-weight: 500;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 20px;
+            opacity: 0.8;
+        }
+        .spot-title {
+            font-family: 'Syne', sans-serif;
+            font-size: clamp(1.5em, 3vw, 2.1em);
+            font-weight: 700;
+            line-height: 1.15;
+            letter-spacing: -0.025em;
+            color: var(--text);
+            margin-bottom: 18px;
+        }
+        .spot-body {
+            font-size: 0.88em;
+            color: var(--muted2);
+            line-height: 1.75;
+            font-weight: 300;
+            margin-bottom: 24px;
+        }
+        .spot-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .spot-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            font-size: 0.84em;
+            color: var(--muted2);
+            font-weight: 300;
+        }
+        .spot-list li::before {
+            content: '';
+            width: 5px; height: 5px;
+            border-radius: 50%;
+            background: var(--accent);
+            flex-shrink: 0;
+            margin-top: 6px;
+            opacity: 0.7;
+        }
+        .spot-visual {
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            background: var(--surface);
+            overflow: hidden;
+            aspect-ratio: 4/3;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .spot-visual-inner {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 28px;
+            width: 100%;
+        }
+        .mock-bar {
+            height: 9px;
+            border-radius: 6px;
+            background: var(--surface2);
+        }
+        .mock-bar.w-full { width: 100%; }
+        .mock-bar.w-3-4 { width: 75%; }
+        .mock-bar.w-1-2 { width: 50%; }
+        .mock-bar.w-1-3 { width: 35%; }
+        .mock-bar.accent { background: rgba(155,138,251,0.2); }
+        .mock-img {
+            width: 100%;
+            border-radius: 10px;
+            background: linear-gradient(135deg, rgba(100,80,200,0.12), rgba(80,60,160,0.06));
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            aspect-ratio: 16/9;
+        }
+        .mock-img svg { width: 36px; height: 36px; color: var(--accent); opacity: 0.3; }
+        .mock-model-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .mock-chip {
+            padding: 5px 12px;
+            border-radius: 7px;
+            border: 1px solid var(--border-md);
+            font-size: 0.7em;
+            color: var(--muted2);
+            background: var(--surface2);
+        }
+        .mock-chip.active {
+            border-color: rgba(155,138,251,0.3);
+            background: var(--accent-dim);
+            color: var(--accent);
+        }
+
+        /* ─── Process ─── */
+        .process {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            position: relative;
+            gap: 0;
+        }
+        @media (max-width: 700px) { .process { grid-template-columns: 1fr; } }
+        .process::before {
+            content: '';
+            position: absolute;
+            top: 27px;
+            left: 16.67%;
+            right: 16.67%;
+            height: 1px;
+            background: linear-gradient(90deg, var(--accent) 0%, rgba(155,138,251,0.2) 100%);
+            pointer-events: none;
+        }
+        @media (max-width: 700px) { .process::before { display: none; } }
+        .proc-step { padding: 0 24px 0 0; }
+        .proc-num-wrap {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .proc-num {
+            width: 54px; height: 54px;
+            border-radius: 14px;
+            border: 1px solid var(--border-md);
+            background: var(--surface);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Syne', sans-serif;
+            font-size: 1.1em;
+            font-weight: 700;
+            color: var(--accent);
+            flex-shrink: 0;
+            transition: all 0.3s;
+        }
+        .proc-step:hover .proc-num {
+            border-color: rgba(155,138,251,0.35);
+            background: var(--accent-dim);
+            box-shadow: 0 0 24px rgba(155,138,251,0.12);
+        }
+        .proc-step h4 {
             font-family: 'Syne', sans-serif;
             font-size: 1.0em;
             font-weight: 600;
             color: var(--text);
             margin-bottom: 10px;
-            letter-spacing: -0.01em;
         }
-        .cap-desc {
-            font-size: 0.865em;
-            color: var(--muted);
+        .proc-step p {
+            font-size: 0.84em;
+            color: var(--muted2);
             line-height: 1.65;
             font-weight: 300;
         }
-
-        /* ─── Process ─── */
-        .process-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 32px;
-        }
-        @media (max-width: 700px) { .process-grid { grid-template-columns: 1fr; gap: 24px; } }
-        .process-step {
-            position: relative;
-            padding-top: 16px;
-        }
-        .process-num {
-            font-family: 'Syne', sans-serif;
-            font-size: 0.72em;
-            font-weight: 700;
-            color: var(--accent);
-            letter-spacing: 0.1em;
-            margin-bottom: 20px;
-            opacity: 0.7;
-        }
-        .process-step h4 {
-            font-family: 'Syne', sans-serif;
-            font-size: 1.05em;
-            font-weight: 600;
-            color: var(--text);
-            margin-bottom: 10px;
-            letter-spacing: -0.01em;
-        }
-        .process-step p {
-            font-size: 0.865em;
-            color: var(--muted);
-            line-height: 1.65;
-            font-weight: 300;
-        }
-        .process-line {
-            position: absolute;
-            top: 36px;
-            right: -16px;
-            width: 32px;
-            height: 1px;
-            background: var(--border);
-        }
-        @media (max-width: 700px) { .process-line { display: none; } }
 
         /* ─── Pricing ─── */
-        .pricing-grid {
+        .pricing {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 16px;
         }
-        @media (max-width: 700px) { .pricing-grid { grid-template-columns: 1fr; max-width: 340px; margin: 0 auto; } }
-
-        .price-card {
+        @media (max-width: 700px) { .pricing { grid-template-columns: 1fr; max-width: 340px; margin: 0 auto; } }
+        .p-card {
             border: 1px solid var(--border);
-            border-radius: 16px;
+            border-radius: 18px;
             padding: 32px 28px;
             background: var(--surface);
             position: relative;
-            transition: border-color 0.25s;
+            transition: border-color 0.3s, transform 0.3s;
         }
-        .price-card:hover { border-color: var(--border-hover); }
-        .price-card.featured {
-            border-color: rgba(155,138,251,0.3);
-            background: rgba(155,138,251,0.04);
+        .p-card:hover { border-color: var(--border-md); transform: translateY(-4px); }
+        .p-card.featured {
+            border-color: rgba(155,138,251,0.25);
+            background: linear-gradient(160deg, rgba(155,138,251,0.05), var(--surface));
         }
-        .price-badge {
+        .p-card.featured:hover { border-color: rgba(155,138,251,0.4); }
+        .p-badge {
             display: inline-block;
             padding: 3px 10px;
             border-radius: 6px;
-            background: rgba(155,138,251,0.12);
+            background: rgba(155,138,251,0.1);
             color: var(--accent);
-            font-size: 0.72em;
+            font-size: 0.7em;
             font-weight: 600;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.06em;
             text-transform: uppercase;
             margin-bottom: 20px;
         }
-        .price-credits {
-            font-size: 0.8em;
-            color: var(--muted);
-            font-weight: 400;
-            margin-bottom: 8px;
-        }
-        .price-amount {
+        .p-credits { font-size: 0.78em; color: var(--muted2); margin-bottom: 10px; }
+        .p-price {
             font-family: 'Syne', sans-serif;
             font-size: 2.8em;
             font-weight: 700;
             color: var(--text);
             line-height: 1;
             margin-bottom: 4px;
+            letter-spacing: -0.02em;
         }
-        .price-currency {
-            font-size: 0.45em;
+        .p-currency {
+            font-size: 0.38em;
             color: var(--muted);
             font-weight: 400;
-            vertical-align: top;
-            margin-top: 8px;
-            display: inline-block;
+            vertical-align: super;
         }
-        .price-per {
-            font-size: 0.78em;
-            color: var(--muted);
-            margin-bottom: 24px;
-        }
-        .price-divider {
-            height: 1px;
-            background: var(--border);
-            margin-bottom: 20px;
-        }
-        .price-feature {
+        .p-per { font-size: 0.76em; color: var(--muted); margin-bottom: 24px; }
+        .p-sep { height: 1px; background: var(--border); margin-bottom: 20px; }
+        .p-feature {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 10px;
-            font-size: 0.83em;
-            color: var(--muted);
+            font-size: 0.82em;
+            color: var(--muted2);
             margin-bottom: 10px;
             font-weight: 300;
+            line-height: 1.5;
         }
-        .price-check {
-            width: 14px; height: 14px;
-            color: var(--accent);
-            flex-shrink: 0;
-        }
+        .p-check { width: 13px; height: 13px; color: var(--accent); flex-shrink: 0; margin-top: 1px; }
 
-        /* ─── Contacts ─── */
-        .contacts-wrap {
+        /* ─── Models showcase ─── */
+        .models-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 40px;
-            align-items: start;
-        }
-        @media (max-width: 700px) { .contacts-wrap { grid-template-columns: 1fr; } }
-        .contacts-info p {
-            font-size: 0.95em;
-            color: var(--muted);
-            line-height: 1.8;
-            font-weight: 300;
-        }
-        .contact-list {
-            display: flex;
-            flex-direction: column;
+            grid-template-columns: repeat(2, 1fr);
             gap: 14px;
         }
-        .contact-row {
+        @media (max-width: 700px) { .models-grid { grid-template-columns: 1fr; } }
+        .model-card {
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 24px;
+            background: var(--surface);
+            transition: border-color 0.25s;
+        }
+        .model-card:hover { border-color: var(--border-md); }
+        .model-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .model-name {
+            font-family: 'Syne', sans-serif;
+            font-size: 0.88em;
+            font-weight: 600;
+            color: var(--text);
+        }
+        .model-tag {
+            font-size: 0.68em;
+            padding: 3px 8px;
+            border-radius: 5px;
+            background: var(--accent-dim);
+            color: var(--accent);
+            font-weight: 500;
+            letter-spacing: 0.03em;
+        }
+        .model-desc { font-size: 0.8em; color: var(--muted2); line-height: 1.6; font-weight: 300; }
+
+        /* ─── CTA banner ─── */
+        .cta-banner {
+            margin: 0 24px;
+            padding: 64px 48px;
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            background: var(--surface);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            max-width: 1040px;
+            margin: 0 auto 0;
+        }
+        .cta-banner::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 500px; height: 500px;
+            background: radial-gradient(circle, rgba(100,80,200,0.1) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .cta-banner h2 {
+            font-family: 'Syne', sans-serif;
+            font-size: clamp(1.6em, 3.5vw, 2.4em);
+            font-weight: 700;
+            letter-spacing: -0.025em;
+            color: var(--text);
+            margin-bottom: 14px;
+            position: relative;
+        }
+        .cta-banner p {
+            font-size: 0.9em;
+            color: var(--muted2);
+            margin-bottom: 36px;
+            font-weight: 300;
+            position: relative;
+        }
+        .cta-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; position: relative; }
+
+        /* ─── Contacts ─── */
+        .contacts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 48px;
+            align-items: start;
+        }
+        @media (max-width: 700px) { .contacts-grid { grid-template-columns: 1fr; } }
+        .contacts-text h3 {
+            font-family: 'Syne', sans-serif;
+            font-size: 1.3em;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 12px;
+        }
+        .contacts-text p {
+            font-size: 0.875em;
+            color: var(--muted2);
+            line-height: 1.75;
+            font-weight: 300;
+        }
+        .contact-cards { display: flex; flex-direction: column; gap: 10px; }
+        .c-row {
             display: flex;
             align-items: center;
             gap: 14px;
-            padding: 16px 20px;
+            padding: 15px 20px;
             border: 1px solid var(--border);
-            border-radius: 10px;
+            border-radius: 12px;
             background: var(--surface);
             transition: border-color 0.2s;
         }
-        .contact-row:hover { border-color: var(--border-hover); }
-        .contact-row a { color: var(--text); font-size: 0.9em; }
-        .contact-row a:hover { color: var(--accent); }
-        .contact-icon-wrap {
-            width: 32px; height: 32px;
-            display: flex; align-items: center; justify-content: center;
-            flex-shrink: 0;
-            color: var(--muted);
-        }
-        .contact-icon-wrap svg { width: 16px; height: 16px; fill: currentColor; }
+        .c-row:hover { border-color: var(--border-md); }
+        .c-row a, .c-row span { font-size: 0.86em; color: var(--muted2); }
+        .c-row a:hover { color: var(--accent); }
+        .c-ico { width: 15px; height: 15px; fill: var(--muted); flex-shrink: 0; }
 
         /* ─── Footer ─── */
-        footer {
+        .footer-wrap {
             border-top: 1px solid var(--border);
-            padding: 40px 24px;
-            max-width: 1000px;
+            padding: 36px 24px;
+            max-width: 1040px;
             margin: 0 auto;
             display: flex;
             align-items: center;
             justify-content: space-between;
             flex-wrap: wrap;
-            gap: 20px;
+            gap: 16px;
         }
-        .footer-copy {
-            font-size: 0.8em;
-            color: var(--muted);
-        }
-        .footer-links {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px 24px;
-        }
-        .footer-links a {
-            font-size: 0.8em;
-            color: var(--muted);
-            transition: color 0.2s;
-        }
+        .footer-copy { font-size: 0.78em; color: var(--muted); }
+        .footer-links { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+        .footer-links a { font-size: 0.78em; color: var(--muted); transition: color 0.2s; }
         .footer-links a:hover { color: var(--text); }
 
-        /* ─── Powered by ─── */
-        .powered {
+        /* ─── Powered ─── */
+        .powered-strip {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
-            padding: 32px 24px;
-            border-top: 1px solid var(--border);
-        }
-        .powered-label {
-            font-size: 0.72em;
-            color: var(--muted);
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-        }
-        .powered-chips {
-            display: flex;
-            gap: 8px;
+            gap: 14px;
+            padding: 24px;
             flex-wrap: wrap;
         }
-        .chip {
+        .pw-label { font-size: 0.7em; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+        .pw-chip {
             padding: 4px 10px;
             border-radius: 6px;
             border: 1px solid var(--border);
-            font-size: 0.72em;
+            font-size: 0.7em;
             color: var(--muted);
             letter-spacing: 0.03em;
         }
@@ -608,315 +849,491 @@
 </head>
 <body>
 
-    <!-- Header -->
-    <header id="site-header">
-        <div class="logo">Pic<span>Gen</span>AI</div>
-        <nav>
-            <a href="#features">Возможности</a>
-            <a href="#pricing">Тарифы</a>
-            <a href="#contacts">Контакты</a>
-        </nav>
-        <a href="https://t.me/PicGenAI_26_bot" class="header-cta">
-            <svg class="btn-icon" viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-            Открыть бота
-        </a>
-    </header>
+<header id="hdr">
+    <div class="logo">Pic<span>Gen</span>AI</div>
+    <nav>
+        <a href="#features">Возможности</a>
+        <a href="#models">Модели</a>
+        <a href="#pricing">Тарифы</a>
+        <a href="#contacts">Контакты</a>
+    </nav>
+    <a href="https://t.me/PicGenAI_26_bot" class="header-btn">
+        <svg viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+        Открыть бота
+    </a>
+</header>
 
-    <!-- Hero -->
-    <section class="hero">
-        <div class="hero-glow"></div>
-        <div class="hero-glow-2"></div>
-        <div class="hero-eyebrow">Powered by Gemini · Veo 3.1 · Lyria 3</div>
-        <h1>Создавайте<br><em>визуальный</em><br>контент с ИИ</h1>
-        <p class="hero-desc">Изображения, видео и музыка — прямо в Telegram и ВКонтакте. Без приложений, без регистрации.</p>
-        <div class="hero-actions">
-            <a href="https://t.me/PicGenAI_26_bot" class="btn-primary">
-                <svg class="btn-icon" viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+<!-- ─── HERO ─── -->
+<section class="hero">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="hero-badge fade-up">
+        <span class="badge-dot"></span>
+        Powered by Gemini · Veo 3.1 · Lyria 3
+    </div>
+    <h1 class="fade-up fade-up-delay-1">
+        Создавайте<br>
+        <span class="line-accent">визуальный</span><br>
+        контент с ИИ
+    </h1>
+    <p class="hero-desc fade-up fade-up-delay-2">
+        Изображения, видео до 4K и музыкальные треки — прямо в Telegram и ВКонтакте. Без установки приложений.
+    </p>
+    <div class="hero-ctas fade-up fade-up-delay-3">
+        <a href="https://t.me/PicGenAI_26_bot" class="btn-main">
+            <svg class="btn-ico" viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+            Начать в Telegram
+        </a>
+        <a href="https://vk.ru/picgenai" class="btn-ghost">
+            <svg class="btn-ico" viewBox="0 0 24 24"><path d="M15.684 0H8.316C1.592 0 0 1.592 0 8.316v7.368C0 22.408 1.592 24 8.316 24h7.368C22.408 24 24 22.408 24 15.684V8.316C24 1.592 22.391 0 15.684 0zm3.692 17.123h-1.744c-.66 0-.864-.525-2.05-1.727-1.033-1-1.49-1.135-1.744-1.135-.356 0-.458.102-.458.593v1.575c0 .424-.135.678-1.253.678-1.846 0-3.896-1.12-5.339-3.202-2.17-3.042-2.763-5.32-2.763-5.778 0-.254.102-.491.593-.491h1.744c.44 0 .61.203.78.678.864 2.491 2.303 4.675 2.896 4.675.22 0 .322-.102.322-.66V9.721c-.068-1.186-.695-1.287-.695-1.71 0-.203.17-.407.44-.407h2.744c.373 0 .508.203.508.643v3.473c0 .372.17.508.271.508.22 0 .407-.136.813-.542 1.253-1.406 2.151-3.574 2.151-3.574.119-.254.322-.491.763-.491h1.744c.525 0 .644.27.525.643-.22 1.017-2.354 4.031-2.354 4.031-.186.305-.254.44 0 .78.186.254.796.779 1.203 1.253.745.847 1.32 1.558 1.473 2.05.17.49-.085.744-.576.744z"/></svg>
+            ВКонтакте
+        </a>
+    </div>
+
+    <div class="scroll-ind fade-up fade-up-delay-4">
+        <div class="scroll-mouse"><div class="scroll-wheel"></div></div>
+        <span class="scroll-text">Прокрутите</span>
+    </div>
+</section>
+
+<hr class="div">
+
+<!-- ─── METRICS ─── -->
+<div class="metrics">
+    <div class="metric fade-up">
+        <div class="metric-val">3&thinsp;в&thinsp;1</div>
+        <div class="metric-lbl">Фото · видео · музыка</div>
+    </div>
+    <div class="metric fade-up fade-up-delay-1">
+        <div class="metric-val">4K</div>
+        <div class="metric-lbl">Макс. разрешение</div>
+    </div>
+    <div class="metric fade-up fade-up-delay-2">
+        <div class="metric-val">10+</div>
+        <div class="metric-lbl">Моделей и форматов</div>
+    </div>
+    <div class="metric fade-up fade-up-delay-3">
+        <div class="metric-val">5</div>
+        <div class="metric-lbl">Бесплатных кредитов</div>
+    </div>
+</div>
+
+<hr class="div">
+
+<!-- ─── FEATURES ─── -->
+<section class="section" id="features">
+    <div class="sec-header fade-up">
+        <div class="sec-eyebrow">Возможности</div>
+        <div class="sec-title">Всё для создания контента</div>
+        <div class="sec-sub">Один бот вместо шести разных инструментов</div>
+    </div>
+    <div class="caps">
+        <div class="cap fade-up">
+            <svg class="cap-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <path d="m21 15-5-5L5 21"/>
+            </svg>
+            <div class="cap-title">Генерация изображений</div>
+            <div class="cap-body">Любой стиль — фото, рисунок, арт, 3D. Поддержка русского и английского. Редактирование по запросу.</div>
+        </div>
+        <div class="cap fade-up fade-up-delay-1">
+            <svg class="cap-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="23 7 16 12 23 17 23 7"/>
+                <rect x="1" y="5" width="15" height="14" rx="2"/>
+            </svg>
+            <div class="cap-title">Видео до 4K</div>
+            <div class="cap-body">Veo 3.1 от Google — текст или фото в видеоролик. До 8 секунд, 720p/1080p/4K, со звуком или без.</div>
+        </div>
+        <div class="cap fade-up fade-up-delay-2">
+            <svg class="cap-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 18V5l12-2v13"/>
+                <circle cx="6" cy="18" r="3"/>
+                <circle cx="18" cy="16" r="3"/>
+            </svg>
+            <div class="cap-title">Музыка и треки</div>
+            <div class="cap-body">Lyria 3 от Google — полные песни до 3 минут или клипы до 30 секунд по текстовому описанию.</div>
+        </div>
+        <div class="cap fade-up fade-up-delay-1">
+            <svg class="cap-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            </svg>
+            <div class="cap-title">Форматы и пропорции</div>
+            <div class="cap-body">10 форматов кадра: квадрат, портрет, пейзаж, кинематограф. Для соцсетей, печати и видео.</div>
+        </div>
+        <div class="cap fade-up fade-up-delay-2">
+            <svg class="cap-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <path d="m10 13-2 2 2 2"/>
+                <path d="m14 13 2 2-2 2"/>
+            </svg>
+            <div class="cap-title">Telegram и ВКонтакте</div>
+            <div class="cap-body">Один бот сразу в двух мессенджерах. Сохраните результат прямо в чате — никаких сторонних сайтов.</div>
+        </div>
+        <div class="cap fade-up fade-up-delay-3">
+            <svg class="cap-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m22 2-7 20-4-9-9-4 20-7z"/>
+            </svg>
+            <div class="cap-title">Мгновенный результат</div>
+            <div class="cap-body">Изображения за секунды. Видео и музыка — от 20 секунд. Без очередей и ожиданий.</div>
+        </div>
+    </div>
+</section>
+
+<hr class="div">
+
+<!-- ─── SPOTLIGHT: Images ─── -->
+<div class="spotlight fade-up">
+    <div>
+        <div class="spot-tag">Изображения</div>
+        <div class="spot-title">Генерация изображений любого стиля</div>
+        <div class="spot-body">Используйте модели Gemini для создания реалистичных фото, цифрового арта, иллюстраций и 3D-рендеров. Опишите идею на русском — бот всё поймёт.</div>
+        <ul class="spot-list">
+            <li>Реализм, анимэ, акварель, oil painting, 3D, pixel art</li>
+            <li>Редактирование существующих изображений по запросу</li>
+            <li>До 4K разрешения для печати и проектов</li>
+            <li>10 форматов кадра на выбор</li>
+        </ul>
+    </div>
+    <div class="spot-visual fade-up fade-up-delay-2">
+        <div class="spot-visual-inner">
+            <div class="mock-model-row">
+                <div class="mock-chip active">Реализм</div>
+                <div class="mock-chip">Арт</div>
+                <div class="mock-chip">3D</div>
+                <div class="mock-chip">Аниме</div>
+            </div>
+            <div class="mock-img">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+            </div>
+            <div class="mock-bar w-3-4 accent"></div>
+            <div class="mock-bar w-1-2"></div>
+            <div class="mock-bar w-full"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ─── SPOTLIGHT: Video ─── -->
+<div class="spotlight flip fade-up">
+    <div>
+        <div class="spot-tag">Видео</div>
+        <div class="spot-title">Видеоролики из текста и фото</div>
+        <div class="spot-body">Veo 3.1 — новейшие видеомодели Google. Создавайте ролики из описания или загруженного изображения. Поддержка аудиодорожки и пролонгации.</div>
+        <ul class="spot-list">
+            <li>Три модели: Standard, Fast, Lite — на любой бюджет</li>
+            <li>Длительность 4, 6 или 8 секунд</li>
+            <li>Разрешение 720p / 1080p / 4K</li>
+            <li>Соотношения 16:9 и 9:16</li>
+            <li>Генерация с аудио и без</li>
+        </ul>
+    </div>
+    <div class="spot-visual fade-up fade-up-delay-2">
+        <div class="spot-visual-inner">
+            <div class="mock-model-row">
+                <div class="mock-chip active">Standard</div>
+                <div class="mock-chip">Fast</div>
+                <div class="mock-chip">Lite</div>
+            </div>
+            <div class="mock-img" style="aspect-ratio:16/9;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+            </div>
+            <div class="mock-model-row">
+                <div class="mock-chip active">16:9</div>
+                <div class="mock-chip">9:16</div>
+                <div class="mock-chip active">🔊 Аудио</div>
+                <div class="mock-chip active">8 сек</div>
+            </div>
+            <div class="mock-bar w-full accent"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ─── SPOTLIGHT: Music ─── -->
+<div class="spotlight fade-up">
+    <div>
+        <div class="spot-tag">Музыка</div>
+        <div class="spot-title">Полные треки по описанию</div>
+        <div class="spot-body">Lyria 3 от Google DeepMind — создаёт полноценные музыкальные треки и короткие клипы. Просто опишите жанр, настроение и инструменты.</div>
+        <ul class="spot-list">
+            <li>Lyria 3 Pro — полные песни до 3 минут (4 кредита)</li>
+            <li>Lyria 3 Clip — клипы 30 секунд (2 кредита)</li>
+            <li>Поддержка фото как дополнительного контекста</li>
+            <li>Результат в MP3 прямо в чат</li>
+        </ul>
+    </div>
+    <div class="spot-visual fade-up fade-up-delay-2">
+        <div class="spot-visual-inner">
+            <div class="mock-model-row">
+                <div class="mock-chip active">Lyria 3 Pro</div>
+                <div class="mock-chip">Lyria 3 Clip</div>
+            </div>
+            <div style="padding: 20px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface2);">
+                <div class="mock-bar w-full accent" style="height:3px; margin-bottom:16px;"></div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div style="width:36px;height:36px;border-radius:8px;background:var(--accent-dim);border:1px solid rgba(155,138,251,0.2);display:flex;align-items:center;justify-content:center;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--accent)"><path d="M8 5v14l11-7z"/></svg>
+                    </div>
+                    <div style="flex:1;">
+                        <div class="mock-bar w-3-4 accent" style="height:4px;margin-bottom:6px;"></div>
+                        <div class="mock-bar w-1-2" style="height:4px;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="mock-bar w-full"></div>
+            <div class="mock-bar w-3-4"></div>
+        </div>
+    </div>
+</div>
+
+<hr class="div">
+
+<!-- ─── MODELS ─── -->
+<section class="section" id="models">
+    <div class="sec-header fade-up">
+        <div class="sec-eyebrow">Модели</div>
+        <div class="sec-title">Лучшие модели Google AI</div>
+        <div class="sec-sub">Доступ к флагманским моделям без подписок и API-ключей</div>
+    </div>
+    <div class="models-grid">
+        <div class="model-card fade-up">
+            <div class="model-header">
+                <div class="model-name">Gemini 3.1 Flash Image</div>
+                <div class="model-tag">Изображения</div>
+            </div>
+            <div class="model-desc">Флагманская модель генерации изображений. Высокая детализация, точное следование промпту, быстрая генерация.</div>
+        </div>
+        <div class="model-card fade-up fade-up-delay-1">
+            <div class="model-header">
+                <div class="model-name">Veo 3.1 Standard</div>
+                <div class="model-tag">Видео</div>
+            </div>
+            <div class="model-desc">Максимальное качество видео. Поддержка 4K, аудиодорожки и генерации из фотографий.</div>
+        </div>
+        <div class="model-card fade-up fade-up-delay-2">
+            <div class="model-header">
+                <div class="model-name">Veo 3.1 Fast</div>
+                <div class="model-tag">Видео · Быстро</div>
+            </div>
+            <div class="model-desc">Быстрая генерация видео при сниженной стоимости. Оптимальный баланс качества и скорости.</div>
+        </div>
+        <div class="model-card fade-up fade-up-delay-3">
+            <div class="model-header">
+                <div class="model-name">Lyria 3 Pro</div>
+                <div class="model-tag">Музыка</div>
+            </div>
+            <div class="model-desc">Полные музыкальные треки до 3 минут. Поддержка любых жанров — от классики до электронной музыки.</div>
+        </div>
+    </div>
+</section>
+
+<hr class="div">
+
+<!-- ─── PROCESS ─── -->
+<section class="section">
+    <div class="sec-header centered fade-up">
+        <div class="sec-eyebrow">Как это работает</div>
+        <div class="sec-title wide">Три шага до результата</div>
+    </div>
+    <div class="process">
+        <div class="proc-step fade-up">
+            <div class="proc-num-wrap">
+                <div class="proc-num">01</div>
+            </div>
+            <h4>Запустите бота</h4>
+            <p>Откройте @PicGenAI_26_bot в Telegram или найдите нас ВКонтакте. При первом запуске вы получите 5 бесплатных кредитов.</p>
+        </div>
+        <div class="proc-step fade-up fade-up-delay-1">
+            <div class="proc-num-wrap">
+                <div class="proc-num">02</div>
+            </div>
+            <h4>Настройте формат</h4>
+            <p>Выберите тип контента — изображение, видео или музыку. Задайте разрешение, пропорции и модель.</p>
+        </div>
+        <div class="proc-step fade-up fade-up-delay-2">
+            <div class="proc-num-wrap">
+                <div class="proc-num">03</div>
+            </div>
+            <h4>Получите контент</h4>
+            <p>Напишите описание и отправьте. Результат придёт прямо в чат. Сохраните или поделитесь мгновенно.</p>
+        </div>
+    </div>
+</section>
+
+<hr class="div">
+
+<!-- ─── PRICING ─── -->
+<section class="section" id="pricing">
+    <div class="sec-header fade-up">
+        <div class="sec-eyebrow">Тарифы</div>
+        <div class="sec-title">Простая и прозрачная цена</div>
+        <div class="sec-sub">Покупайте кредиты по мере необходимости. Без подписок и скрытых платежей.</div>
+    </div>
+    <div class="pricing">
+        <div class="p-card fade-up">
+            <div class="p-credits">30 кредитов</div>
+            <div class="p-price">99<span class="p-currency">₽</span></div>
+            <div class="p-per">~ 3.3 ₽ за генерацию</div>
+            <div class="p-sep"></div>
+            <div class="p-feature">
+                <svg class="p-check" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 6.5l3 3 6-6"/></svg>
+                30 обычных изображений
+            </div>
+            <div class="p-feature">
+                <svg class="p-check" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 6.5l3 3 6-6"/></svg>
+                15 коротких видео (Lite)
+            </div>
+            <div class="p-feature">
+                <svg class="p-check" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 6.5l3 3 6-6"/></svg>
+                7 музыкальных клипов
+            </div>
+        </div>
+        <div class="p-card featured fade-up fade-up-delay-1">
+            <div class="p-badge">Популярный</div>
+            <div class="p-credits">100 кредитов</div>
+            <div class="p-price">299<span class="p-currency">₽</span></div>
+            <div class="p-per">~ 2.99 ₽ за генерацию</div>
+            <div class="p-sep"></div>
+            <div class="p-feature">
+                <svg class="p-check" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 6.5l3 3 6-6"/></svg>
+                100 обычных изображений
+            </div>
+            <div class="p-feature">
+                <svg class="p-check" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 6.5l3 3 6-6"/></svg>
+                25 видео Standard
+            </div>
+            <div class="p-feature">
+                <svg class="p-check" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 6.5l3 3 6-6"/></svg>
+                25 полных музыкальных треков
+            </div>
+        </div>
+        <div class="p-card fade-up fade-up-delay-2">
+            <div class="p-credits">200 кредитов</div>
+            <div class="p-price">549<span class="p-currency">₽</span></div>
+            <div class="p-per">~ 2.75 ₽ за генерацию</div>
+            <div class="p-sep"></div>
+            <div class="p-feature">
+                <svg class="p-check" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 6.5l3 3 6-6"/></svg>
+                200 обычных изображений
+            </div>
+            <div class="p-feature">
+                <svg class="p-check" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 6.5l3 3 6-6"/></svg>
+                50 видео Standard
+            </div>
+            <div class="p-feature">
+                <svg class="p-check" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 6.5l3 3 6-6"/></svg>
+                50 полных музыкальных треков
+            </div>
+        </div>
+    </div>
+    <p style="font-size:0.75em; color:var(--muted); margin-top:20px; text-align:center; font-weight:300;">
+        Фото — 1 кр. &nbsp;·&nbsp; 4K фото — 2 кр. &nbsp;·&nbsp; Видео — от 2 кр. &nbsp;·&nbsp; Музыка — от 2 кр. &nbsp;·&nbsp; 5 кредитов бесплатно при регистрации
+    </p>
+</section>
+
+<hr class="div">
+
+<!-- ─── CTA ─── -->
+<section class="section">
+    <div class="cta-banner fade-up">
+        <h2>Попробуйте бесплатно прямо сейчас</h2>
+        <p>5 кредитов при первом запуске. Никакой регистрации — просто откройте бота.</p>
+        <div class="cta-btns">
+            <a href="https://t.me/PicGenAI_26_bot" class="btn-main">
+                <svg class="btn-ico" viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
                 Начать в Telegram
             </a>
-            <a href="https://vk.ru/picgenai" class="btn-secondary">
-                <svg class="btn-icon" viewBox="0 0 24 24"><path d="M15.684 0H8.316C1.592 0 0 1.592 0 8.316v7.368C0 22.408 1.592 24 8.316 24h7.368C22.408 24 24 22.408 24 15.684V8.316C24 1.592 22.391 0 15.684 0zm3.692 17.123h-1.744c-.66 0-.864-.525-2.05-1.727-1.033-1-1.49-1.135-1.744-1.135-.356 0-.458.102-.458.593v1.575c0 .424-.135.678-1.253.678-1.846 0-3.896-1.12-5.339-3.202-2.17-3.042-2.763-5.32-2.763-5.778 0-.254.102-.491.593-.491h1.744c.44 0 .61.203.78.678.864 2.491 2.303 4.675 2.896 4.675.22 0 .322-.102.322-.66V9.721c-.068-1.186-.695-1.287-.695-1.71 0-.203.17-.407.44-.407h2.744c.373 0 .508.203.508.643v3.473c0 .372.17.508.271.508.22 0 .407-.136.813-.542 1.253-1.406 2.151-3.574 2.151-3.574.119-.254.322-.491.763-.491h1.744c.525 0 .644.27.525.643-.22 1.017-2.354 4.031-2.354 4.031-.186.305-.254.44 0 .78.186.254.796.779 1.203 1.253.745.847 1.32 1.558 1.473 2.05.17.49-.085.744-.576.744z"/></svg>
+            <a href="https://vk.ru/picgenai" class="btn-ghost">
+                <svg class="btn-ico" viewBox="0 0 24 24"><path d="M15.684 0H8.316C1.592 0 0 1.592 0 8.316v7.368C0 22.408 1.592 24 8.316 24h7.368C22.408 24 24 22.408 24 15.684V8.316C24 1.592 22.391 0 15.684 0zm3.692 17.123h-1.744c-.66 0-.864-.525-2.05-1.727-1.033-1-1.49-1.135-1.744-1.135-.356 0-.458.102-.458.593v1.575c0 .424-.135.678-1.253.678-1.846 0-3.896-1.12-5.339-3.202-2.17-3.042-2.763-5.32-2.763-5.778 0-.254.102-.491.593-.491h1.744c.44 0 .61.203.78.678.864 2.491 2.303 4.675 2.896 4.675.22 0 .322-.102.322-.66V9.721c-.068-1.186-.695-1.287-.695-1.71 0-.203.17-.407.44-.407h2.744c.373 0 .508.203.508.643v3.473c0 .372.17.508.271.508.22 0 .407-.136.813-.542 1.253-1.406 2.151-3.574 2.151-3.574.119-.254.322-.491.763-.491h1.744c.525 0 .644.27.525.643-.22 1.017-2.354 4.031-2.354 4.031-.186.305-.254.44 0 .78.186.254.796.779 1.203 1.253.745.847 1.32 1.558 1.473 2.05.17.49-.085.744-.576.744z"/></svg>
                 ВКонтакте
             </a>
         </div>
-        <div class="scroll-hint">
-            <div class="scroll-line"></div>
-        </div>
-    </section>
+    </div>
+</section>
 
-    <div class="section-divider"></div>
+<hr class="div" style="margin-top:88px">
 
-    <!-- Metrics -->
-    <div class="metrics">
-        <div class="metric">
-            <div class="metric-value">3&thinsp;в&thinsp;1</div>
-            <div class="metric-label">Фото · видео · музыка</div>
+<!-- ─── CONTACTS ─── -->
+<section class="section" id="contacts">
+    <div class="contacts-grid">
+        <div class="contacts-text fade-up">
+            <div class="sec-eyebrow">Контакты</div>
+            <h3>Свяжитесь с нами</h3>
+            <p>Вопросы по работе сервиса, оплате или сотрудничеству — пишите в Telegram. Отвечаем быстро.</p>
         </div>
-        <div class="metric">
-            <div class="metric-value">4K</div>
-            <div class="metric-label">Максимальное разрешение</div>
-        </div>
-        <div class="metric">
-            <div class="metric-value">10+</div>
-            <div class="metric-label">Моделей и форматов</div>
-        </div>
-        <div class="metric">
-            <div class="metric-value">5</div>
-            <div class="metric-label">Бесплатных кредитов</div>
+        <div class="contact-cards fade-up fade-up-delay-1">
+            <div class="c-row">
+                <svg class="c-ico" viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
+                <a href="mailto:mistermackalister@gmail.com">mistermackalister@gmail.com</a>
+            </div>
+            <div class="c-row">
+                <svg class="c-ico" viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                <a href="https://t.me/ShadowsockTM">@ShadowsockTM — Поддержка в Telegram</a>
+            </div>
+            <div class="c-row">
+                <svg class="c-ico" viewBox="0 0 24 24"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/></svg>
+                <a href="tel:+79503183091">+7 (950) 318-30-91</a>
+            </div>
+            <div class="c-row">
+                <svg class="c-ico" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
+                <span>Долгопрудный, Московская область</span>
+            </div>
         </div>
     </div>
+</section>
 
-    <div class="section-divider"></div>
+<hr class="div">
 
-    <!-- Features -->
-    <section class="section" id="features">
-        <div class="section-header">
-            <div class="section-label">Возможности</div>
-            <div class="section-title">Всё необходимое для творчества</div>
-        </div>
-        <div class="caps-grid">
-            <div class="cap-item">
-                <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="2"/>
-                    <circle cx="8.5" cy="8.5" r="1.5"/>
-                    <path d="m21 15-5-5L5 21"/>
-                </svg>
-                <div class="cap-title">Генерация изображений</div>
-                <div class="cap-desc">Опишите сцену на русском или английском. ИИ создаст уникальное изображение с точностью до деталей.</div>
-            </div>
-            <div class="cap-item">
-                <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <polygon points="23 7 16 12 23 17 23 7"/>
-                    <rect x="1" y="5" width="15" height="14" rx="2"/>
-                </svg>
-                <div class="cap-title">Генерация видео</div>
-                <div class="cap-desc">Видеоролики до 4K из текста или фото. Модели Veo 3.1 от Google с поддержкой до 8 секунд.</div>
-            </div>
-            <div class="cap-item">
-                <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M9 18V5l12-2v13"/>
-                    <circle cx="6" cy="18" r="3"/>
-                    <circle cx="18" cy="16" r="3"/>
-                </svg>
-                <div class="cap-title">Генерация музыки</div>
-                <div class="cap-desc">Музыкальные треки и полные песни по описанию. Lyria 3 Pro — до 3 минут аудио.</div>
-            </div>
-            <div class="cap-item">
-                <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                </svg>
-                <div class="cap-title">Любые пропорции</div>
-                <div class="cap-desc">Квадрат, широкий, вертикальный, кинематограф — 10 форматов для фото и видео на выбор.</div>
-            </div>
-            <div class="cap-item">
-                <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="11" cy="11" r="8"/>
-                    <path d="m21 21-4.35-4.35"/>
-                    <path d="M11 8v3l2 2"/>
-                </svg>
-                <div class="cap-title">4K качество</div>
-                <div class="cap-desc">Изображения и видео в максимальном разрешении — для печати, портфолио и коммерческих проектов.</div>
-            </div>
-            <div class="cap-item">
-                <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="m22 2-7 20-4-9-9-4 20-7z"/>
-                </svg>
-                <div class="cap-title">Мгновенный результат</div>
-                <div class="cap-desc">Прямо в чате Telegram или ВКонтакте. Без установки приложений, без лишних шагов.</div>
-            </div>
-        </div>
-    </section>
+<!-- Powered by -->
+<div class="powered-strip">
+    <span class="pw-label">Powered by</span>
+    <span class="pw-chip">Google Gemini</span>
+    <span class="pw-chip">Veo 3.1</span>
+    <span class="pw-chip">Lyria 3</span>
+    <span class="pw-chip">Vertex AI</span>
+</div>
 
-    <div class="section-divider"></div>
+<hr class="div">
 
-    <!-- How it works -->
-    <section class="section">
-        <div class="section-header" style="text-align:center;">
-            <div class="section-label" style="text-align:center;">Процесс</div>
-            <div class="section-title centered">Три шага до результата</div>
-        </div>
-        <div class="process-grid">
-            <div class="process-step">
-                <div class="process-num">01</div>
-                <h4>Откройте бота</h4>
-                <p>Запустите бота в Telegram или ВКонтакте. Вы получите 5 бесплатных кредитов для первых генераций.</p>
-                <div class="process-line"></div>
-            </div>
-            <div class="process-step">
-                <div class="process-num">02</div>
-                <h4>Выберите формат</h4>
-                <p>Укажите тип контента — изображение, видео Veo 3.1 или музыку Lyria 3. Настройте разрешение и пропорции.</p>
-                <div class="process-line"></div>
-            </div>
-            <div class="process-step">
-                <div class="process-num">03</div>
-                <h4>Получите результат</h4>
-                <p>ИИ сгенерирует фото, ролик или трек и отправит прямо в чат в высоком качестве.</p>
-            </div>
-        </div>
-    </section>
-
-    <div class="section-divider"></div>
-
-    <!-- Pricing -->
-    <section class="section" id="pricing">
-        <div class="section-header">
-            <div class="section-label">Тарифы</div>
-            <div class="section-title">Простая и прозрачная оплата</div>
-        </div>
-        <div class="pricing-grid">
-            <div class="price-card">
-                <div class="price-credits">30 кредитов</div>
-                <div class="price-amount">99<span class="price-currency">₽</span></div>
-                <div class="price-per">~3.3 ₽ за генерацию</div>
-                <div class="price-divider"></div>
-                <div class="price-feature">
-                    <svg class="price-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                        <path d="M3 8l3.5 3.5L13 5"/>
-                    </svg>
-                    30 изображений
-                </div>
-                <div class="price-feature">
-                    <svg class="price-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                        <path d="M3 8l3.5 3.5L13 5"/>
-                    </svg>
-                    15 видео (базовые)
-                </div>
-                <div class="price-feature">
-                    <svg class="price-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                        <path d="M3 8l3.5 3.5L13 5"/>
-                    </svg>
-                    7 музыкальных треков
-                </div>
-            </div>
-            <div class="price-card featured">
-                <div class="price-badge">Популярный</div>
-                <div class="price-credits">100 кредитов</div>
-                <div class="price-amount">299<span class="price-currency">₽</span></div>
-                <div class="price-per">~2.99 ₽ за генерацию</div>
-                <div class="price-divider"></div>
-                <div class="price-feature">
-                    <svg class="price-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                        <path d="M3 8l3.5 3.5L13 5"/>
-                    </svg>
-                    100 изображений
-                </div>
-                <div class="price-feature">
-                    <svg class="price-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                        <path d="M3 8l3.5 3.5L13 5"/>
-                    </svg>
-                    50 видео (базовые)
-                </div>
-                <div class="price-feature">
-                    <svg class="price-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                        <path d="M3 8l3.5 3.5L13 5"/>
-                    </svg>
-                    25 музыкальных треков
-                </div>
-            </div>
-            <div class="price-card">
-                <div class="price-credits">200 кредитов</div>
-                <div class="price-amount">549<span class="price-currency">₽</span></div>
-                <div class="price-per">~2.75 ₽ за генерацию</div>
-                <div class="price-divider"></div>
-                <div class="price-feature">
-                    <svg class="price-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                        <path d="M3 8l3.5 3.5L13 5"/>
-                    </svg>
-                    200 изображений
-                </div>
-                <div class="price-feature">
-                    <svg class="price-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                        <path d="M3 8l3.5 3.5L13 5"/>
-                    </svg>
-                    100 видео (базовые)
-                </div>
-                <div class="price-feature">
-                    <svg class="price-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                        <path d="M3 8l3.5 3.5L13 5"/>
-                    </svg>
-                    50 музыкальных треков
-                </div>
-            </div>
-        </div>
-        <p style="font-size:0.78em; color:var(--muted); margin-top:20px; text-align:center; font-weight:300;">
-            Фото — 1 кр. · 4K фото — 2 кр. · Видео — от 2 кр. · Музыка — от 2 кр.
-        </p>
-    </section>
-
-    <div class="section-divider"></div>
-
-    <!-- Contacts -->
-    <section class="section" id="contacts">
-        <div class="section-header">
-            <div class="section-label">Контакты</div>
-            <div class="section-title">Свяжитесь с нами</div>
-        </div>
-        <div class="contacts-wrap">
-            <div class="contacts-info">
-                <p>Если у вас есть вопросы по работе сервиса, оплате или сотрудничеству — напишите нам. Поддержка работает в Telegram.</p>
-            </div>
-            <div class="contact-list">
-                <div class="contact-row">
-                    <div class="contact-icon-wrap">
-                        <svg viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
-                    </div>
-                    <a href="mailto:mistermackalister@gmail.com">mistermackalister@gmail.com</a>
-                </div>
-                <div class="contact-row">
-                    <div class="contact-icon-wrap">
-                        <svg viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-                    </div>
-                    <a href="https://t.me/ShadowsockTM">@ShadowsockTM — Поддержка в Telegram</a>
-                </div>
-                <div class="contact-row">
-                    <div class="contact-icon-wrap">
-                        <svg viewBox="0 0 24 24"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/></svg>
-                    </div>
-                    <a href="tel:+79503183091">+7 (950) 318-30-91</a>
-                </div>
-                <div class="contact-row">
-                    <div class="contact-icon-wrap">
-                        <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
-                    </div>
-                    <span style="font-size:0.85em; color:var(--muted); font-weight:300;">Долгопрудный, Московская обл.</span>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <div class="section-divider"></div>
-
-    <!-- Powered by -->
-    <div class="powered">
-        <span class="powered-label">Powered by</span>
-        <div class="powered-chips">
-            <span class="chip">Google Gemini</span>
-            <span class="chip">Veo 3.1</span>
-            <span class="chip">Lyria 3</span>
-            <span class="chip">Vertex AI</span>
-        </div>
+<!-- Footer -->
+<div class="footer-wrap">
+    <div class="footer-copy">&copy; 2026 PicGenAI. Все права защищены.</div>
+    <div class="footer-links">
+        <a href="/offer">Оферта</a>
+        <a href="/privacy">Конфиденциальность</a>
+        <a href="/consent">Согласие</a>
+        <a href="/refund">Возврат</a>
     </div>
+</div>
 
-    <div class="section-divider"></div>
+<script>
+    // Sticky header
+    const hdr = document.getElementById('hdr');
+    window.addEventListener('scroll', () => {
+        hdr.classList.toggle('scrolled', window.scrollY > 30);
+    }, { passive: true });
 
-    <!-- Footer -->
-    <footer>
-        <div class="footer-copy">&copy; 2025–2026 PicGenAI. Все права защищены.</div>
-        <div class="footer-links">
-            <a href="/offer">Оферта</a>
-            <a href="/privacy">Конфиденциальность</a>
-            <a href="/consent">Согласие</a>
-            <a href="/refund">Возврат</a>
-        </div>
-    </footer>
+    // Fade-in on scroll
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('visible');
+            }
+        });
+    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
 
-    <script>
-        const header = document.getElementById('site-header');
-        window.addEventListener('scroll', () => {
-            header.classList.toggle('scrolled', window.scrollY > 20);
-        }, { passive: true });
-    </script>
+    // Hero elements visible immediately
+    document.querySelectorAll('.hero .fade-up').forEach(el => {
+        el.classList.add('visible');
+    });
+
+    // Rest observe
+    document.querySelectorAll('.fade-up:not(.hero .fade-up)').forEach(el => {
+        observer.observe(el);
+    });
+</script>
 
 </body>
 </html>
