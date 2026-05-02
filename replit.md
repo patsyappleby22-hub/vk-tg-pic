@@ -140,3 +140,13 @@ Admin section "Рассылки" with full lifecycle: drafts → schedule → se
 - Media: `data/broadcast_media` (env `BROADCAST_MEDIA_DIR`), 50MB cap, ext-allowlisted.
 - Schedule input is MSK; converted to UTC before DB write.
 - Custom date/time picker (in `_compose_html`): replaces native `<input type="datetime-local">` with a dark themed popup (calendar grid Mon-first, hour/minute spinners ±5, presets +15м/+1ч/+3ч/Завтра 09:00/12:00/+неделя). Hidden `#bc-when-dt` keeps `YYYY-MM-DDTHH:MM` (MSK). On edit pages with prefilled schedule, `syncWhenFromHidden()` IIFE auto-switches `#bc-when` to `schedule` mode so launch hits `/schedule` and not `/send_now`.
+
+## Autopub Admin Redesign (2026-05)
+Раздел `/admin/autopub` (`bot/web_admin.py` `handle_autopub`) переведён на тот же тёмно-фиолетовый стиль, что и рассылки.
+- CSS-префикс `.ap-*` (status pill, tabs с счётчиком, post card 220px+grid, status pills с dot-индикаторами, banner/bar/log/trends/think для генератора, warn/info/flags для настроек, modal-h).
+- Все эмодзи убраны из заголовков, статусов, кнопок и подписей. Сохранены только Unicode-знаки `✓ ✗ ×` и стрелки `›` в `<summary>`.
+- Все ID и обработчики событий сохранены: `gen-btn`, `gen-banner`, `gen-bar`, `gen-log`, `gen-trend-list`, `gen-think-wrap`, `edit-modal`, `feedback-modal`, `queue-list`, `lightbox`, `post-card-{pid}`, `prompt-{pid}`. JS заменён только в плане ярлыков и стилизации (через CSS-классы `.ap-log-entry`, `.ap-trend-btn`, `is-error`/`is-done` на баннере вместо inline-стилей).
+- `_autopub_status_badge()` рендерит `<span class="ap-pill is-{status}">` — статусы draft/approved/publishing/published/error/rejected.
+- `_render_post_card()` — карточка `220px / 1fr`, тематика крупным заголовком, метки трендов/фидбэка как `.ap-tag`, текст с маской-фейдом, промпт-toggle с моноширинным фоном.
+- Исправлен предсуществующий баг в JS: `var _editPosts = {{}};` (от f-string) → `{}`, что устраняло SyntaxError на странице с пустой очередью.
+- `bot/autopub/publisher.py` НЕ ТРОНУТ — TG `sendMediaGroup` (1-3 фото) и VK 3-step (`photos.getWallUploadServer` → multipart upload → `photos.saveWallPhoto` → `wall.post`) работают без изменений; `VK_USER_TOKEN` нужен для постинга в стену группы.

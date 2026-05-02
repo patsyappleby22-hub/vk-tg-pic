@@ -424,25 +424,193 @@ def _layout(title: str, content: str, active: str = "") -> str:
   .alert-error{{background:rgba(251,113,133,.06);
     border-color:rgba(251,113,133,.2);color:var(--red)}}
 
-  /* ── Autopub post card ── */
-  .post-card{{display:grid;grid-template-columns:200px 1fr;gap:16px;margin-bottom:14px;
-    background:var(--surface);border:1px solid var(--border);
-    border-radius:12px;padding:14px}}
-  .pc-img{{min-width:0}}
-  .post-card-btns{{display:flex;flex-wrap:wrap;gap:6px}}
-  .form-grid-2{{display:grid;grid-template-columns:1fr 1fr;gap:16px}}
-  .autopub-tabs{{display:flex;gap:0;border-bottom:1px solid var(--border);
+  /* ── Autopub ───────────────────────────────────────────────────── */
+  .ap-header{{display:flex;align-items:center;gap:14px;margin-bottom:18px;flex-wrap:wrap}}
+  .ap-status{{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;
+    border-radius:999px;border:1px solid var(--border);background:var(--surface);
+    font-size:.74em;color:var(--muted);letter-spacing:.04em;
+    text-transform:uppercase;font-weight:600}}
+  .ap-status .dot{{width:8px;height:8px;border-radius:50%;background:var(--muted)}}
+  .ap-status.is-on{{color:var(--green);border-color:rgba(110,231,183,.25);
+    background:rgba(110,231,183,.06)}}
+  .ap-status.is-on .dot{{background:var(--green);box-shadow:0 0 8px rgba(110,231,183,.7)}}
+  .ap-status.is-off{{color:var(--red);border-color:rgba(251,113,133,.22);
+    background:rgba(251,113,133,.05)}}
+  .ap-status.is-off .dot{{background:var(--red)}}
+  .ap-meta{{font-size:.82em;color:var(--muted2);
+    font-family:'JetBrains Mono','SF Mono',Menlo,monospace;letter-spacing:.02em}}
+
+  .ap-tabs{{display:flex;gap:0;border-bottom:1px solid var(--border);
     margin-bottom:22px;overflow-x:auto;-webkit-overflow-scrolling:touch;
     scrollbar-width:none}}
-  .autopub-tabs::-webkit-scrollbar{{display:none}}
-  .autopub-tabs a{{padding:11px 18px;text-decoration:none;white-space:nowrap;
-    font-size:.86em;color:var(--muted2);border-bottom:2px solid transparent;
-    flex-shrink:0;transition:color .2s,border-color .2s;font-weight:500}}
-  .autopub-tabs a:hover{{color:var(--text);opacity:1}}
-  .autopub-tabs a.tab-active{{border-bottom-color:var(--accent);color:var(--text)}}
-  .autopub-header{{display:flex;align-items:center;gap:12px;
-    margin-bottom:22px;flex-wrap:wrap}}
-  .gen-hint{{font-size:.78em;color:var(--muted2)}}
+  .ap-tabs::-webkit-scrollbar{{display:none}}
+  .ap-tabs a{{padding:11px 20px;text-decoration:none;white-space:nowrap;
+    font-size:.85em;color:var(--muted);border-bottom:2px solid transparent;
+    flex-shrink:0;transition:color .2s,border-color .2s;font-weight:500;
+    display:inline-flex;align-items:center;gap:8px}}
+  .ap-tabs a:hover{{color:var(--text);opacity:1}}
+  .ap-tabs a.is-active{{border-bottom-color:var(--accent);color:var(--text)}}
+  .ap-tabs .ap-count{{font-family:'JetBrains Mono',Menlo,monospace;font-size:.85em;
+    color:var(--muted2);background:rgba(255,255,255,.04);padding:2px 8px;border-radius:6px}}
+  .ap-tabs a.is-active .ap-count{{background:var(--accent-dim);color:var(--accent-bright)}}
+
+  .ap-pill{{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;
+    border-radius:999px;font-size:.71em;font-weight:600;letter-spacing:.05em;
+    text-transform:uppercase;border:1px solid transparent;white-space:nowrap}}
+  .ap-pill .dot{{width:6px;height:6px;border-radius:50%}}
+  .ap-pill.is-draft{{color:var(--muted2);background:rgba(255,255,255,.04);border-color:var(--border)}}
+  .ap-pill.is-draft .dot{{background:var(--muted2)}}
+  .ap-pill.is-approved{{color:var(--green);background:rgba(110,231,183,.08);border-color:rgba(110,231,183,.2)}}
+  .ap-pill.is-approved .dot{{background:var(--green)}}
+  .ap-pill.is-publishing{{color:var(--yellow);background:rgba(252,211,77,.08);border-color:rgba(252,211,77,.22)}}
+  .ap-pill.is-publishing .dot{{background:var(--yellow)}}
+  .ap-pill.is-published{{color:var(--accent-bright);background:var(--accent-dim);border-color:var(--accent-glow)}}
+  .ap-pill.is-published .dot{{background:var(--accent-bright)}}
+  .ap-pill.is-error{{color:var(--red);background:rgba(251,113,133,.08);border-color:rgba(251,113,133,.22)}}
+  .ap-pill.is-error .dot{{background:var(--red)}}
+  .ap-pill.is-rejected{{color:var(--red);background:rgba(251,113,133,.05);border-color:rgba(251,113,133,.18)}}
+  .ap-pill.is-rejected .dot{{background:var(--red)}}
+
+  .ap-card{{display:grid;grid-template-columns:220px 1fr;gap:18px;margin-bottom:14px;
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:14px;padding:16px;transition:border-color .15s}}
+  .ap-card:hover{{border-color:var(--border-md)}}
+  .ap-card-img{{min-width:0}}
+  .ap-card-img>img{{width:100%;max-height:280px;object-fit:cover;border-radius:10px;
+    cursor:zoom-in;display:block}}
+  .ap-card-thumbs{{display:flex;gap:5px;margin-top:5px}}
+  .ap-card-thumbs img{{width:calc(50% - 2.5px);height:78px;object-fit:cover;
+    border-radius:7px;cursor:zoom-in}}
+  .ap-card-empty{{width:100%;min-height:140px;border-radius:10px;
+    background:rgba(255,255,255,.025);border:1px dashed var(--border);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--muted2);font-size:.82em}}
+  .ap-card-body{{min-width:0;display:flex;flex-direction:column;gap:8px}}
+  .ap-card-head{{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}}
+  .ap-card-topic{{font-family:'Syne','Inter',sans-serif;font-weight:600;font-size:1em;
+    color:var(--text);line-height:1.35;flex:1;min-width:0;word-break:break-word}}
+  .ap-card-meta{{font-size:.74em;color:var(--muted2);
+    font-family:'JetBrains Mono',Menlo,monospace;letter-spacing:.02em}}
+  .ap-tag{{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;
+    border-radius:7px;font-size:.74em;border:1px solid var(--border);
+    background:rgba(255,255,255,.02);color:var(--muted);max-width:100%}}
+  .ap-tag span{{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+  .ap-tag.is-trend{{color:var(--accent-bright);background:var(--accent-dim);border-color:var(--accent-glow)}}
+  .ap-tag.is-feedback{{color:var(--yellow);background:rgba(252,211,77,.06);border-color:rgba(252,211,77,.2)}}
+  .ap-card-text{{font-size:.85em;color:var(--text);line-height:1.55;
+    white-space:pre-wrap;word-break:break-word;
+    max-height:5.5em;overflow:hidden;
+    -webkit-mask-image:linear-gradient(180deg,#000 70%,transparent);
+    mask-image:linear-gradient(180deg,#000 70%,transparent)}}
+  .ap-prompt-toggle{{font-size:.76em;color:var(--accent);cursor:pointer;
+    user-select:none;display:inline-flex;align-items:center;gap:6px;
+    background:transparent;border:none;padding:0;font-family:inherit;font-weight:500}}
+  .ap-prompt-toggle::before{{content:'›';font-size:1.2em;line-height:.8;
+    transition:transform .15s;display:inline-block}}
+  details[open]>summary.ap-prompt-toggle::before{{transform:rotate(90deg)}}
+  .ap-prompt-toggle::-webkit-details-marker{{display:none}}
+  .ap-prompt-body{{margin-top:8px;padding:10px 12px;
+    background:rgba(155,138,251,.04);border:1px solid var(--accent-glow);
+    border-radius:8px;font-family:'JetBrains Mono',Menlo,monospace;
+    font-size:.74em;color:var(--muted);white-space:pre-wrap;word-break:break-word;
+    cursor:pointer;line-height:1.55;max-height:140px;overflow:auto;
+    transition:background .2s}}
+  .ap-prompt-body:hover{{background:rgba(155,138,251,.08)}}
+  .ap-card-actions{{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto;padding-top:6px}}
+
+  /* Generate panel */
+  .ap-gen-row{{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px}}
+  .ap-gen-hint{{font-size:.82em;color:var(--muted2);max-width:520px;line-height:1.5}}
+  .ap-mode{{display:none;border:1px solid var(--accent-glow);background:var(--accent-dim);
+    border-radius:14px;padding:16px 18px;margin-bottom:16px}}
+  .ap-mode-h{{font-family:'Syne','Inter',sans-serif;font-weight:600;font-size:.95em;
+    color:var(--text);margin-bottom:12px}}
+  .ap-mode-grid{{display:grid;grid-template-columns:1fr 1fr;gap:10px}}
+  .ap-mode-card{{border:1px solid var(--border-md);border-radius:11px;
+    padding:14px 16px;background:var(--surface);cursor:pointer;
+    transition:all .18s;text-align:left}}
+  .ap-mode-card:hover{{background:var(--surface2);border-color:var(--accent-glow);
+    transform:translateY(-1px)}}
+  .ap-mode-title{{font-size:.95em;color:var(--text);font-weight:600;margin-bottom:4px}}
+  .ap-mode-desc{{font-size:.78em;color:var(--muted);line-height:1.5}}
+  .ap-idea{{display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--accent-glow)}}
+  .ap-idea-lbl{{font-size:.78em;color:var(--muted2);margin-bottom:6px}}
+  .ap-idea textarea{{width:100%;box-sizing:border-box;
+    background:var(--bg);border:1px solid var(--border-md);
+    border-radius:9px;color:var(--text);font-family:'Inter',sans-serif;
+    font-size:.9em;padding:10px 12px;resize:vertical;min-height:74px;outline:none}}
+  .ap-idea textarea:focus{{border-color:var(--accent-glow)}}
+  .ap-idea-row{{display:flex;gap:8px;margin-top:10px}}
+
+  .ap-banner{{display:none;border:1px solid var(--accent-glow);background:var(--accent-dim);
+    border-radius:14px;margin-bottom:18px;padding:14px 18px;font-size:.88em}}
+  .ap-banner.is-error{{border-color:rgba(251,113,133,.4);background:rgba(251,113,133,.06)}}
+  .ap-banner.is-done{{border-color:rgba(110,231,183,.35);background:rgba(110,231,183,.05)}}
+  .ap-bar-row{{display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:10px;gap:10px}}
+  .ap-bar-label{{font-weight:600;color:var(--text);font-size:.92em}}
+  .ap-bar-pct{{color:var(--muted2);font-size:.82em;white-space:nowrap;
+    font-family:'JetBrains Mono',Menlo,monospace}}
+  .ap-bar-track{{background:rgba(255,255,255,.06);border-radius:6px;height:5px;
+    margin-bottom:12px;overflow:hidden}}
+  .ap-bar-fill{{height:100%;width:0;
+    background:linear-gradient(90deg,var(--accent),var(--accent-bright));
+    border-radius:6px;transition:width .4s}}
+  .ap-log{{max-height:140px;overflow-y:auto;line-height:1.5;
+    font-family:'JetBrains Mono',Menlo,monospace;font-size:.78em}}
+  .ap-log-entry{{padding:3px 0;display:flex;gap:10px;align-items:baseline;
+    border-bottom:1px solid rgba(255,255,255,.03)}}
+  .ap-log-time{{color:var(--muted2);min-width:46px;flex-shrink:0}}
+  .ap-log-msg{{color:var(--text);word-break:break-word;flex:1;min-width:0}}
+  .ap-log-msg.is-err{{color:var(--red)}}
+  .ap-log-msg.is-info{{color:var(--muted)}}
+  .ap-trends{{display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--accent-glow)}}
+  .ap-trends-h{{font-size:.82em;color:var(--accent-bright);font-weight:600;
+    margin-bottom:8px;letter-spacing:.02em}}
+  .ap-trend-btn{{display:block;width:100%;padding:10px 13px;background:var(--surface);
+    border:1px solid var(--border-md);border-radius:9px;color:var(--text);
+    cursor:pointer;font-size:.85em;text-align:left;transition:all .15s;
+    font-family:'Inter',sans-serif;margin-bottom:5px;line-height:1.4}}
+  .ap-trend-btn:hover{{background:var(--surface2);border-color:var(--accent-glow)}}
+  .ap-trend-btn b{{font-weight:600;color:var(--text)}}
+  .ap-trend-ctx{{color:var(--muted);font-size:.86em;margin-left:6px}}
+  .ap-trend-rand{{background:transparent;color:var(--muted);
+    border:1px dashed var(--border-md);font-style:italic}}
+  .ap-think{{margin-top:8px}}
+  .ap-think summary{{cursor:pointer;font-size:.78em;color:var(--accent);
+    user-select:none;padding:4px 0;list-style:none;
+    display:inline-flex;align-items:center;gap:6px}}
+  .ap-think summary::-webkit-details-marker{{display:none}}
+  .ap-think summary::before{{content:'›';font-size:1.1em;line-height:1;
+    transition:transform .15s;display:inline-block}}
+  .ap-think[open] summary::before{{transform:rotate(90deg)}}
+  .ap-think-body{{margin-top:8px;padding:10px;
+    background:rgba(0,0,0,.25);border-radius:8px;max-height:220px;overflow-y:auto;
+    font-family:'JetBrains Mono',Menlo,monospace;font-size:.74em;
+    color:rgba(200,200,255,.65);white-space:pre-wrap;line-height:1.55;word-break:break-word}}
+
+  /* Settings */
+  .form-grid-2{{display:grid;grid-template-columns:1fr 1fr;gap:16px}}
+  .ap-info{{margin-top:20px;padding:14px 16px;background:var(--accent-dim);
+    border:1px solid var(--accent-glow);border-radius:12px;
+    font-size:.84em;color:var(--muted);line-height:1.7}}
+  .ap-info b{{color:var(--text);font-weight:600}}
+  .ap-warn{{margin-top:8px;background:rgba(252,211,77,.08);
+    border:1px solid rgba(252,211,77,.25);border-radius:9px;padding:10px 12px;
+    font-size:.8em;line-height:1.55;color:var(--yellow)}}
+  .ap-warn b{{color:#fde68a}}
+  .ap-warn code{{background:rgba(0,0,0,.35);padding:1px 6px;border-radius:4px;
+    font-family:'JetBrains Mono',Menlo,monospace;font-size:.92em}}
+  .ap-warn a{{color:var(--yellow);text-decoration:underline}}
+  .ap-flags{{display:flex;gap:24px;align-items:center;padding:8px 0;flex-wrap:wrap}}
+  .ap-flags label{{display:flex;align-items:center;gap:8px;cursor:pointer;
+    color:var(--text);font-size:.92em}}
+  .ap-flags input[type=checkbox]{{width:17px;height:17px;accent-color:var(--accent)}}
+
+  /* Modal */
+  .ap-modal-h{{font-family:'Syne','Inter',sans-serif;font-weight:600;font-size:1.1em;
+    margin-bottom:6px;color:var(--text)}}
+  .ap-modal-sub{{font-size:.85em;color:var(--muted2);margin-bottom:14px;line-height:1.5}}
 
   /* ── Bottom nav (mobile only) ── */
   .bottom-nav{{display:none}}
@@ -485,17 +653,15 @@ def _layout(title: str, content: str, active: str = "") -> str:
     .toolbar{{flex-direction:column;align-items:stretch}}
     .search-input{{width:100%;flex:none}}
     select{{width:100%;flex:none}}
-    .post-card{{grid-template-columns:1fr}}
-    .post-card .pc-img img{{max-height:220px;width:100%;object-fit:cover;
-      border-radius:8px}}
-    .post-card .pc-img>div{{height:100px}}
+    .ap-card{{grid-template-columns:1fr}}
+    .ap-card-img>img{{max-height:230px}}
+    .ap-card-empty{{min-height:120px}}
     .form-grid-2{{grid-template-columns:1fr}}
     .form-grid-2>div[style*="grid-column:1/-1"]{{grid-column:1 !important}}
-    .post-card-btns .btn{{flex:1 1 calc(50% - 6px);margin-left:0 !important;
-      text-align:center}}
-    .autopub-header h2{{font-size:1.2em}}
-    .gen-hint{{display:none}}
-    .autopub-tabs a{{padding:9px 12px;font-size:.8em}}
+    .ap-card-actions .btn{{flex:1 1 calc(50% - 6px);text-align:center}}
+    .ap-gen-hint{{display:none}}
+    .ap-tabs a{{padding:9px 14px;font-size:.82em}}
+    .ap-mode-grid{{grid-template-columns:1fr}}
     .hist-mobile-hide{{display:none}}
     .hist-table-wrap{{display:none !important}}
     .hist-mob-list{{display:block !important}}
@@ -2306,16 +2472,16 @@ async def api_keys_history(request: web.Request) -> web.Response:
 # ─── Autopub ─────────────────────────────────────────────────────────────────
 
 def _autopub_status_badge(status: str) -> str:
-    colors = {
-        "draft":      ("var(--muted)",   "⏳ Черновик"),
-        "approved":   ("var(--green)",   "✅ Одобрен"),
-        "publishing": ("var(--yellow)",  "📤 Публикуется"),
-        "published":  ("var(--accent-bright)", "📣 Опубликован"),
-        "error":      ("var(--red)",     "❌ Ошибка"),
-        "rejected":   ("var(--red)",     "🚫 Отклонён"),
+    labels = {
+        "draft":      "Черновик",
+        "approved":   "Одобрен",
+        "publishing": "Публикация",
+        "published":  "Опубликован",
+        "error":      "Ошибка",
+        "rejected":   "Отклонён",
     }
-    color, label = colors.get(status, ("var(--muted)", status))
-    return f'<span style="color:{color};font-weight:600">{label}</span>'
+    label = labels.get(status, status)
+    return f'<span class="ap-pill is-{status}"><span class="dot"></span>{label}</span>'
 
 
 def _render_post_card(p: dict) -> str:
@@ -2324,7 +2490,8 @@ def _render_post_card(p: dict) -> str:
     status = p["status"]
     prompt_full = (p.get("prompt") or "").replace('"', "&quot;").replace("<", "&lt;")
     prompt_short = prompt_full[:300]
-    caption_short = (p.get("caption") or "")[:300].replace("<", "&lt;")
+    caption_full = p.get("caption") or ""
+    caption_short = caption_full[:300].replace("<", "&lt;")
     topic = p.get("topic", "").replace("<", "&lt;")
     dt = _msk(p.get("created_at", ""))
     fuid = p.get("tg_file_unique", "")
@@ -2332,48 +2499,71 @@ def _render_post_card(p: dict) -> str:
     admin_comment = p.get("admin_comment", "").replace("<", "&lt;")
     extra_fids = [fid.strip() for fid in p.get("extra_file_ids", "").split(",") if fid.strip()]
     img_src = f"/admin/tg-photo/{fuid}" if fuid else ""
+
+    photo_count_label = ""
+    total_photos = (1 if img_src else 0) + len(extra_fids)
+    if total_photos > 1:
+        photo_count_label = (
+            f'<span class="ap-card-meta" style="margin-left:6px">'
+            f'• {total_photos} фото</span>'
+        )
+
     if img_src and extra_fids:
-        gallery_items = f'<img src="{img_src}" loading="lazy" style="width:100%;max-height:260px;object-fit:cover;border-radius:8px;cursor:pointer;display:block" onclick="openLightboxUrl(\'{img_src}\')">'
-        extra_thumbs = ""
-        for efid in extra_fids:
-            esrc = f"/admin/tg-photo-fid/{efid}"
-            extra_thumbs += f'<img src="{esrc}" loading="lazy" style="width:calc(50% - 3px);height:80px;object-fit:cover;border-radius:6px;cursor:pointer" onclick="openLightboxUrl(\'{esrc}\')">'
-        img_html = f'{gallery_items}<div style="display:flex;gap:6px;margin-top:6px">{extra_thumbs}</div>'
+        thumbs = "".join(
+            f'<img src="/admin/tg-photo-fid/{efid}" loading="lazy" '
+            f'onclick="openLightboxUrl(\'/admin/tg-photo-fid/{efid}\')">'
+            for efid in extra_fids
+        )
+        img_html = (
+            f'<img src="{img_src}" loading="lazy" '
+            f'onclick="openLightboxUrl(\'{img_src}\')">'
+            f'<div class="ap-card-thumbs">{thumbs}</div>'
+        )
     elif img_src:
-        img_html = f'<img src="{img_src}" loading="lazy" style="width:100%;max-height:260px;object-fit:cover;border-radius:8px;cursor:pointer;display:block" onclick="openLightboxUrl(\'{img_src}\')">'
+        img_html = (
+            f'<img src="{img_src}" loading="lazy" '
+            f'onclick="openLightboxUrl(\'{img_src}\')">'
+        )
     else:
-        img_html = '<div style="width:100%;height:120px;border-radius:8px;background:rgba(255,255,255,.05);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.85em">нет фото</div>'
-    trend_badge = (
-        f'<div style="font-size:.75em;background:rgba(167,139,250,.12);color:var(--accent);border-radius:6px;padding:3px 8px;margin-bottom:6px;display:inline-block">🔥 {source_trend}</div><br>'
-        if source_trend else ""
-    )
-    feedback_badge = (
-        f'<div style="font-size:.75em;background:rgba(251,191,36,.1);color:#fbbf24;border-radius:6px;padding:3px 8px;margin-bottom:6px;display:inline-block">💬 {admin_comment[:60]}{"…" if len(admin_comment) > 60 else ""}</div><br>'
-        if admin_comment else ""
-    )
+        img_html = '<div class="ap-card-empty">нет фото</div>'
+
+    tags = ""
+    if source_trend:
+        tags += f'<span class="ap-tag is-trend"><span>{source_trend[:60]}</span></span>'
+    if admin_comment:
+        comment_short = admin_comment[:80]
+        if len(admin_comment) > 80:
+            comment_short += "…"
+        tags += f'<span class="ap-tag is-feedback"><span>фидбэк: {comment_short}</span></span>'
+    tags_html = f'<div style="display:flex;flex-wrap:wrap;gap:6px">{tags}</div>' if tags else ""
+
     btns = ""
     if status == "draft":
-        btns += f'<button class="btn btn-primary btn-sm" onclick="postAction({pid},\'approve\')">✅ Одобрить</button>'
+        btns += f'<button class="btn btn-primary btn-sm" onclick="postAction({pid},\'approve\')">Одобрить</button>'
     if status in ("draft", "approved"):
-        btns += f'<button class="btn btn-sm" onclick="postAction({pid},\'publish\')" style="background:var(--green);color:#fff">📣 Опубл.</button>'
-        btns += f'<button class="btn btn-muted btn-sm" onclick="openEditModal({pid})">✏️ Ред.</button>'
-        btns += f'<button class="btn btn-sm" onclick="openFeedbackModal({pid})" style="background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.4);color:#fbbf24">🔄 Перед.</button>'
-        btns += f'<button class="btn btn-danger btn-sm" onclick="postAction({pid},\'reject\')">🗑</button>'
-    return f"""<div class="card post-card" id="post-card-{pid}">
-  <div class="pc-img">{img_html}</div>
-  <div>
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px;gap:6px">
-      <span style="font-weight:600;font-size:.93em;line-height:1.3">{topic}</span>
+        btns += f'<button class="btn btn-success btn-sm" onclick="postAction({pid},\'publish\')">Опубликовать</button>'
+        btns += f'<button class="btn btn-muted btn-sm" onclick="openEditModal({pid})">Редактировать</button>'
+        btns += f'<button class="btn btn-muted btn-sm" onclick="openFeedbackModal({pid})">Переделать</button>'
+        btns += f'<button class="btn btn-danger btn-sm" onclick="postAction({pid},\'reject\')">Удалить</button>'
+
+    caption_overflow = "…" if len(caption_full) > 300 else ""
+    prompt_overflow = "…" if len(p.get("prompt", "")) > 300 else ""
+
+    return f"""<div class="ap-card" id="post-card-{pid}">
+  <div class="ap-card-img">{img_html}</div>
+  <div class="ap-card-body">
+    <div class="ap-card-head">
+      <div class="ap-card-topic">{topic or '—'}</div>
       {_autopub_status_badge(status)}
     </div>
-    <div style="font-size:.78em;color:var(--muted);margin-bottom:6px">{dt}</div>
-    {trend_badge}{feedback_badge}
-    <div style="font-size:.82em;color:var(--text);line-height:1.5;margin-bottom:8px;white-space:pre-wrap">{caption_short}{'…' if len(p.get('caption', '')) > 300 else ''}</div>
-    <details style="margin-bottom:10px">
-      <summary style="font-size:.78em;color:var(--accent);cursor:pointer">Промпт <span style="font-size:.75em;color:var(--muted)">(нажми чтобы скопировать)</span></summary>
-      <pre id="prompt-{pid}" onclick="copyPrompt(this)" data-full-prompt="{prompt_full}" title="Нажми чтобы скопировать весь промпт" style="font-size:.74em;color:var(--muted);white-space:pre-wrap;margin-top:6px;overflow-x:auto;cursor:pointer;padding:8px;border-radius:6px;background:rgba(255,255,255,.03);transition:background .2s" onmouseenter="this.style.background='rgba(167,139,250,.08)'" onmouseleave="this.style.background='rgba(255,255,255,.03)'">{prompt_short}{'…' if len(p.get('prompt', '')) > 300 else ''}</pre>
+    <div class="ap-card-meta">{dt}{photo_count_label}</div>
+    {tags_html}
+    <div class="ap-card-text">{caption_short}{caption_overflow}</div>
+    <details>
+      <summary class="ap-prompt-toggle">Промпт</summary>
+      <pre id="prompt-{pid}" class="ap-prompt-body" onclick="copyPrompt(this)" data-full-prompt="{prompt_full}" title="Нажмите чтобы скопировать">{prompt_short}{prompt_overflow}</pre>
     </details>
-    <div class="post-card-btns">{btns}</div>
+    <div class="ap-card-actions">{btns}</div>
   </div>
 </div>"""
 
@@ -2408,8 +2598,9 @@ async def handle_autopub(request: web.Request) -> web.Response:
         alert_html = '<div class="alert alert-error">✗ Ошибка — проверьте настройки и логи</div>'
 
     enabled_badge = (
-        '<span class="badge badge-green">🟢 Включено</span>' if settings.get("enabled")
-        else '<span class="badge badge-red">🔴 Выключено</span>'
+        '<span class="ap-status is-on"><span class="dot"></span>Автопостинг включён</span>'
+        if settings.get("enabled")
+        else '<span class="ap-status is-off"><span class="dot"></span>Автопостинг выключен</span>'
     )
 
     # ── Tabs ──
@@ -2427,12 +2618,12 @@ async def handle_autopub(request: web.Request) -> web.Response:
   <div>
     <label class="form-label">VK группа (ID без минуса)</label>
     <input name="vk_group_id" value="{settings.get('vk_group_id','')}" placeholder="например: 123456789" class="form-input">
-    {"" if __import__("os").getenv("VK_USER_TOKEN") else '''<div style="margin-top:8px;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);border-radius:8px;padding:10px 12px;font-size:.8em;line-height:1.5;color:#fbbf24">
-      ⚠️ <b>VK_USER_TOKEN не задан</b> — публикация в ВК невозможна.<br>
+    {"" if __import__("os").getenv("VK_USER_TOKEN") else '''<div class="ap-warn">
+      <b>VK_USER_TOKEN не задан</b> — публикация в ВК невозможна.<br>
       Токен группы (VK_BOT_TOKEN) не имеет прав на публикацию постов.<br>
       Нужен токен <b>пользователя-администратора</b> с правами <code>wall,photos,offline</code>.<br>
-      Получить: <a href="https://vkhost.github.io/" target="_blank" style="color:#fbbf24">vkhost.github.io</a>
-      → выбери приложение → выдай права → скопируй токен из URL → добавь в секреты как <code>VK_USER_TOKEN</code>.
+      Получить: <a href="https://vkhost.github.io/" target="_blank">vkhost.github.io</a>
+      → выберите приложение → выдайте права → скопируйте токен из URL → добавьте в секреты как <code>VK_USER_TOKEN</code>.
     </div>'''}
   </div>
   <div>
@@ -2453,29 +2644,29 @@ async def handle_autopub(request: web.Request) -> web.Response:
   </div>
   <div style="grid-column:1/-1">
     <label class="form-label">CTA-текст поста (оставьте пустым — используется шаблон по умолчанию)</label>
-    <textarea name="post_cta" rows="3" class="form-input" placeholder="✅ Переходи в бот @mybot...">{settings.get('post_cta','')}</textarea>
+    <textarea name="post_cta" rows="3" class="form-input" placeholder="Переходи в бот @mybot...">{settings.get('post_cta','')}</textarea>
   </div>
   <div style="grid-column:1/-1">
     <label class="form-label">Шаблон поста (переменные: {{topic}}, {{caption_intro}}, {{prompt}}, {{bot_username}}, {{cta}})</label>
     <textarea name="post_template" rows="4" class="form-input" placeholder="Оставьте пустым — используется шаблон по умолчанию">{settings.get('post_template','')}</textarea>
   </div>
-  <div style="display:flex;gap:24px;align-items:center;padding:8px 0">
-    <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-      <input type="checkbox" name="enabled" value="1" {chk(settings.get('enabled'))} style="width:18px;height:18px;accent-color:var(--accent)">
+  <div class="ap-flags" style="grid-column:1/-1">
+    <label>
+      <input type="checkbox" name="enabled" value="1" {chk(settings.get('enabled'))}>
       <span>Автопостинг включён</span>
     </label>
-    <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-      <input type="checkbox" name="auto_approve" value="1" {chk(settings.get('auto_approve'))} style="width:18px;height:18px;accent-color:var(--accent)">
+    <label>
+      <input type="checkbox" name="auto_approve" value="1" {chk(settings.get('auto_approve'))}>
       <span>Автоодобрение постов</span>
     </label>
   </div>
 </div>
 <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
-  <button type="submit" class="btn btn-primary">💾 Сохранить настройки</button>
+  <button type="submit" class="btn btn-primary">Сохранить настройки</button>
 </div>
 </form>
-<div style="margin-top:20px;padding:14px;background:rgba(167,139,250,.07);border-radius:10px;border:1px solid var(--border);font-size:.83em;color:var(--muted);line-height:1.8">
-  <b style="color:var(--text)">Как работает расписание:</b><br>
+<div class="ap-info">
+  <b>Как работает расписание:</b><br>
   Посты публикуются равномерно с 09:00 до 21:00 МСК.<br>
   При <b>{settings.get('posts_per_day',3)} постах в день</b> — интервал ~{int(720/max(1,settings.get('posts_per_day',3)))} минут.<br>
   Без автоодобрения — посты попадают в очередь со статусом <b>Черновик</b> и ждут вашего одобрения.<br>
@@ -2488,52 +2679,51 @@ async def handle_autopub(request: web.Request) -> web.Response:
     else:
         queue_html = '<div id="queue-empty" class="img-empty">Очередь пуста — нажмите «Сгенерировать» чтобы создать первый пост</div>'
 
-    gen_btn = f'''<div style="margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-  <button class="btn btn-primary" id="gen-btn" onclick="openModePicker(this)">⚡ Сгенерировать</button>
-  <span class="gen-hint">Задай идею или найди тренды → Gemini придумывает пост и генерирует фото (~60 сек)</span>
+    gen_btn = '''<div class="ap-gen-row">
+  <button class="btn btn-primary" id="gen-btn" onclick="openModePicker(this)">Сгенерировать пост</button>
+  <span class="ap-gen-hint">Задайте идею или найдите тренды — Gemini придумает пост и сгенерирует фото (~60 сек)</span>
 </div>
 
-<!-- Mode picker panel -->
-<div id="gen-mode-picker" style="display:none;border:1px solid rgba(167,139,250,.3);background:rgba(167,139,250,.07);border-radius:12px;margin-bottom:16px;padding:14px 16px;font-size:.88em">
-  <div style="font-weight:600;color:var(--text);margin-bottom:12px">Как создать пост?</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-    <div onclick="showIdeaInput()" style="cursor:pointer;border:1px solid rgba(167,139,250,.25);border-radius:10px;padding:12px 14px;transition:background .15s" onmouseover="this.style.background=\'rgba(167,139,250,.12)\'" onmouseout="this.style.background=\'transparent\'">
-      <div style="font-size:1.1em;margin-bottom:4px">💡 Задать идею</div>
-      <div style="font-size:.8em;color:var(--muted);line-height:1.4">Опиши тему словами — ИИ найдёт информацию в интернете и создаст пост</div>
-    </div>
-    <div onclick="startWithTrends()" style="cursor:pointer;border:1px solid rgba(167,139,250,.25);border-radius:10px;padding:12px 14px;transition:background .15s" onmouseover="this.style.background=\'rgba(167,139,250,.12)\'" onmouseout="this.style.background=\'transparent\'">
-      <div style="font-size:1.1em;margin-bottom:4px">📈 Искать тренды</div>
-      <div style="font-size:.8em;color:var(--muted);line-height:1.4">Gemini ищет актуальные тренды — ты выбираешь подходящий</div>
-    </div>
+<!-- Mode picker -->
+<div id="gen-mode-picker" class="ap-mode">
+  <div class="ap-mode-h">Как создать пост?</div>
+  <div class="ap-mode-grid">
+    <button type="button" class="ap-mode-card" onclick="showIdeaInput()">
+      <div class="ap-mode-title">Задать идею</div>
+      <div class="ap-mode-desc">Опишите тему словами — ИИ найдёт информацию и создаст пост</div>
+    </button>
+    <button type="button" class="ap-mode-card" onclick="startWithTrends()">
+      <div class="ap-mode-title">Искать тренды</div>
+      <div class="ap-mode-desc">Gemini ищет актуальные тренды — вы выбираете подходящий</div>
+    </button>
   </div>
-  <div id="gen-idea-input" style="display:none;margin-top:14px;border-top:1px solid rgba(167,139,250,.15);padding-top:12px">
-    <div style="font-size:.82em;color:var(--muted);margin-bottom:6px">Опиши идею — тема, настроение, образ, что угодно:</div>
-    <textarea id="gen-idea-text" rows="3" placeholder="Например: рассветная прогулка в осеннем лесу..." style="width:100%;box-sizing:border-box;background:rgba(0,0,0,.2);border:1px solid rgba(167,139,250,.3);border-radius:8px;color:var(--text);font-size:.88em;padding:8px 10px;resize:vertical;font-family:inherit" onkeydown="if(event.ctrlKey&&event.key===\'Enter\')startWithIdea()"></textarea>
-    <div style="display:flex;gap:8px;margin-top:8px">
-      <button class="btn btn-primary" style="flex:1;padding:8px 0" onclick="startWithIdea()">🚀 Поехали</button>
-      <button onclick="closeModePicker()" style="padding:8px 16px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-size:.85em">Отмена</button>
+  <div id="gen-idea-input" class="ap-idea">
+    <div class="ap-idea-lbl">Опишите идею — тема, настроение, образ:</div>
+    <textarea id="gen-idea-text" rows="3" placeholder="Например: рассветная прогулка в осеннем лесу..." onkeydown="if(event.ctrlKey&&event.key==='Enter')startWithIdea()"></textarea>
+    <div class="ap-idea-row">
+      <button class="btn btn-primary" style="flex:1" onclick="startWithIdea()">Запустить</button>
+      <button class="btn btn-muted" onclick="closeModePicker()">Отмена</button>
     </div>
   </div>
 </div>
 
-<div id="gen-banner" style="display:none;border:1px solid rgba(167,139,250,.3);background:rgba(167,139,250,.07);border-radius:12px;margin-bottom:16px;padding:14px 16px;font-size:.88em">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px">
-    <span id="gen-label" style="font-weight:600;color:var(--text)">⚙️ Генерация...</span>
-    <span id="gen-bar-txt" style="color:var(--muted);font-size:.82em;white-space:nowrap">0%</span>
+<!-- Generation banner -->
+<div id="gen-banner" class="ap-banner">
+  <div class="ap-bar-row">
+    <span id="gen-label" class="ap-bar-label">Генерация...</span>
+    <span id="gen-bar-txt" class="ap-bar-pct">0%</span>
   </div>
-  <div style="background:rgba(255,255,255,.08);border-radius:6px;height:6px;margin-bottom:10px;overflow:hidden">
-    <div id="gen-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#a78bfa,#60a5fa);border-radius:6px;transition:width .4s ease"></div>
+  <div class="ap-bar-track"><div id="gen-bar" class="ap-bar-fill"></div></div>
+  <div id="gen-log" class="ap-log"></div>
+  <!-- Inline trend picker -->
+  <div id="gen-trend-picker" class="ap-trends">
+    <div class="ap-trends-h">Выберите тренд для поста</div>
+    <div id="gen-trend-list"></div>
+    <button onclick="submitTrendPick(null)" class="ap-trend-btn ap-trend-rand">Случайный — пусть Gemini выберет сам</button>
   </div>
-  <div id="gen-log" style="max-height:130px;overflow-y:auto;font-family:monospace;line-height:1.5;margin-bottom:6px"></div>
-  <!-- Inline trend picker (shown when scheduler waits for selection) -->
-  <div id="gen-trend-picker" style="display:none;margin-top:10px;border-top:1px solid rgba(167,139,250,.2);padding-top:12px">
-    <div style="font-size:.85em;color:var(--accent);font-weight:600;margin-bottom:8px">📈 Выберите тренд для поста:</div>
-    <div id="gen-trend-list" style="display:flex;flex-direction:column;gap:6px"></div>
-    <button onclick="submitTrendPick(null)" style="margin-top:8px;width:100%;padding:8px 12px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--muted);cursor:pointer;font-size:.82em;text-align:left">🎲 Случайный — пусть Gemini выберет сам</button>
-  </div>
-  <details id="gen-think-wrap" style="display:none">
-    <summary style="cursor:pointer;font-size:.8em;color:var(--accent);user-select:none;padding:4px 0">🧠 Процесс мышления Gemini <span id="gen-think-chars" style="color:var(--muted)"></span></summary>
-    <div id="gen-thinking" style="margin-top:8px;padding:10px;background:rgba(0,0,0,.25);border-radius:8px;max-height:220px;overflow-y:auto;font-family:monospace;font-size:.76em;color:rgba(200,200,255,.65);white-space:pre-wrap;line-height:1.55;word-break:break-word"></div>
+  <details id="gen-think-wrap" class="ap-think" style="display:none">
+    <summary>Процесс мышления Gemini <span id="gen-think-chars" style="color:var(--muted2)"></span></summary>
+    <div id="gen-thinking" class="ap-think-body"></div>
   </details>
 </div>'''
 
@@ -2545,27 +2735,36 @@ async def handle_autopub(request: web.Request) -> web.Response:
             pid = p["id"]
             fuid = p.get("tg_file_unique","")
             img_src = f"/admin/tg-photo/{fuid}" if fuid else ""
-            thumb = f'<img src="{img_src}" loading="lazy" style="width:44px;height:44px;object-fit:cover;border-radius:6px;cursor:pointer" onclick="openLightboxUrl(\'{img_src}\')">' if img_src else '<div style="width:44px;height:44px;border-radius:6px;background:rgba(255,255,255,.05)"></div>'
+            thumb = (
+                f'<img class="ap-hist-thumb" src="{img_src}" loading="lazy" '
+                f'onclick="openLightboxUrl(\'{img_src}\')">'
+                if img_src else '<div class="ap-hist-empty"></div>'
+            )
             topic = p.get("topic","").replace("<","&lt;")[:55]
             dt_pub = _msk(p.get("published_at","")) or _msk(p.get("created_at",""))
-            tg_link = f'<a href="https://t.me/c/{p.get("tg_msg_id","")}" target="_blank" style="color:var(--accent-bright);font-size:.82em">📩 TG</a>' if p.get("tg_msg_id") else ""
-            vk_link = f'<a href="https://vk.com/wall-{p.get("vk_post_id","")}" target="_blank" style="color:var(--accent);font-size:.82em">🅥 VK</a>' if p.get("vk_post_id") else ""
-            tg_td = f'<a href="https://t.me/c/{p.get("tg_msg_id","")}" target="_blank" style="color:var(--accent-bright)">TG</a>' if p.get("tg_msg_id") else "—"
-            vk_td = f'<a href="https://vk.com/wall-{p.get("vk_post_id","")}" target="_blank" style="color:var(--accent)">VK</a>' if p.get("vk_post_id") else "—"
-            err = f'<span style="color:var(--red);font-size:.75em">{p.get("error_text","")[:60]}</span>' if p.get("error_text") else ""
+            tg_link = f'<a href="https://t.me/c/{p.get("tg_msg_id","")}" target="_blank" class="ap-hist-link" style="color:var(--accent-bright)">TG</a>' if p.get("tg_msg_id") else ""
+            vk_link = f'<a href="https://vk.com/wall-{p.get("vk_post_id","")}" target="_blank" class="ap-hist-link" style="color:var(--accent)">VK</a>' if p.get("vk_post_id") else ""
+            tg_td = tg_link if tg_link else '<span style="color:var(--muted2)">—</span>'
+            vk_td = vk_link if vk_link else '<span style="color:var(--muted2)">—</span>'
+            err = (
+                f'<span style="color:var(--red);font-size:.75em;margin-right:6px">'
+                f'{p.get("error_text","")[:60]}</span>'
+                if p.get("error_text") else ""
+            )
             hist_rows += (
                 f"<tr>"
-                f"<td style='padding:5px 8px'>{thumb}</td>"
-                f"<td style='padding:5px 4px;font-size:.83em'>{topic}</td>"
-                f"<td style='padding:5px 8px'>{_autopub_status_badge(p['status'])}</td>"
-                f"<td class='hist-mobile-hide' style='padding:5px 8px;white-space:nowrap;color:var(--muted);font-size:.79em'>{dt_pub}</td>"
-                f"<td class='hist-mobile-hide' style='padding:5px 8px'>{tg_td}</td>"
-                f"<td class='hist-mobile-hide' style='padding:5px 8px'>{vk_td}</td>"
-                f"<td style='padding:5px 8px'>{err}<button class='btn btn-danger btn-sm' onclick='postAction({pid},\"delete\")'>🗑</button></td>"
+                f"<td style='padding:6px 8px'>{thumb}</td>"
+                f"<td style='padding:6px 4px;font-size:.86em'>{topic}</td>"
+                f"<td style='padding:6px 8px'>{_autopub_status_badge(p['status'])}</td>"
+                f"<td class='hist-mobile-hide' style='padding:6px 8px;white-space:nowrap;color:var(--muted2);font-size:.78em;font-family:JetBrains Mono,Menlo,monospace'>{dt_pub}</td>"
+                f"<td class='hist-mobile-hide' style='padding:6px 8px'>{tg_td}</td>"
+                f"<td class='hist-mobile-hide' style='padding:6px 8px'>{vk_td}</td>"
+                f"<td style='padding:6px 8px;text-align:right'>{err}<button class='btn btn-danger btn-sm' onclick='postAction({pid},\"delete\")'>Удалить</button></td>"
                 f"</tr>"
             )
             mc_img = (
-                f'<img src="{img_src}" loading="lazy" onclick="openLightboxUrl(\'{img_src}\')" style="cursor:pointer;object-fit:cover;border-radius:8px;width:52px;height:52px;min-width:52px;flex-shrink:0">'
+                f'<img src="{img_src}" loading="lazy" onclick="openLightboxUrl(\'{img_src}\')" '
+                f'style="cursor:pointer;object-fit:cover;border-radius:8px;width:52px;height:52px;min-width:52px;flex-shrink:0">'
                 if img_src else
                 f'<div style="width:52px;height:52px;min-width:52px;border-radius:8px;background:rgba(255,255,255,.06);flex-shrink:0"></div>'
             )
@@ -2573,11 +2772,11 @@ async def handle_autopub(request: web.Request) -> web.Response:
                 f'<div class="hist-card">'
                 f'{mc_img}'
                 f'<div style="flex:1;min-width:0">'
-                f'<div style="font-size:.86em;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{topic}</div>'
-                f'<div style="font-size:.75em;color:var(--muted);margin-top:2px">{dt_pub}</div>'
+                f'<div style="font-size:.88em;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{topic}</div>'
+                f'<div style="font-size:.74em;color:var(--muted2);margin-top:2px;font-family:JetBrains Mono,Menlo,monospace">{dt_pub}</div>'
                 f'<div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
                 f'{_autopub_status_badge(p["status"])} {tg_link} {vk_link}'
-                f'<button class="btn btn-danger btn-sm" onclick="postAction({pid},\'delete\')">🗑</button>'
+                f'<button class="btn btn-danger btn-sm" onclick="postAction({pid},\'delete\')">Удалить</button>'
                 f'</div>{err}</div></div>'
             )
         history_html = (
@@ -2597,15 +2796,15 @@ async def handle_autopub(request: web.Request) -> web.Response:
     content = f"""
 {alert_html}
 
-<div class="autopub-header">
+<div class="ap-header">
   {enabled_badge}
-  <span style="color:var(--muted2);font-size:.82em;letter-spacing:.02em">Опубликовано сегодня: {posts_today} / {settings.get('posts_per_day',3)}</span>
+  <span class="ap-meta">Опубликовано сегодня: {posts_today} / {settings.get('posts_per_day',3)}</span>
 </div>
 
-<div class="autopub-tabs">
-  <a href="/admin/autopub?tab=queue" class="{'tab-active' if tab=='queue' else ''}" style="color:{'var(--text)' if tab=='queue' else 'var(--muted)'}">⏳ Очередь ({len(queue_posts)})</a>
-  <a href="/admin/autopub?tab=settings" class="{'tab-active' if tab=='settings' else ''}" style="color:{'var(--text)' if tab=='settings' else 'var(--muted)'}">⚙️ Настройки</a>
-  <a href="/admin/autopub?tab=history" class="{'tab-active' if tab=='history' else ''}" style="color:{'var(--text)' if tab=='history' else 'var(--muted)'}">📋 История ({len(history_posts)})</a>
+<div class="ap-tabs">
+  <a href="/admin/autopub?tab=queue"    class="{'is-active' if tab=='queue' else ''}">Очередь<span class="ap-count">{len(queue_posts)}</span></a>
+  <a href="/admin/autopub?tab=settings" class="{'is-active' if tab=='settings' else ''}">Настройки</a>
+  <a href="/admin/autopub?tab=history"  class="{'is-active' if tab=='history' else ''}">История<span class="ap-count">{len(history_posts)}</span></a>
 </div>
 
 {'<div>' + gen_btn + '<div id="queue-list">' + queue_html + '</div></div>' if tab == 'queue' else ''}
@@ -2615,7 +2814,8 @@ async def handle_autopub(request: web.Request) -> web.Response:
 <!-- Edit modal -->
 <div id="edit-modal" class="modal-overlay" style="display:none">
   <div class="modal" style="max-width:640px;width:95vw">
-    <h3 style="margin-bottom:14px">✏️ Редактировать пост</h3>
+    <h3 class="ap-modal-h">Редактировать пост</h3>
+    <p class="ap-modal-sub">Изменения сохраняются в очереди — пост будет опубликован после одобрения</p>
     <input type="hidden" id="edit-post-id">
     <div style="margin-bottom:10px">
       <label class="form-label">Тема</label>
@@ -2631,7 +2831,7 @@ async def handle_autopub(request: web.Request) -> web.Response:
     </div>
     <div style="display:flex;gap:10px;justify-content:flex-end">
       <button class="btn btn-muted" onclick="closeEditModal()">Отмена</button>
-      <button class="btn btn-primary" onclick="saveEdit()">💾 Сохранить</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Сохранить</button>
     </div>
   </div>
 </div>
@@ -2643,7 +2843,7 @@ async def handle_autopub(request: web.Request) -> web.Response:
 </div>
 
 <script>
-var _editPosts = {json.dumps(_edit_posts_map, ensure_ascii=False).replace('</','<\\/') if _edit_posts_map else '{{}}'};
+var _editPosts = {json.dumps(_edit_posts_map, ensure_ascii=False).replace('</','<\\/') if _edit_posts_map else '{}'};
 
 function openLightboxUrl(src){{
   document.getElementById('lightbox-img').src=src;
@@ -2690,14 +2890,13 @@ function _genAddLog(entry){{
   var box = document.getElementById('gen-log');
   if(!box) return;
   var div = document.createElement('div');
-  div.style.cssText='padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:.82em;display:flex;gap:8px;align-items:baseline';
+  div.className = 'ap-log-entry';
   var ts = document.createElement('span');
-  ts.style.cssText='color:var(--muted);min-width:42px;flex-shrink:0';
+  ts.className = 'ap-log-time';
   ts.textContent = '+'+entry.t+'s';
   var msg = document.createElement('span');
-  msg.style.color = entry.err ? '#f87171' : (entry.ok ? 'var(--text)' : 'var(--muted)');
-  if(entry.err) msg.textContent = '❌ '+entry.msg;
-  else msg.textContent = entry.msg;
+  msg.className = 'ap-log-msg' + (entry.err ? ' is-err' : (entry.ok ? '' : ' is-info'));
+  msg.textContent = entry.msg;
   div.appendChild(ts); div.appendChild(msg);
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
@@ -2766,14 +2965,12 @@ function _genConnectSSE(){{
     var picker=document.getElementById('gen-trend-picker');
     var tlist=document.getElementById('gen-trend-list');
     if(d.trends && d.trends.length && picker){{
-      if(picker.style.display==='none'){{
+      if(picker.style.display==='none' || picker.style.display===''){{
         tlist.innerHTML='';
         d.trends.forEach(function(t){{
           var btn=document.createElement('button');
-          btn.style.cssText='width:100%;padding:9px 13px;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);border-radius:8px;color:var(--text);cursor:pointer;font-size:.85em;text-align:left;transition:.15s';
-          btn.onmouseover=function(){{this.style.background='rgba(167,139,250,.22)';}};
-          btn.onmouseout=function(){{this.style.background='rgba(167,139,250,.1)';}};
-          var ctx=t.context?(' <span style="color:var(--muted);font-size:.8em">— '+t.context.slice(0,80)+'</span>'):'';
+          btn.className='ap-trend-btn';
+          var ctx=t.context?('<span class="ap-trend-ctx">— '+t.context.slice(0,80)+'</span>'):'';
           btn.innerHTML='<b>'+t.trend+'</b>'+ctx;
           btn.onclick=(function(trend){{return function(){{submitTrendPick(trend);}};}})(t);
           tlist.appendChild(btn);
@@ -2784,20 +2981,17 @@ function _genConnectSSE(){{
       picker.style.display='none';
     }}
 
-    _genShowPanel(d.label || '⚙️ Генерация...', d.pct || 0);
+    _genShowPanel(d.label || 'Генерация...', d.pct || 0);
 
     if(d.error){{
       _genES.close(); _genES=null;
       var p=_genPanel();
-      if(p){{
-        p.style.borderColor='rgba(248,113,113,.4)';
-        p.style.background='rgba(248,113,113,.08)';
-      }}
+      if(p){{ p.classList.remove('is-done'); p.classList.add('is-error'); }}
       var lbl=document.getElementById('gen-label');
-      if(lbl) lbl.textContent='❌ Ошибка: '+d.error;
+      if(lbl) lbl.textContent='Ошибка: '+d.error;
       _genSetBar(0);
       var gb=document.getElementById('gen-btn');
-      if(gb){{ gb.disabled=false; gb.textContent='⚡ Сгенерировать пост'; }}
+      if(gb){{ gb.disabled=false; gb.textContent='Сгенерировать пост'; }}
       return;
     }}
 
@@ -2806,13 +3000,13 @@ function _genConnectSSE(){{
       _genES.close(); _genES=null;
       _genSetBar(100);
       var p=_genPanel();
-      if(p){{ p.style.borderColor='rgba(52,211,153,.4)'; p.style.background='rgba(52,211,153,.08)'; }}
+      if(p){{ p.classList.remove('is-error'); p.classList.add('is-done'); }}
       var gb=document.getElementById('gen-btn');
-      if(gb){{ gb.disabled=false; gb.textContent='⚡ Сгенерировать пост'; }}
+      if(gb){{ gb.disabled=false; gb.textContent='Сгенерировать пост'; }}
       _genInjectCard(d.last_post_id).then(function(){{
         setTimeout(function(){{
           var p2=_genPanel();
-          if(p2) p2.style.display='none';
+          if(p2){{ p2.style.display='none'; p2.classList.remove('is-done','is-error'); }}
           _genResetThinking();
         }}, 3500);
       }});
@@ -2850,7 +3044,7 @@ function closeModePicker(){{
   var picker=document.getElementById('gen-mode-picker');
   if(picker){{ picker.style.display='none'; }}
   var btn=document.getElementById('gen-btn');
-  if(btn){{ btn.disabled=false; btn.textContent='⚡ Сгенерировать'; }}
+  if(btn){{ btn.disabled=false; btn.textContent='Сгенерировать пост'; }}
 }}
 
 function showIdeaInput(){{
@@ -2877,7 +3071,7 @@ async function startWithTrends(){{
 
 async function _doGenerate(body){{
   var btn=document.getElementById('gen-btn');
-  if(btn){{ btn.disabled=true; btn.textContent='⏳ Генерация...'; }}
+  if(btn){{ btn.disabled=true; btn.textContent='Генерация...'; }}
   try{{
     var r=await fetch('/admin/api/autopub/generate',{{
       method:'POST',
@@ -2890,8 +3084,7 @@ async function _doGenerate(body){{
       var p=_genPanel();
       if(p){{
         p.style.display='block';
-        p.style.borderColor='rgba(167,139,250,.3)';
-        p.style.background='rgba(167,139,250,.07)';
+        p.classList.remove('is-error','is-done');
         var logBox=document.getElementById('gen-log');
         if(logBox) logBox.innerHTML='';
         _genSetBar(0);
@@ -2900,11 +3093,11 @@ async function _doGenerate(body){{
       _genConnectSSE();
     }} else {{
       alert('Ошибка: '+(d.error||'неизвестная'));
-      if(btn){{ btn.disabled=false; btn.textContent='⚡ Сгенерировать'; }}
+      if(btn){{ btn.disabled=false; btn.textContent='Сгенерировать пост'; }}
     }}
   }}catch(e){{
-    alert('Fetch error: '+e);
-    if(btn){{ btn.disabled=false; btn.textContent='⚡ Сгенерировать'; }}
+    alert('Ошибка сети: '+e);
+    if(btn){{ btn.disabled=false; btn.textContent='Сгенерировать пост'; }}
   }}
 }}
 
@@ -2914,10 +3107,10 @@ async function _doGenerate(body){{
     if(d.active){{
       _genDone=false;
       var p=_genPanel();
-      if(p){{ p.style.display='block'; p.style.borderColor='rgba(167,139,250,.3)'; p.style.background='rgba(167,139,250,.07)'; }}
+      if(p){{ p.style.display='block'; p.classList.remove('is-error','is-done'); }}
       _genConnectSSE();
       var gb=document.getElementById('gen-btn');
-      if(gb){{ gb.disabled=true; gb.textContent='⏳ Генерация...'; }}
+      if(gb){{ gb.disabled=true; gb.textContent='Генерация...'; }}
     }}
   }}).catch(function(){{}});
 }})();
@@ -2970,7 +3163,7 @@ async function submitFeedback(btn){{
   var id=document.getElementById('feedback-post-id').value;
   var comment=document.getElementById('feedback-text').value.trim();
   if(!comment){{ alert('Напишите комментарий — что именно исправить'); return; }}
-  btn.disabled=true; btn.textContent='⏳ Отправляю...';
+  btn.disabled=true; btn.textContent='Отправка...';
   try{{
     var r=await fetch('/admin/api/autopub/posts/'+id+'/reject_feedback',{{
       method:'POST',
@@ -2984,34 +3177,33 @@ async function submitFeedback(btn){{
       var p=_genPanel();
       if(p){{
         p.style.display='block';
-        p.style.borderColor='rgba(251,191,36,.3)';
-        p.style.background='rgba(251,191,36,.07)';
+        p.classList.remove('is-error','is-done');
         var logBox=document.getElementById('gen-log');
         if(logBox) logBox.innerHTML='';
         _genSetBar(0);
         _genResetThinking();
         var lbl=document.getElementById('gen-label');
-        if(lbl) lbl.textContent='🔄 Перегенерация с фидбэком...';
+        if(lbl) lbl.textContent='Перегенерация с учётом фидбэка...';
       }}
       _genConnectSSE();
       var gb=document.getElementById('gen-btn');
-      if(gb){{ gb.disabled=true; gb.textContent='⏳ Перегенерация...'; }}
+      if(gb){{ gb.disabled=true; gb.textContent='Перегенерация...'; }}
     }} else alert('Ошибка: '+(d.error||d));
   }}catch(e){{ alert('Ошибка: '+e); }}
-  finally{{ btn.disabled=false; btn.textContent='🔄 Переделать'; }}
+  finally{{ btn.disabled=false; btn.textContent='Переделать'; }}
 }}
 </script>
 
-<div id="feedback-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;align-items:center;justify-content:center">
-  <div style="background:#14122a;border:1px solid var(--border);border-radius:16px;padding:28px;width:min(480px,94vw);position:relative">
-    <h3 style="margin:0 0 6px">🔄 Переделать пост</h3>
-    <p style="color:var(--muted);font-size:.85em;margin:0 0 16px">Напишите что не так — ИИ учтёт фидбэк и сгенерирует новый пост</p>
+<div id="feedback-modal" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:480px;width:94vw">
+    <h3 class="ap-modal-h">Переделать пост</h3>
+    <p class="ap-modal-sub">Опишите, что нужно исправить — ИИ учтёт фидбэк и сгенерирует новый пост</p>
     <input type="hidden" id="feedback-post-id">
     <textarea id="feedback-text" class="form-input" rows="4"
       placeholder="Например: слишком общая тема, хочу про весну и цветы; или: картинка должна быть более минималистичной; или: текст слишком длинный"></textarea>
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
       <button class="btn btn-muted" onclick="closeFeedbackModal()">Отмена</button>
-      <button class="btn btn-primary" onclick="submitFeedback(this)" style="background:rgba(251,191,36,.2);border-color:rgba(251,191,36,.5);color:#fbbf24">🔄 Переделать</button>
+      <button class="btn btn-primary" onclick="submitFeedback(this)">Переделать</button>
     </div>
   </div>
 </div>"""
