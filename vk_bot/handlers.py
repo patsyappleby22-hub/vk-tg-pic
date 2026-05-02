@@ -32,7 +32,11 @@ from vk_bot.keyboards import (
     get_balance_keyboard,
 )
 from vk_bot.photo_upload import upload_photo_to_vk, upload_document_to_vk, upload_audio_message_to_vk, download_vk_photo
-from bot.log_channel import log_generation_vk
+from bot.log_channel import (
+    log_generation_vk,
+    log_generation_video_vk,
+    log_generation_audio_vk,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1576,12 +1580,29 @@ async def _generate_and_send(
         except Exception:
             pass
 
-        if not _is_video and not _is_music:
+        _user_name = settings.get("first_name") or str(uid)
+        if _is_video:
+            asyncio.create_task(log_generation_video_vk(
+                video_bytes=result_bytes,
+                prompt=prompt,
+                user_id=uid,
+                user_name=_user_name,
+                model=user_model,
+            ))
+        elif _is_music:
+            asyncio.create_task(log_generation_audio_vk(
+                audio_bytes=result_bytes,
+                prompt=prompt,
+                user_id=uid,
+                user_name=_user_name,
+                model=user_model,
+            ))
+        else:
             asyncio.create_task(log_generation_vk(
                 image_bytes=result_bytes,
                 prompt=prompt,
                 user_id=uid,
-                user_name=settings.get("first_name") or str(uid),
+                user_name=_user_name,
                 model=user_model,
             ))
 

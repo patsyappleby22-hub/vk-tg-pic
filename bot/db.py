@@ -291,6 +291,93 @@ def init_tables() -> None:
                     created_at   TIMESTAMP DEFAULT NOW()
                 )
             """)
+
+            # ── Web chat panel: sessions, login codes, audit log ─────────
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS bot_web_sessions (
+                    sid         TEXT PRIMARY KEY,
+                    user_id     BIGINT NOT NULL,
+                    platform    TEXT NOT NULL DEFAULT 'tg',
+                    created_at  TIMESTAMP DEFAULT NOW(),
+                    expires_at  TIMESTAMP NOT NULL,
+                    last_seen   TIMESTAMP DEFAULT NOW(),
+                    ip          TEXT NOT NULL DEFAULT '',
+                    ua          TEXT NOT NULL DEFAULT ''
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_web_sessions_user
+                ON bot_web_sessions (user_id, expires_at DESC)
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS bot_web_login_codes (
+                    id          SERIAL PRIMARY KEY,
+                    code_hash   TEXT NOT NULL,
+                    platform    TEXT NOT NULL DEFAULT 'tg',
+                    user_id     BIGINT NOT NULL,
+                    attempts    INT NOT NULL DEFAULT 0,
+                    created_at  TIMESTAMP DEFAULT NOW(),
+                    expires_at  TIMESTAMP NOT NULL,
+                    used        BOOLEAN NOT NULL DEFAULT FALSE,
+                    ip          TEXT NOT NULL DEFAULT ''
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_web_login_codes_user
+                ON bot_web_login_codes (user_id, platform, created_at DESC)
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS bot_web_login_log (
+                    id          SERIAL PRIMARY KEY,
+                    user_id     BIGINT,
+                    platform    TEXT NOT NULL DEFAULT 'tg',
+                    event       TEXT NOT NULL DEFAULT '',
+                    ip          TEXT NOT NULL DEFAULT '',
+                    ua          TEXT NOT NULL DEFAULT '',
+                    detail      TEXT NOT NULL DEFAULT '',
+                    created_at  TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_web_login_log_user
+                ON bot_web_login_log (user_id, created_at DESC)
+            """)
+
+            # ── Web chats and messages ──────────────────────────────────
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS bot_web_chats (
+                    id          SERIAL PRIMARY KEY,
+                    user_id     BIGINT NOT NULL,
+                    platform    TEXT NOT NULL DEFAULT 'tg',
+                    title       TEXT NOT NULL DEFAULT 'Новый чат',
+                    archived    BOOLEAN NOT NULL DEFAULT FALSE,
+                    created_at  TIMESTAMP DEFAULT NOW(),
+                    updated_at  TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_web_chats_user
+                ON bot_web_chats (user_id, archived, updated_at DESC)
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS bot_web_messages (
+                    id              SERIAL PRIMARY KEY,
+                    chat_id         INT NOT NULL REFERENCES bot_web_chats(id) ON DELETE CASCADE,
+                    role            TEXT NOT NULL DEFAULT 'user',
+                    mode            TEXT NOT NULL DEFAULT 'chat',
+                    content_text    TEXT NOT NULL DEFAULT '',
+                    model           TEXT NOT NULL DEFAULT '',
+                    file_id         TEXT NOT NULL DEFAULT '',
+                    file_unique_id  TEXT NOT NULL DEFAULT '',
+                    file_kind       TEXT NOT NULL DEFAULT '',
+                    extras_json     TEXT NOT NULL DEFAULT '{}',
+                    created_at      TIMESTAMP DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_web_messages_chat
+                ON bot_web_messages (chat_id, id)
+            """)
         logger.info("db: tables ready (PostgreSQL)")
     except Exception:
         logger.exception("db: failed to init tables")
@@ -1838,3 +1925,458 @@ def broadcast_template_delete(tid: int) -> None:
             cur.execute("DELETE FROM bot_broadcast_templates WHERE id=%s", (tid,))
     except Exception:
         pass
+
+
+# ── Web chat panel: sessions ────────────────────────────────────────────────
+
+def web_session_create(sid: str, user_id: int, platform: str,
+                       expires_at_iso: str, ip: str, ua: str) -> None:
+    if not _DATABASE_URL:
+        return
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO bot_web_sessions (sid, user_id, platform, "
+                "expires_at, ip, ua) VALUES (%s, %s, %s, %s, %s, %s) "
+                "ON CONFLICT (sid) DO NOTHING",
+                (sid, user_id, platform, expires_at_iso, ip[:64], ua[:200]),
+            )
+    except Exception:
+        logger.exception("db: failed to create web session")
+
+
+def web_session_get(sid: str) -> dict | None:
+    if not _DATABASE_URL or not sid:
+        return None
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT sid, user_id, platform, expires_at, ip, ua "
+                "FROM bot_web_sessions "
+                "WHERE sid=%s AND expires_at > NOW()",
+                (sid,),
+            )
+            row = cur.fetchone()
+        if not row:
+            return None
+        return {
+            "sid": row[0], "user_id": int(row[1]), "platform": row[2],
+            "expires_at": row[3].isoformat() if row[3] else "",
+            "ip": row[4], "ua": row[5],
+        }
+    except Exception:
+        return None
+
+
+def web_session_touch(sid: str) -> None:
+    if not _DATABASE_URL or not sid:
+        return
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("UPDATE bot_web_sessions SET last_seen=NOW() WHERE sid=%s", (sid,))
+    except Exception:
+        pass
+
+
+def web_session_delete(sid: str) -> None:
+    if not _DATABASE_URL or not sid:
+        return
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM bot_web_sessions WHERE sid=%s", (sid,))
+    except Exception:
+        pass
+
+
+def web_session_cleanup_expired() -> int:
+    if not _DATABASE_URL:
+        return 0
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM bot_web_sessions WHERE expires_at < NOW()")
+            return cur.rowcount or 0
+    except Exception:
+        return 0
+
+
+def web_session_list_user(user_id: int) -> list[dict]:
+    if not _DATABASE_URL:
+        return []
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT sid, platform, created_at, expires_at, last_seen, ip, ua "
+                "FROM bot_web_sessions WHERE user_id=%s AND expires_at > NOW() "
+                "ORDER BY last_seen DESC",
+                (user_id,),
+            )
+            rows = cur.fetchall()
+        return [{
+            "sid": r[0], "platform": r[1],
+            "created_at": r[2].isoformat() if r[2] else "",
+            "expires_at": r[3].isoformat() if r[3] else "",
+            "last_seen": r[4].isoformat() if r[4] else "",
+            "ip": r[5], "ua": r[6],
+        } for r in rows]
+    except Exception:
+        return []
+
+
+# ── Web chat panel: login codes ──────────────────────────────────────────────
+
+def web_code_create(code_hash: str, user_id: int, platform: str,
+                    expires_at_iso: str, ip: str) -> int | None:
+    if not _DATABASE_URL:
+        return None
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO bot_web_login_codes "
+                "(code_hash, user_id, platform, expires_at, ip) "
+                "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                (code_hash, user_id, platform, expires_at_iso, ip[:64]),
+            )
+            row = cur.fetchone()
+        return int(row[0]) if row else None
+    except Exception:
+        logger.exception("db: failed to create web login code")
+        return None
+
+
+def web_code_recent_count(user_id: int, platform: str, since_minutes: int) -> int:
+    if not _DATABASE_URL:
+        return 0
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) FROM bot_web_login_codes "
+                "WHERE user_id=%s AND platform=%s "
+                "AND created_at >= NOW() - %s::interval",
+                (user_id, platform, f"{int(since_minutes)} minutes"),
+            )
+            row = cur.fetchone()
+        return int(row[0]) if row else 0
+    except Exception:
+        return 0
+
+
+def web_code_get_active(user_id: int, platform: str) -> dict | None:
+    """Return the latest unused, non-expired login code for the user."""
+    if not _DATABASE_URL:
+        return None
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, code_hash, attempts FROM bot_web_login_codes "
+                "WHERE user_id=%s AND platform=%s AND used=FALSE "
+                "AND expires_at > NOW() "
+                "ORDER BY id DESC LIMIT 1",
+                (user_id, platform),
+            )
+            row = cur.fetchone()
+        if not row:
+            return None
+        return {"id": int(row[0]), "code_hash": row[1], "attempts": int(row[2])}
+    except Exception:
+        return None
+
+
+def web_code_increment_attempt(code_id: int) -> int:
+    if not _DATABASE_URL:
+        return 0
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE bot_web_login_codes SET attempts=attempts+1 "
+                "WHERE id=%s RETURNING attempts",
+                (code_id,),
+            )
+            row = cur.fetchone()
+        return int(row[0]) if row else 0
+    except Exception:
+        return 0
+
+
+def web_code_mark_used(code_id: int) -> None:
+    if not _DATABASE_URL:
+        return
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("UPDATE bot_web_login_codes SET used=TRUE WHERE id=%s", (code_id,))
+    except Exception:
+        pass
+
+
+def web_login_log(user_id: int | None, platform: str, event: str,
+                  ip: str, ua: str, detail: str = "") -> None:
+    if not _DATABASE_URL:
+        return
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO bot_web_login_log "
+                "(user_id, platform, event, ip, ua, detail) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
+                (user_id, platform, event[:32], ip[:64], ua[:200], detail[:500]),
+            )
+    except Exception:
+        pass
+
+
+# ── Web chat panel: chats and messages ──────────────────────────────────────
+
+def web_chat_create(user_id: int, platform: str, title: str = "Новый чат") -> int | None:
+    if not _DATABASE_URL:
+        return None
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO bot_web_chats (user_id, platform, title) "
+                "VALUES (%s, %s, %s) RETURNING id",
+                (user_id, platform, title[:120]),
+            )
+            row = cur.fetchone()
+        return int(row[0]) if row else None
+    except Exception:
+        logger.exception("db: failed to create web chat")
+        return None
+
+
+def web_chat_list(user_id: int, archived: bool = False, limit: int = 50) -> list[dict]:
+    if not _DATABASE_URL:
+        return []
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, title, archived, created_at, updated_at "
+                "FROM bot_web_chats WHERE user_id=%s AND archived=%s "
+                "ORDER BY updated_at DESC LIMIT %s",
+                (user_id, archived, limit),
+            )
+            rows = cur.fetchall()
+        return [{
+            "id": int(r[0]), "title": r[1], "archived": bool(r[2]),
+            "created_at": r[3].isoformat() if r[3] else "",
+            "updated_at": r[4].isoformat() if r[4] else "",
+        } for r in rows]
+    except Exception:
+        return []
+
+
+def web_chat_get(chat_id: int, user_id: int) -> dict | None:
+    if not _DATABASE_URL:
+        return None
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, user_id, platform, title, archived, created_at, updated_at "
+                "FROM bot_web_chats WHERE id=%s AND user_id=%s",
+                (chat_id, user_id),
+            )
+            row = cur.fetchone()
+        if not row:
+            return None
+        return {
+            "id": int(row[0]), "user_id": int(row[1]), "platform": row[2],
+            "title": row[3], "archived": bool(row[4]),
+            "created_at": row[5].isoformat() if row[5] else "",
+            "updated_at": row[6].isoformat() if row[6] else "",
+        }
+    except Exception:
+        return None
+
+
+def web_chat_count(user_id: int, archived: bool = False) -> int:
+    if not _DATABASE_URL:
+        return 0
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) FROM bot_web_chats WHERE user_id=%s AND archived=%s",
+                (user_id, archived),
+            )
+            row = cur.fetchone()
+        return int(row[0]) if row else 0
+    except Exception:
+        return 0
+
+
+def web_chat_update_title(chat_id: int, user_id: int, title: str) -> bool:
+    if not _DATABASE_URL:
+        return False
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE bot_web_chats SET title=%s, updated_at=NOW() "
+                "WHERE id=%s AND user_id=%s",
+                (title[:120], chat_id, user_id),
+            )
+            return (cur.rowcount or 0) > 0
+    except Exception:
+        return False
+
+
+def web_chat_set_archived(chat_id: int, user_id: int, archived: bool) -> bool:
+    if not _DATABASE_URL:
+        return False
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE bot_web_chats SET archived=%s, updated_at=NOW() "
+                "WHERE id=%s AND user_id=%s",
+                (archived, chat_id, user_id),
+            )
+            return (cur.rowcount or 0) > 0
+    except Exception:
+        return False
+
+
+def web_chat_delete(chat_id: int, user_id: int) -> bool:
+    if not _DATABASE_URL:
+        return False
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM bot_web_chats WHERE id=%s AND user_id=%s",
+                (chat_id, user_id),
+            )
+            return (cur.rowcount or 0) > 0
+    except Exception:
+        return False
+
+
+def web_chat_touch(chat_id: int) -> None:
+    if not _DATABASE_URL:
+        return
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE bot_web_chats SET updated_at=NOW() WHERE id=%s",
+                (chat_id,),
+            )
+    except Exception:
+        pass
+
+
+def web_msg_add(chat_id: int, role: str, mode: str, content_text: str,
+                model: str = "", file_id: str = "", file_unique_id: str = "",
+                file_kind: str = "", extras_json: str = "{}") -> int | None:
+    if not _DATABASE_URL:
+        return None
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO bot_web_messages "
+                "(chat_id, role, mode, content_text, model, file_id, "
+                "file_unique_id, file_kind, extras_json) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                (chat_id, role[:16], mode[:16], content_text, model[:80],
+                 file_id, file_unique_id, file_kind[:16], extras_json),
+            )
+            row = cur.fetchone()
+            cur.execute(
+                "UPDATE bot_web_chats SET updated_at=NOW() WHERE id=%s",
+                (chat_id,),
+            )
+        return int(row[0]) if row else None
+    except Exception:
+        logger.exception("db: failed to add web message")
+        return None
+
+
+def web_msg_list(chat_id: int, limit: int = 200, offset: int = 0) -> list[dict]:
+    if not _DATABASE_URL:
+        return []
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, role, mode, content_text, model, file_id, "
+                "file_unique_id, file_kind, extras_json, created_at "
+                "FROM bot_web_messages WHERE chat_id=%s "
+                "ORDER BY id ASC LIMIT %s OFFSET %s",
+                (chat_id, limit, offset),
+            )
+            rows = cur.fetchall()
+        out = []
+        for r in rows:
+            try:
+                extras = json.loads(r[8]) if r[8] else {}
+            except Exception:
+                extras = {}
+            out.append({
+                "id": int(r[0]), "role": r[1], "mode": r[2],
+                "content_text": r[3], "model": r[4],
+                "file_id": r[5], "file_unique_id": r[6],
+                "file_kind": r[7], "extras": extras,
+                "created_at": r[9].isoformat() if r[9] else "",
+            })
+        return out
+    except Exception:
+        return []
+
+
+def web_msg_count(chat_id: int) -> int:
+    if not _DATABASE_URL:
+        return 0
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM bot_web_messages WHERE chat_id=%s", (chat_id,))
+            row = cur.fetchone()
+        return int(row[0]) if row else 0
+    except Exception:
+        return 0
+
+
+def web_msg_recent(chat_id: int, limit: int = 30) -> list[dict]:
+    """Return the last N messages of a chat in chronological order."""
+    if not _DATABASE_URL:
+        return []
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, role, mode, content_text, model, file_id, "
+                "file_kind, extras_json, created_at "
+                "FROM bot_web_messages WHERE chat_id=%s "
+                "ORDER BY id DESC LIMIT %s",
+                (chat_id, limit),
+            )
+            rows = list(reversed(cur.fetchall()))
+        out = []
+        for r in rows:
+            try:
+                extras = json.loads(r[7]) if r[7] else {}
+            except Exception:
+                extras = {}
+            out.append({
+                "id": int(r[0]), "role": r[1], "mode": r[2],
+                "content_text": r[3], "model": r[4],
+                "file_id": r[5], "file_kind": r[6], "extras": extras,
+                "created_at": r[8].isoformat() if r[8] else "",
+            })
+        return out
+    except Exception:
+        return []

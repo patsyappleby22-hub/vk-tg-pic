@@ -170,6 +170,9 @@ async def main():
     # Give the admin panel access to live slot statuses
     from bot.web_admin import set_vertex_service
     set_vertex_service(vertex_service)
+    # Same for the user-facing web chat
+    from bot.web_chat import set_vertex_service as _wc_set
+    _wc_set(vertex_service)
 
     tasks = []
 

@@ -415,4 +415,6 @@ def create_web_app() -> web.Application:
     register_admin_routes(app)
     from bot.web_broadcasts import register_broadcast_routes
     register_broadcast_routes(app)
+    from bot.web_chat import register_chat_routes
+    register_chat_routes(app)
     return app

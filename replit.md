@@ -12,6 +12,7 @@ An asynchronous multi-platform bot (Telegram + VK) for AI image, video, and musi
 - **Payment (FreeKassa)**: `bot/services/freekassa_service.py` — URL-based payment for VK
 - **Payment (Pally)**: `bot/services/payment_service.py` — Pally.info API for Telegram
 - **Web pages**: `web/templates/` — landing (index.html), success.html, fail.html (+ fallback in code)
+- **Web chat**: `bot/web_chat.py` — user-facing single-page chat UI at `/chat` (Russian, dark/lavender theme, no emoji). Login by 6-digit code delivered via TG bot or VK community message; HMAC-signed cookie session (30 d). Modes: chat (Gemini/Grok), image, video, music. Reuses bot credit balance (`reserve/confirm/release_credits`) and unified log-channel posting. Per-user chats + messages persisted in `bot_web_chats` / `bot_web_messages`; media files served through `/chat/api/media/<id>` with on-disk LRU cache in `/tmp/web_media_cache`.
 - **Webhooks**: `bot/web_server.py` — FreeKassa + Pally webhook handlers with signature verification, idempotency
 - **Config**: `bot/config.py` — pydantic-settings from environment variables
 - **Database**: `bot/db.py` — PostgreSQL persistence (users, API keys, SA files, payments, key history)
@@ -35,6 +36,8 @@ An asynchronous multi-platform bot (Telegram + VK) for AI image, video, and musi
 
 ## Other Secrets
 - `DATABASE_URL` — PostgreSQL connection string
+- `LOG_CHANNEL_ID` — Telegram channel id for generation log/media re-hosting (used by web chat too)
+- `WEB_SESSION_SECRET` — optional; HMAC key for `/chat` session cookies (falls back to a key derived from `ADMIN_PASSWORD`)
 
 ## Running
 - Workflow: "Start application" runs `python start_all.py`
