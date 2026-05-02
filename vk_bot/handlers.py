@@ -483,7 +483,7 @@ def register_handlers(bot: Bot, vertex_service: VertexAIService) -> None:
 
     @bot.on.message(text=["/info", "info", "Info", "📁 Документы"])
     async def cmd_info(message: Message):
-        BASE = "https://www.vk-tg-picgenai.ru"
+        from vk_bot.keyboards import _WEB_CHAT_BASE as BASE
         text = (
             "📁 Правовые документы и условия использования:\n\n"
             "Вы можете ознакомиться с нашими документами по ссылкам ниже:\n\n"

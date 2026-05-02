@@ -1,6 +1,25 @@
 from __future__ import annotations
 
+import os as _os
+
 from vkbottle import Keyboard, KeyboardButtonColor, Text, Callback, OpenLink
+
+
+def _resolve_web_base() -> str:
+    """Mirror of bot.handlers.start._resolve_web_base — kept local to avoid
+    a circular import. Picks Replit dev domain when running locally.
+    """
+    override = (_os.getenv("WEB_CHAT_BASE") or "").strip().rstrip("/")
+    if override:
+        return override
+    if not _os.getenv("REPLIT_DEPLOYMENT"):
+        dev = (_os.getenv("REPLIT_DEV_DOMAIN") or "").strip()
+        if dev:
+            return f"https://{dev}"
+    return "https://www.vk-tg-picgenai.ru"
+
+
+_WEB_CHAT_BASE = _resolve_web_base()
 
 from bot.user_settings import (
     get_user_settings, AVAILABLE_MODELS, SEND_MODES, RESOLUTIONS, THINKING_LEVELS,
@@ -36,7 +55,7 @@ def get_web_chat_inline_keyboard(uid: int) -> str:
     kb = Keyboard(inline=True)
     kb.add(OpenLink(
         "🌐 Открыть веб-чат",
-        link=f"https://www.vk-tg-picgenai.ru/chat?platform=vk&uid={uid}",
+        link=f"{_WEB_CHAT_BASE}/chat?platform=vk&uid={uid}",
     ))
     return kb.get_json()
 

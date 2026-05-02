@@ -36,7 +36,26 @@ router = Router(name="start")
 BTN_BALANCE = "💰 Баланс"
 
 
-_WEB_CHAT_BASE = "https://www.vk-tg-picgenai.ru"
+import os as _os
+
+
+def _resolve_web_base() -> str:
+    """Pick the dev domain when running in Replit dev, otherwise prod.
+
+    Order: explicit `WEB_CHAT_BASE` env override → Replit dev domain
+    (when not in a deployed env) → production www domain.
+    """
+    override = (_os.getenv("WEB_CHAT_BASE") or "").strip().rstrip("/")
+    if override:
+        return override
+    if not _os.getenv("REPLIT_DEPLOYMENT"):
+        dev = (_os.getenv("REPLIT_DEV_DOMAIN") or "").strip()
+        if dev:
+            return f"https://{dev}"
+    return "https://www.vk-tg-picgenai.ru"
+
+
+_WEB_CHAT_BASE = _resolve_web_base()
 
 
 def _web_chat_inline_kb(uid: int) -> InlineKeyboardMarkup:
@@ -181,7 +200,7 @@ async def cmd_balance(message: Message) -> None:
 
 @router.message(Command("info"))
 async def cmd_info(message: Message) -> None:
-    BASE = "https://www.vk-tg-picgenai.ru"
+    BASE = _WEB_CHAT_BASE
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📁 ПУБЛИЧНАЯ ОФЕРТА", url=f"{BASE}/offer")],
         [InlineKeyboardButton(text="📁 Политика обработки данных", url=f"{BASE}/privacy")],
