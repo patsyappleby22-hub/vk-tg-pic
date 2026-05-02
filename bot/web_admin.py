@@ -1199,7 +1199,7 @@ async def handle_user_detail(request: web.Request) -> web.Response:
   </div>
   <div class="detail-card">
     <div class="detail-card-label">Генераций</div>
-    <div class="detail-card-value" style="color:var(--accent2)">{gens}</div>
+    <div class="detail-card-value" style="color:var(--accent-bright)">{gens}</div>
   </div>
   <div class="detail-card">
     <div class="detail-card-label">Итого оплачено</div>
@@ -1751,12 +1751,9 @@ async def handle_api_keys(request: web.Request) -> web.Response:
         key_rows = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:28px">Ключей нет — добавьте первый ниже</td></tr>'
 
     content = f"""
-<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
-  <h1 class="page-title" style="margin:0">🔑 API ключи</h1>
-  <div style="display:flex;align-items:center;gap:8px">
-    <span id="live-dot" style="width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block"></span>
-    <span id="live-label" style="font-size:.8em;color:var(--muted)">подключение…</span>
-  </div>
+<div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:-12px 0 18px">
+  <span id="live-dot" style="width:7px;height:7px;border-radius:50%;background:var(--muted);display:inline-block"></span>
+  <span id="live-label" style="font-size:.78em;color:var(--muted2);letter-spacing:.04em">подключение…</span>
 </div>
 {msg_html}
 
@@ -1764,7 +1761,7 @@ async def handle_api_keys(request: web.Request) -> web.Response:
 <div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr));margin-bottom:24px">
   <div class="card"><div class="card-label">Всего ключей</div><div class="card-value purple">{total}</div></div>
   <div class="card"><div class="card-label">🟢 Активны</div><div class="card-value green" id="cnt-ok">—</div></div>
-  <div class="card"><div class="card-label">⚡ В работе</div><div class="card-value" style="color:var(--accent2)" id="cnt-active">—</div></div>
+  <div class="card"><div class="card-label">⚡ В работе</div><div class="card-value" style="color:var(--accent-bright)" id="cnt-active">—</div></div>
   <div class="card"><div class="card-label">⏳ Кулдаун</div><div class="card-value yellow" id="cnt-cool">—</div></div>
   <div class="card"><div class="card-label">🔴 Ошибка</div><div class="card-value red" id="cnt-err">—</div></div>
 </div>
@@ -1923,7 +1920,7 @@ async function poll() {{
       // Active requests cell
       if (s.active_requests > 0) {{
         const model = modelShort(s.last_model);
-        act.innerHTML = `<span style="color:var(--accent2);font-weight:600">⚡ ${{s.active_requests}} шт</span>`
+        act.innerHTML = `<span style="color:var(--accent-bright);font-weight:600">⚡ ${{s.active_requests}} шт</span>`
                       + (model ? ` <span style="color:var(--muted)">[${{model}}]</span>` : '');
       }} else {{
         const ago = fmtAgo(s.last_used_ago);
@@ -2301,7 +2298,7 @@ def _autopub_status_badge(status: str) -> str:
         "draft":      ("var(--muted)",   "⏳ Черновик"),
         "approved":   ("var(--green)",   "✅ Одобрен"),
         "publishing": ("var(--yellow)",  "📤 Публикуется"),
-        "published":  ("var(--accent2)", "📣 Опубликован"),
+        "published":  ("var(--accent-bright)", "📣 Опубликован"),
         "error":      ("var(--red)",     "❌ Ошибка"),
         "rejected":   ("var(--red)",     "🚫 Отклонён"),
     }
@@ -2539,9 +2536,9 @@ async def handle_autopub(request: web.Request) -> web.Response:
             thumb = f'<img src="{img_src}" loading="lazy" style="width:44px;height:44px;object-fit:cover;border-radius:6px;cursor:pointer" onclick="openLightboxUrl(\'{img_src}\')">' if img_src else '<div style="width:44px;height:44px;border-radius:6px;background:rgba(255,255,255,.05)"></div>'
             topic = p.get("topic","").replace("<","&lt;")[:55]
             dt_pub = _msk(p.get("published_at","")) or _msk(p.get("created_at",""))
-            tg_link = f'<a href="https://t.me/c/{p.get("tg_msg_id","")}" target="_blank" style="color:var(--accent2);font-size:.82em">📩 TG</a>' if p.get("tg_msg_id") else ""
+            tg_link = f'<a href="https://t.me/c/{p.get("tg_msg_id","")}" target="_blank" style="color:var(--accent-bright);font-size:.82em">📩 TG</a>' if p.get("tg_msg_id") else ""
             vk_link = f'<a href="https://vk.com/wall-{p.get("vk_post_id","")}" target="_blank" style="color:var(--accent);font-size:.82em">🅥 VK</a>' if p.get("vk_post_id") else ""
-            tg_td = f'<a href="https://t.me/c/{p.get("tg_msg_id","")}" target="_blank" style="color:var(--accent2)">TG</a>' if p.get("tg_msg_id") else "—"
+            tg_td = f'<a href="https://t.me/c/{p.get("tg_msg_id","")}" target="_blank" style="color:var(--accent-bright)">TG</a>' if p.get("tg_msg_id") else "—"
             vk_td = f'<a href="https://vk.com/wall-{p.get("vk_post_id","")}" target="_blank" style="color:var(--accent)">VK</a>' if p.get("vk_post_id") else "—"
             err = f'<span style="color:var(--red);font-size:.75em">{p.get("error_text","")[:60]}</span>' if p.get("error_text") else ""
             hist_rows += (
@@ -2589,9 +2586,8 @@ async def handle_autopub(request: web.Request) -> web.Response:
 {alert_html}
 
 <div class="autopub-header">
-  <h2 style="margin:0;font-size:1.35em">📣 Автопостинг</h2>
   {enabled_badge}
-  <span style="color:var(--muted);font-size:.83em">Опубликовано: {posts_today} / {settings.get('posts_per_day',3)}</span>
+  <span style="color:var(--muted2);font-size:.82em;letter-spacing:.02em">Опубликовано сегодня: {posts_today} / {settings.get('posts_per_day',3)}</span>
 </div>
 
 <div class="autopub-tabs">
