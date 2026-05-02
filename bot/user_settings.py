@@ -27,7 +27,7 @@ FREE_CREDITS = 5
 
 _PERSISTENT_KEYS = {
     "model", "send_mode", "resolution", "aspect_ratio", "thinking_level",
-    "first_name", "generations_count", "platform",
+    "first_name", "username", "generations_count", "platform",
     "credits", "blocked",
     "video_duration", "video_resolution", "video_aspect_ratio",
     "video_audio", "video_task",
@@ -451,6 +451,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "aspect_ratio": "1:1",
     "thinking_level": "low",
     "first_name": "",
+    "username": "",
     "generations_count": 0,
     "platform": "",
     "last_menu_message_id": None,
@@ -586,6 +587,51 @@ def get_user_settings(user_id: int) -> dict[str, Any]:
 
 def save_user_settings(user_id: int) -> None:
     _save_user(user_id)
+
+
+def set_tg_identity(user_id: int, first_name: str = "", username: str = "",
+                    platform: str = "tg") -> None:
+    """Persist a user's TG/VK identity (first_name + @username) on every
+    interaction so the web-chat login flow can resolve `@username` →
+    `user_id` locally. The Telegram Bot API does not support resolving
+    arbitrary user @usernames into IDs, so we maintain this mapping
+    ourselves.
+
+    No-op when nothing changed — avoids needless DB writes.
+    """
+    s = get_user_settings(user_id)
+    changed = False
+    if first_name and s.get("first_name") != first_name:
+        s["first_name"] = first_name
+        changed = True
+    # Telegram usernames are stored lowercased so lookups can be done in
+    # a case-insensitive way without scanning twice.
+    uname_norm = (username or "").lstrip("@").lower().strip()
+    if uname_norm and s.get("username") != uname_norm:
+        s["username"] = uname_norm
+        changed = True
+    if platform and not s.get("platform"):
+        s["platform"] = platform
+        changed = True
+    if changed:
+        _save_user(user_id)
+
+
+def find_user_id_by_username(username: str, platform: str = "tg") -> int | None:
+    """Look up a previously-seen user_id by their @username. Returns
+    None when no match is found. Case-insensitive. Used by the web-chat
+    login flow when the visitor types `@handle` instead of a numeric ID."""
+    if not username:
+        return None
+    norm = username.lstrip("@").lower().strip()
+    if not norm:
+        return None
+    for uid, s in user_settings.items():
+        if (s.get("username") or "").lower() == norm:
+            # Optional platform filter — empty platform means accept any.
+            if not platform or not s.get("platform") or s.get("platform") == platform:
+                return uid
+    return None
 
 
 def increment_generations(

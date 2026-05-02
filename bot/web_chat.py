@@ -326,6 +326,13 @@ async def _resolve_tg_user(identifier: str) -> tuple[int | None, str]:
 
     Requires the user to have started the bot at least once — otherwise
     we cannot DM them with a code.
+
+    Username resolution: the Telegram Bot API has no public method that
+    converts an arbitrary user @handle into a numeric user_id. We
+    therefore maintain a local map (populated by IdentityMiddleware on
+    every message/callback) and look up @usernames there first. The
+    `get_chat("@username")` fallback is kept for the rare case where
+    the bot has met the user but their stored handle is stale.
     """
     from bot.notify import _tg_bot
     if _tg_bot is None:
@@ -346,12 +353,32 @@ async def _resolve_tg_user(identifier: str) -> tuple[int | None, str]:
             return None, "Не удалось найти пользователя. Сначала напишите боту /start в Telegram."
     if not _USERNAME_RE.match(ident):
         return None, "Неверный username"
+    # Local lookup first — populated automatically every time the user
+    # sends a message or taps a button in the bot.
+    from bot.user_settings import find_user_id_by_username
+    local_uid = find_user_id_by_username(ident, platform="tg")
+    if local_uid:
+        try:
+            # Sanity check that the bot can still reach the user (e.g.
+            # they haven't blocked the bot since we last saw them).
+            await _tg_bot.get_chat(local_uid)
+            return int(local_uid), ""
+        except Exception as exc:
+            logger.info("TG local-resolved @%s → %s but get_chat failed: %s",
+                        ident, local_uid, exc)
+            return None, ("Не удалось доставить код. Откройте бот в Telegram "
+                          "и нажмите /start, затем попробуйте снова.")
+    # Last-resort: ask Telegram. This rarely succeeds for plain user
+    # @usernames (works mainly for channels/supergroups), but kept as a
+    # safety net.
     try:
         chat = await _tg_bot.get_chat("@" + ident)
         return int(chat.id), ""
     except Exception as exc:
         logger.info("TG resolve by username @%s failed: %s", ident, exc)
-        return None, "Не удалось найти пользователя. Сначала напишите боту /start в Telegram."
+        return None, ("Этот username не найден. Откройте бот в Telegram "
+                      "и нажмите /start — после этого вход по @username "
+                      "заработает.")
 
 
 async def _resolve_vk_user(identifier: str) -> tuple[int | None, str]:

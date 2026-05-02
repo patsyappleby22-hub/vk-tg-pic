@@ -50,6 +50,7 @@ from bot.handlers import creative as creative_handler
 from bot.handlers import image as image_handler
 from bot.handlers import start as start_handler
 from bot.middlewares.album_middleware import AlbumMiddleware
+from bot.middlewares.identity_middleware import IdentityMiddleware
 from bot.middlewares.logging_middleware import LoggingMiddleware
 from bot.services.vertex_ai_service import VertexAIService
 from bot.user_settings import load_settings
@@ -104,6 +105,11 @@ async def main() -> None:
 
     # ── Middlewares ───────────────────────────────────────────────────────────
     dp.update.outer_middleware(LoggingMiddleware())
+    # Capture sender first_name + @username on every message/callback so the
+    # web-chat login flow can resolve `@username → user_id` locally (the
+    # Bot API has no public way to do that lookup).
+    dp.message.outer_middleware(IdentityMiddleware())
+    dp.callback_query.outer_middleware(IdentityMiddleware())
     dp.message.middleware(AlbumMiddleware())
 
     # ── Dependency injection ──────────────────────────────────────────────────
