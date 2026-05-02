@@ -2429,17 +2429,20 @@ a:hover{opacity:.8}
     border:1px solid rgba(155,138,251,.18);font-size:.88em;
     color:var(--text);text-align:center}
 
-  /* Compact mode-icon + credits chip, pinned to the right edge of the
-     input card so it never overlaps the textarea placeholder. Tap to
-     open the settings drawer. The outer .mobile-status is just a flex
-     row used for right-alignment; the actual visible pill is .ms-pill. */
-  .mobile-status{display:flex;justify-content:flex-end;
-    margin:0 0 6px;padding:0;background:none;border:none}
+  /* Compact mode-icon + credits chip. It floats absolutely above the
+     input card so it doesn't claim its own horizontal row — the
+     textarea below keeps the full width of the card. Pinned to the
+     very right edge of the input strip. Tap to open settings. */
+  .input-wrap{padding-top:32px;position:relative}
+  .mobile-status{position:absolute;top:6px;right:12px;
+    margin:0;padding:0;background:none;border:none;z-index:2;
+    pointer-events:none}
   .mobile-status:empty{display:none}
   .ms-pill{display:inline-flex;align-items:center;gap:6px;
     padding:3px 9px;font-size:.72em;color:var(--muted2);
     background:var(--surface2);border:1px solid var(--border);
     border-radius:999px;line-height:1.4;cursor:pointer;
+    pointer-events:auto;
     transition:border-color .15s,color .15s}
   .ms-pill:hover{border-color:var(--border-md);color:var(--text)}
   .ms-pill .ms-icon{width:13px;height:13px;flex-shrink:0;
@@ -2449,8 +2452,7 @@ a:hover{opacity:.8}
   .ms-pill .ms-cost{color:var(--accent-bright);font-weight:500;
     white-space:nowrap}
   .ms-pill .ms-cost b{font-weight:600}
-  /* Slightly tighter input-card on mobile so the chip + textarea fit
-     comfortably without the placeholder getting clipped. */
+  /* Slightly tighter input-card on mobile. */
   .input-card{padding:8px 10px 6px}
 }
 
