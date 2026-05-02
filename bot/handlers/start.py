@@ -14,6 +14,7 @@ from bot.keyboards import (
     BTN_MENU,
     BTN_STOP,
     BTN_SETTINGS,
+    BTN_WEB_CHAT,
     get_persistent_keyboard,
     get_settings_summary_keyboard,
     get_balance_keyboard,
@@ -175,6 +176,33 @@ async def cmd_info(message: Message) -> None:
         parse_mode="HTML",
         reply_markup=kb,
     )
+
+
+_WEB_CHAT_BASE = "https://www.vk-tg-picgenai.ru"
+
+
+@router.message(Command("webchat"))
+@router.message(lambda m: m.text == BTN_WEB_CHAT)
+async def cmd_web_chat(message: Message) -> None:
+    """Issue a fresh login code and DM the user a prefilled web-chat link."""
+    from bot.web_chat import issue_login_code
+
+    uid = message.from_user.id
+    code, err = await issue_login_code(uid, "tg")
+    if not code:
+        await message.answer(err or "Не удалось создать код. Попробуйте позже.")
+        return
+
+    link = f"{_WEB_CHAT_BASE}/chat?platform=tg&uid={uid}"
+    await message.answer(
+        "🌐 <b>Веб-версия чата PicGenAI</b>\n\n"
+        f"1. Откройте по ссылке: {link}\n"
+        "2. Введите шестизначный код ниже\n\n"
+        "Код действует 5 минут. Кредиты и история — общие с этим ботом.",
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
+    await message.answer(f"<code>{code}</code>", parse_mode="HTML")
 
 
 @router.message(Command("cancel"))

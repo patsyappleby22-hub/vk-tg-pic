@@ -21,6 +21,7 @@ BTN_STOP = "⛔ Стоп"
 BTN_SETTINGS = "⚙️ Настройки"
 BTN_CHAT = "💬 Чат"
 BTN_BALANCE = "💰 Баланс"
+BTN_WEB_CHAT = "🌐 Веб-чат"
 
 ASPECT_RATIOS: dict[str, str] = {
     "1:1": "1:1 (Квадрат)",
@@ -41,7 +42,7 @@ def get_persistent_keyboard() -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text=BTN_MENU), KeyboardButton(text=BTN_CHAT)],
             [KeyboardButton(text=BTN_SETTINGS), KeyboardButton(text=BTN_BALANCE)],
-            [KeyboardButton(text=BTN_STOP)],
+            [KeyboardButton(text=BTN_WEB_CHAT), KeyboardButton(text=BTN_STOP)],
         ],
         resize_keyboard=True,
         is_persistent=True,

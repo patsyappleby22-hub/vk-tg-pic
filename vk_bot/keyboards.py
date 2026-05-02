@@ -20,6 +20,7 @@ def get_persistent_keyboard() -> str:
     kb.add(Text("⚙️ Настройки"), color=KeyboardButtonColor.SECONDARY)
     kb.add(Text("💰 Баланс"), color=KeyboardButtonColor.POSITIVE)
     kb.row()
+    kb.add(Text("🌐 Веб-чат"), color=KeyboardButtonColor.PRIMARY)
     kb.add(Text("⛔ Стоп"), color=KeyboardButtonColor.NEGATIVE)
     return kb.get_json()
 

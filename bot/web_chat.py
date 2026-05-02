@@ -421,6 +421,49 @@ def _hash_code(user_id: int, platform: str, code: str) -> str:
     ).hexdigest()
 
 
+# ─── Public helper for bot menus ─────────────────────────────────────────────
+# When a user taps the "Веб-чат" button inside the TG or VK bot, we want the
+# bot to generate the login code itself (so the user does not have to type
+# their own ID) and DM both the code and the prefilled link. This helper is
+# imported by `bot/handlers/start.py` and `vk_bot/handlers.py`.
+
+async def issue_login_code(
+    user_id: int, platform: str, ip: str = "", ua: str = ""
+) -> tuple[str | None, str | None]:
+    """Generate a fresh 6-digit code, persist its hash, and return the
+    plaintext code so the bot can send it directly to the user.
+
+    Returns ``(code, None)`` on success, or ``(None, error_message)`` if the
+    user is rate-limited, blocked, or the DB is unavailable. The same
+    rate-limit windows as `/chat/api/login/request` apply.
+    """
+    if platform not in ("tg", "vk"):
+        return None, "Неизвестная платформа"
+    if is_blocked(user_id):
+        _db.web_login_log(user_id, platform, "blocked", ip, ua, "")
+        return None, "Доступ заблокирован администратором"
+
+    recent = _db.web_code_recent_count(user_id, platform, _CODE_RATE_LIMIT_WINDOW)
+    if recent >= _CODE_RATE_LIMIT_PER_USER:
+        _db.web_login_log(user_id, platform, "rate_limit", ip, ua, f"recent={recent}")
+        return None, (
+            f"Слишком часто. Подождите {_CODE_RATE_LIMIT_WINDOW} минут "
+            "перед следующей попыткой."
+        )
+
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    expires_at = (datetime.now(timezone.utc) + timedelta(seconds=_CODE_TTL)).isoformat()
+    code_id = _db.web_code_create(
+        _hash_code(user_id, platform, code), user_id, platform, expires_at, ip
+    )
+    if code_id is None:
+        _db.web_login_log(user_id, platform, "db_unavailable", ip, ua, "")
+        return None, "Сервис временно недоступен, попробуйте через минуту."
+
+    _db.web_login_log(user_id, platform, "code_sent_bot", ip, ua, "via_bot_menu")
+    return code, None
+
+
 # ─── Aiohttp handlers: auth ─────────────────────────────────────────────────
 
 async def handle_login_request(request: web.Request) -> web.Response:
@@ -512,10 +555,17 @@ async def handle_login_verify(request: web.Request) -> web.Response:
     ip = _client_ip(request)
     ua = _client_ua(request)
 
+    # Uniform "wrong code" response is returned for both "no active code"
+    # and "bad code". Disclosing which one would let an attacker who knows a
+    # user_id probe whether that user currently has an active login code
+    # (an enumeration oracle). Lockout is still surfaced separately so the
+    # legitimate user understands why they need a fresh code.
+    _GENERIC_BAD = "Неверный код. Запросите новый или проверьте бот."
+
     active = _db.web_code_get_active(user_id, platform)
     if active is None:
         _db.web_login_log(user_id, platform, "verify_no_code", ip, ua, "")
-        return web.json_response({"error": "Код истёк или не найден. Запросите новый."}, status=400)
+        return web.json_response({"error": _GENERIC_BAD}, status=400)
 
     if active["attempts"] >= _CODE_MAX_ATTEMPTS:
         _db.web_login_log(user_id, platform, "verify_locked", ip, ua, "")
@@ -523,12 +573,8 @@ async def handle_login_verify(request: web.Request) -> web.Response:
 
     if not hmac.compare_digest(active["code_hash"], _hash_code(user_id, platform, code)):
         attempts = _db.web_code_increment_attempt(active["id"])
-        left = max(0, _CODE_MAX_ATTEMPTS - attempts)
         _db.web_login_log(user_id, platform, "verify_bad", ip, ua, f"attempts={attempts}")
-        return web.json_response(
-            {"error": f"Неверный код. Осталось попыток: {left}."},
-            status=400,
-        )
+        return web.json_response({"error": _GENERIC_BAD}, status=400)
 
     _db.web_code_mark_used(active["id"])
 
@@ -2232,6 +2278,21 @@ a:hover{opacity:.8}
 
   // ── Login ────────────────────────────────────────────────
   let loginPlatform = "tg";
+  let pendingUserIdEarly = null;
+  // Prefill from URL ?platform=tg&uid=12345 (used by bot "Веб-чат" buttons).
+  // The bot has already generated a code and sent it via DM, so we skip
+  // step1 (identifier input) and show the code field straight away.
+  (function applyUrlPrefill(){
+    try {
+      const sp = new URLSearchParams(location.search);
+      const p = (sp.get("platform") || "").toLowerCase();
+      const uidRaw = sp.get("uid") || "";
+      if ((p === "tg" || p === "vk") && /^\\d{1,20}$/.test(uidRaw)) {
+        loginPlatform = p;
+        pendingUserIdEarly = parseInt(uidRaw, 10);
+      }
+    } catch(e) {}
+  })();
   document.querySelectorAll("#loginTabs .tab").forEach(t => {
     t.addEventListener("click", () => {
       document.querySelectorAll("#loginTabs .tab").forEach(x => x.classList.remove("active"));
@@ -2252,6 +2313,19 @@ a:hover{opacity:.8}
   $("codeInput").addEventListener("keydown", e => { if (e.key === "Enter") $("verifyBtn").click(); });
 
   let pendingUserId = null;
+
+  // If we arrived via the bot's "Веб-чат" button (?platform=&uid=), the bot
+  // already DM'd a fresh code, so jump directly to the code-input step.
+  if (pendingUserIdEarly) {
+    pendingUserId = pendingUserIdEarly;
+    document.querySelectorAll("#loginTabs .tab").forEach(b =>
+      b.classList.toggle("active", b.dataset.platform === loginPlatform));
+    $("loginTabs").style.display = "none";
+    $("step1").style.display = "none";
+    $("step2").style.display = "block";
+    showOk("Введите код, который вам прислал бот в личных сообщениях.");
+    setTimeout(() => $("codeInput").focus(), 50);
+  }
 
   $("reqBtn").addEventListener("click", async () => {
     clearMsgs();
@@ -2276,7 +2350,13 @@ a:hover{opacity:.8}
   });
 
   $("backBtn").addEventListener("click", () => {
-    $("step1").style.display = "block"; $("step2").style.display = "none";
+    // If we came from the bot prefill, "Изменить" should re-open the
+    // identifier tabs as well (so the user can switch platforms).
+    pendingUserId = null;
+    pendingUserIdEarly = null;
+    $("loginTabs").style.display = "";
+    $("step1").style.display = "block";
+    $("step2").style.display = "none";
     clearMsgs();
   });
 
