@@ -2094,6 +2094,9 @@ a:hover{opacity:.8}
 
 .mobile-toggle{display:none}
 .scrim{display:none}
+/* Settings drawer chrome — only rendered on mobile (display:none on desktop). */
+.settings-head{display:none}
+.mobile-status{display:none}
 
 @media (max-width: 880px){
   .sidebar{position:fixed;inset:0 auto 0 0;width:280px;z-index:30;
@@ -2102,11 +2105,64 @@ a:hover{opacity:.8}
   .scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:29;
     opacity:0;pointer-events:none;transition:opacity .2s}
   .scrim.show{opacity:1;pointer-events:auto;display:block}
-  .mobile-toggle{display:flex}
+  .mobile-toggle{display:flex;align-items:center;justify-content:center}
   .main-head{padding:12px 14px}
   .messages{padding:14px 14px 10px}
   .input-wrap{padding:10px 12px 14px}
   .starter-grid{grid-template-columns:1fr}
+
+  /* The whole input-toolbar becomes a right-side drawer. We keep a single
+     DOM element so existing JS handlers (switchMode/updateCost/etc.) keep
+     working without ID changes — only its layout flips on small screens. */
+  .input-toolbar{position:fixed;inset:0 0 0 auto;width:min(320px,86vw);z-index:30;
+    margin:0;padding:0;border-top:none;border-left:1px solid var(--border);
+    background:var(--surface);box-shadow:-12px 0 40px rgba(0,0,0,.45);
+    display:flex;flex-direction:column;align-items:stretch;gap:0;
+    overflow-y:auto;-webkit-overflow-scrolling:touch;
+    transform:translateX(100%);transition:transform .22s ease}
+  .input-toolbar.open{transform:translateX(0)}
+
+  .settings-head{display:flex;align-items:center;gap:12px;
+    padding:14px 16px;border-bottom:1px solid var(--border);
+    position:sticky;top:0;background:var(--surface);z-index:1}
+  .settings-title{font-family:'Syne',sans-serif;font-weight:600;
+    font-size:1.02em;flex:1;letter-spacing:-.005em}
+  .settings-section{padding:14px 16px 6px;font-size:.7em;color:var(--muted2);
+    text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+
+  /* 2x2 grid for mode pills inside the drawer. */
+  .input-toolbar .mode-grid{display:grid;grid-template-columns:1fr 1fr;
+    gap:8px;padding:0 16px}
+  .input-toolbar .mode-pill{padding:11px 12px;border-radius:10px;
+    font-size:.92em;font-weight:500;text-align:center;
+    background:var(--surface2);border:1px solid var(--border)}
+  .input-toolbar .mode-pill.active{background:var(--accent-dim);
+    color:var(--text);border-color:rgba(155,138,251,.32)}
+
+  /* Selects + toggles stack vertically, full-width, with breathing room. */
+  .input-toolbar .tb-spacer{display:none}
+  .input-toolbar > .tb-select,
+  .input-toolbar > .tb-toggle{margin:0 16px;padding:11px 14px;
+    border-radius:10px;font-size:.92em;width:auto;text-align:left;
+    justify-content:flex-start;background:var(--surface2)}
+  .input-toolbar > .tb-select{appearance:none;-webkit-appearance:none;
+    background-image:linear-gradient(45deg,transparent 50%,var(--muted2) 50%),
+                     linear-gradient(135deg,var(--muted2) 50%,transparent 50%);
+    background-position:calc(100% - 18px) 50%,calc(100% - 13px) 50%;
+    background-size:5px 5px,5px 5px;background-repeat:no-repeat;
+    padding-right:34px}
+  .input-toolbar > .tb-cost{margin:auto 16px 18px;padding:14px 16px;
+    border-radius:10px;background:var(--accent-dim);
+    border:1px solid rgba(155,138,251,.18);font-size:.88em;
+    color:var(--text);text-align:center}
+
+  /* Tiny "mode · cost" hint above the input so the user always sees the
+     current selection without opening the drawer. */
+  .mobile-status{display:flex;flex-wrap:wrap;align-items:center;gap:6px;
+    margin:0 0 8px;padding:6px 10px;font-size:.78em;color:var(--muted2);
+    background:var(--surface2);border:1px solid var(--border);border-radius:8px}
+  .mobile-status b{color:var(--text);font-weight:600}
+  .mobile-status .ms-cost{color:var(--accent-bright);margin-left:auto}
 }
 
 ::-webkit-scrollbar{width:8px;height:8px}
@@ -2227,6 +2283,9 @@ a:hover{opacity:.8}
       </button>
       <div class="main-title" id="mainTitle">PicGenAI</div>
       <div class="main-actions">
+        <button class="btn-icon mobile-toggle" id="settingsBtn" title="Настройки">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
         <button class="btn-icon" id="renameBtn" title="Переименовать">
           <svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
         </button>
@@ -2256,18 +2315,27 @@ a:hover{opacity:.8}
             </button>
           </div>
         </div>
-        <div class="input-toolbar">
-          <button class="mode-pill active" data-mode="chat">Чат</button>
-          <button class="mode-pill" data-mode="image">Изображение</button>
-          <button class="mode-pill" data-mode="video">Видео</button>
-          <button class="mode-pill" data-mode="music">Музыка</button>
-          <div class="tb-spacer"></div>
+        <div class="mobile-status" id="mobileStatus"></div>
+        <div class="input-toolbar" id="inputToolbar">
+          <div class="settings-head">
+            <div class="settings-title">Настройки</div>
+            <button class="modal-x" id="settingsClose" type="button" aria-label="Закрыть">×</button>
+          </div>
+          <div class="settings-section">Режим</div>
+          <div class="mode-grid">
+            <button class="mode-pill active" data-mode="chat">Чат</button>
+            <button class="mode-pill" data-mode="image">Изображение</button>
+            <button class="mode-pill" data-mode="video">Видео</button>
+            <button class="mode-pill" data-mode="music">Музыка</button>
+          </div>
+          <div class="settings-section">Параметры</div>
           <select class="tb-select" id="modelSelect"></select>
           <select class="tb-select" id="aspectSelect" style="display:none"></select>
           <select class="tb-select" id="durationSelect" style="display:none"></select>
           <select class="tb-select" id="resolutionSelect" style="display:none"></select>
           <button class="tb-toggle" id="audioToggle" style="display:none">Со звуком</button>
           <button class="tb-toggle" id="searchToggle" style="display:none">Поиск</button>
+          <div class="tb-spacer"></div>
           <span class="tb-cost" id="costLbl"></span>
         </div>
         <input type="file" id="fileInput" multiple accept="image/*,video/mp4" style="display:none">
@@ -2787,7 +2855,12 @@ a:hover{opacity:.8}
     $("sendBtn").addEventListener("click", sendMessage);
     $("logoutBtn").addEventListener("click", logout);
     $("menuBtn").addEventListener("click", openSidebar);
-    $("scrim").addEventListener("click", closeSidebar);
+    $("settingsBtn").addEventListener("click", openSettings);
+    $("settingsClose").addEventListener("click", closeOverlays);
+    $("scrim").addEventListener("click", closeOverlays);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeOverlays();
+    });
     $("topupBtn").addEventListener("click", openTopup);
     $("topupClose").addEventListener("click", () => $("topupModal").style.display = "none");
     $("topupModal").addEventListener("click", (e) => {
@@ -2913,8 +2986,25 @@ a:hover{opacity:.8}
       $("feedBody").innerHTML = '<div class="topup-warn">Не удалось загрузить ленту.</div>';
     }
   }
-  function openSidebar(){ $("sidebar").classList.add("open"); $("scrim").classList.add("show"); }
-  function closeSidebar(){ $("sidebar").classList.remove("open"); $("scrim").classList.remove("show"); }
+  // Sidebar (left) and settings drawer (right) share the same scrim.
+  // closeOverlays() hides both — used by the scrim click + Escape.
+  function openSidebar(){
+    $("sidebar").classList.add("open");
+    $("inputToolbar").classList.remove("open");
+    $("scrim").classList.add("show");
+  }
+  function openSettings(){
+    $("inputToolbar").classList.add("open");
+    $("sidebar").classList.remove("open");
+    $("scrim").classList.add("show");
+  }
+  function closeOverlays(){
+    $("sidebar").classList.remove("open");
+    $("inputToolbar").classList.remove("open");
+    $("scrim").classList.remove("show");
+  }
+  // Backwards-compatible alias used by sendMessage / chat-switch flows.
+  function closeSidebar(){ closeOverlays(); }
 
   function switchMode(m) {
     state.mode = m;
@@ -3000,6 +3090,19 @@ a:hover{opacity:.8}
       const credits = Math.max(1, Math.ceil((usd / 3.0) / (1.40/30)));
       lbl.innerHTML = `Стоимость: <b>~${credits} кредитов</b>`;
     }
+    updateMobileStatus();
+  }
+
+  // Updates the small "mode · cost" pill above the input on mobile so the
+  // user always sees the current selection without opening the drawer.
+  function updateMobileStatus(){
+    const mob = $("mobileStatus");
+    if (!mob) return;
+    const names = {chat:"Чат",image:"Изображение",video:"Видео",music:"Музыка"};
+    const modeName = names[state.mode] || "";
+    const costHtml = $("costLbl").innerHTML || "";
+    mob.innerHTML = '<b>' + escapeHtml(modeName) + '</b>' +
+                    (costHtml ? '<span class="ms-cost">' + costHtml + '</span>' : '');
   }
 
   function autosizeText() {
