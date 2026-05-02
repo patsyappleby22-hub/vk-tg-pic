@@ -4,22 +4,29 @@ bot/web_chat.py
 User-facing web chat panel for PicGenAI.
 
 Routes:
-  GET  /chat                           → SPA shell (login or chat UI)
-  POST /chat/api/login/request         → {platform, identifier} → send 6-digit code
-  POST /chat/api/login/verify          → {platform, user_id, code} → set session cookie
-  POST /chat/api/logout                → clear session
-  GET  /chat/api/me                    → current user info + credits
-  GET  /chat/api/chats                 → list user's chats
-  POST /chat/api/chats                 → create chat
-  PATCH /chat/api/chats/{cid}          → rename / archive
-  DELETE /chat/api/chats/{cid}         → delete
-  GET  /chat/api/chats/{cid}/messages  → list messages
-  POST /chat/api/chats/{cid}/send      → send a message (text + optional files)
-  GET  /chat/api/gen/{gen_id}/status   → poll long-running generation
-  GET  /chat/api/media/{mid}           → stream media bytes for a message
+  GET  /chat                                → SPA shell (login or chat UI)
+  POST /chat/api/login/request              → {platform, identifier} → send code
+  POST /chat/api/login/verify               → {platform, user_id, code} → session
+  POST /chat/api/logout                     → clear session
+  GET  /chat/api/me                         → current user info + credits
+  GET  /chat/api/catalog                    → models / aspects / durations
+  GET  /chat/api/chats                      → list user's chats
+  POST /chat/api/chats                      → create chat
+  PATCH /chat/api/chats/{cid}               → rename / archive
+  DELETE /chat/api/chats/{cid}              → delete
+  GET  /chat/api/chats/{cid}/messages       → list messages
+  POST /chat/api/chats/{cid}/send           → send a message (multipart)
+  POST /chat/api/generate                   → spec-compliant unified gen entry
+  GET  /chat/api/generate/{gen_id}/stream   → SSE progress + final result
+  GET  /chat/api/gen/{gen_id}/status        → poll long-running generation
+  GET  /chat/api/media/{mid}                → stream media bytes for a message
+  GET  /chat/api/topup                      → credit packages for the user
+  GET  /chat/api/feed                       → cross-chat generation feed
 
 Auth: 6-digit code via the bot DM (TG / VK). HMAC-signed `sid` cookie for
-30 days, persisted in `bot_web_sessions`. Credits are shared with the bot
+30 days, persisted in `bot_web_sessions`. CSRF: double-submit cookie
+(`pg_chat_csrf` HMAC-signed by sid) checked against `X-CSRF-Token` header
+on every state-changing request. Credits are shared with the bot
 through `bot.user_settings` (reserve / confirm / release).
 """
 from __future__ import annotations
@@ -86,7 +93,11 @@ if not _SECRET:
 
 _COOKIE_SID = "pg_chat_sid"
 _COOKIE_TOK = "pg_chat_tok"
+_COOKIE_CSRF = "pg_chat_csrf"
 _COOKIE_TTL = 86400 * 30  # 30 days
+# Cookies are always set with Secure=True. Replit's preview, Northflank
+# deployment and real production all serve /chat over HTTPS.
+_COOKIE_SECURE = True
 
 _CODE_TTL = 300  # seconds — how long a 6-digit code is valid
 _CODE_MAX_ATTEMPTS = 5
@@ -167,16 +178,32 @@ def _sign_sid(sid: str) -> str:
     return hmac.new(_SECRET.encode(), sid.encode(), hashlib.sha256).hexdigest()
 
 
+def _sign_csrf(sid: str) -> str:
+    """CSRF double-submit token derived from sid via HMAC.
+    JS reads the (non-httpOnly) csrf cookie and mirrors it in X-CSRF-Token."""
+    return hmac.new(_SECRET.encode(), (sid + "|csrf").encode(),
+                    hashlib.sha256).hexdigest()
+
+
 def _set_session_cookies(resp: web.StreamResponse, sid: str) -> None:
     resp.set_cookie(_COOKIE_SID, sid, max_age=_COOKIE_TTL,
-                    httponly=True, samesite="Lax", path="/")
+                    httponly=True, secure=_COOKIE_SECURE,
+                    samesite="Lax", path="/")
     resp.set_cookie(_COOKIE_TOK, _sign_sid(sid), max_age=_COOKIE_TTL,
-                    httponly=True, samesite="Lax", path="/")
+                    httponly=True, secure=_COOKIE_SECURE,
+                    samesite="Lax", path="/")
+    # CSRF cookie is intentionally readable by JS so the SPA can echo
+    # it in the X-CSRF-Token header. Value still depends on a server-only
+    # HMAC key — an attacker on another origin can't forge it.
+    resp.set_cookie(_COOKIE_CSRF, _sign_csrf(sid), max_age=_COOKIE_TTL,
+                    httponly=False, secure=_COOKIE_SECURE,
+                    samesite="Lax", path="/")
 
 
 def _clear_session_cookies(resp: web.StreamResponse) -> None:
     resp.del_cookie(_COOKIE_SID, path="/")
     resp.del_cookie(_COOKIE_TOK, path="/")
+    resp.del_cookie(_COOKIE_CSRF, path="/")
 
 
 def _get_session(request: web.Request) -> dict | None:
@@ -203,10 +230,49 @@ def _require_session(request: web.Request) -> dict:
     return s
 
 
+def _check_csrf(request: web.Request) -> bool:
+    """Validate double-submit CSRF token for state-changing requests.
+
+    Requires a matching value in cookie `pg_chat_csrf` and header
+    `X-CSRF-Token`, both equal to HMAC(sid). Returns False if any piece
+    is missing/mismatched."""
+    sid = request.cookies.get(_COOKIE_SID, "")
+    cookie_val = request.cookies.get(_COOKIE_CSRF, "")
+    header_val = request.headers.get("X-CSRF-Token", "")
+    if not sid or not cookie_val or not header_val:
+        return False
+    expected = _sign_csrf(sid)
+    return (hmac.compare_digest(cookie_val, expected)
+            and hmac.compare_digest(header_val, expected))
+
+
+def _csrf_error() -> web.Response:
+    return web.json_response(
+        {"error": "Истёк CSRF-токен сессии. Обновите страницу."},
+        status=403,
+    )
+
+
 def _client_ip(request: web.Request) -> str:
+    """Return a best-effort client IP that an attacker cannot spoof.
+
+    Trust rules (single-proxy deployments — Replit edge / Northflank / etc):
+      1. Prefer `X-Real-IP` if the reverse proxy set it.
+      2. Otherwise take the *rightmost* entry of `X-Forwarded-For` —
+         that entry is appended by the closest trusted proxy. The leftmost
+         is the original (untrusted) client value and can be padded with
+         bogus IPs to defeat per-IP throttles, so we explicitly do not
+         trust it here.
+      3. Fall back to the transport peer address.
+    """
+    real = request.headers.get("X-Real-IP", "").strip()
+    if real:
+        return real[:64]
     fwd = request.headers.get("X-Forwarded-For", "")
     if fwd:
-        return fwd.split(",")[0].strip()[:64]
+        parts = [p.strip() for p in fwd.split(",") if p.strip()]
+        if parts:
+            return parts[-1][:64]
     peer = request.transport.get_extra_info("peername") if request.transport else None
     return (peer[0] if peer else "")[:64]
 
@@ -391,6 +457,18 @@ async def handle_login_request(request: web.Request) -> web.Response:
             {"error": f"Слишком часто. Подождите {_CODE_RATE_LIMIT_WINDOW} минут перед следующей попыткой."},
             status=429,
         )
+    # Second-layer brute-force defence: cap total login traffic from one IP
+    # so attackers can't spray many user_ids from the same source.
+    if ip:
+        ip_recent = _db.web_login_log_count_by_ip(ip, _CODE_GLOBAL_WINDOW)
+        if ip_recent >= _CODE_GLOBAL_PER_IP:
+            _db.web_login_log(uid, platform, "rate_limit_ip", ip, ua,
+                              f"ip_recent={ip_recent}")
+            return web.json_response(
+                {"error": "Слишком много попыток входа с этого адреса. "
+                          "Подождите час и повторите."},
+                status=429,
+            )
 
     code = f"{secrets.randbelow(1_000_000):06d}"
     expires_at = (datetime.now(timezone.utc) + timedelta(seconds=_CODE_TTL)).isoformat()
@@ -474,6 +552,8 @@ async def handle_login_verify(request: web.Request) -> web.Response:
 
 
 async def handle_logout(request: web.Request) -> web.Response:
+    if not _check_csrf(request):
+        return _csrf_error()
     sid = request.cookies.get(_COOKIE_SID, "")
     if sid:
         _db.web_session_delete(sid)
@@ -560,6 +640,8 @@ async def handle_chats_list(request: web.Request) -> web.Response:
 
 async def handle_chats_create(request: web.Request) -> web.Response:
     s = _require_session(request)
+    if not _check_csrf(request):
+        return _csrf_error()
     uid = s["user_id"]
     if _db.web_chat_count(uid, archived=False) >= _MAX_CHATS_PER_USER:
         return web.json_response(
@@ -579,6 +661,8 @@ async def handle_chats_create(request: web.Request) -> web.Response:
 
 async def handle_chats_patch(request: web.Request) -> web.Response:
     s = _require_session(request)
+    if not _check_csrf(request):
+        return _csrf_error()
     try:
         cid = int(request.match_info["cid"])
     except Exception:
@@ -602,6 +686,8 @@ async def handle_chats_patch(request: web.Request) -> web.Response:
 
 async def handle_chats_delete(request: web.Request) -> web.Response:
     s = _require_session(request)
+    if not _check_csrf(request):
+        return _csrf_error()
     try:
         cid = int(request.match_info["cid"])
     except Exception:
@@ -684,27 +770,16 @@ async def handle_media(request: web.Request) -> web.Response:
         mid = int(request.match_info["mid"])
     except Exception:
         return web.Response(status=400, text="bad id")
-    msgs = _db.web_msg_list(0, limit=0)  # noop just to assure import
-    # Look up the message and verify chat ownership
     if not _db.is_available():
         return web.Response(status=503, text="db unavailable")
-    try:
-        conn = _db._get_conn()
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT m.file_id, m.file_unique_id, m.file_kind, c.user_id "
-                "FROM bot_web_messages m JOIN bot_web_chats c ON c.id=m.chat_id "
-                "WHERE m.id=%s",
-                (mid,),
-            )
-            row = cur.fetchone()
-    except Exception:
-        return web.Response(status=500, text="db error")
-    if not row:
+    msg = _db.web_msg_get_with_owner(mid)
+    if msg is None:
         return web.Response(status=404, text="not found")
-    if int(row[3]) != s["user_id"]:
+    if msg["owner_user_id"] != s["user_id"]:
         return web.Response(status=403, text="forbidden")
-    file_id, fuid, kind = row[0], row[1], row[2] or ""
+    file_id = msg["file_id"]
+    fuid = msg["file_unique_id"]
+    kind = msg["file_kind"]
     if not file_id:
         return web.Response(status=404, text="no media")
     data = await _fetch_tg_media(file_id, fuid, kind)
@@ -770,6 +845,8 @@ async def _read_multipart(request: web.Request) -> tuple[dict, list[tuple[bytes,
 
 async def handle_send(request: web.Request) -> web.Response:
     s = _require_session(request)
+    if not _check_csrf(request):
+        return _csrf_error()
     uid = s["user_id"]
     try:
         cid = int(request.match_info["cid"])
@@ -1262,31 +1339,395 @@ async def handle_gen_status(request: web.Request) -> web.Response:
     msg_id = g.get("msg_id")
     if msg_id:
         out["msg_id"] = msg_id
-        # Pull the assistant message for display
-        try:
-            conn = _db._get_conn()
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT id, role, mode, content_text, model, file_kind, "
-                    "extras_json, created_at "
-                    "FROM bot_web_messages WHERE id=%s",
-                    (msg_id,),
-                )
-                row = cur.fetchone()
-            if row:
-                try:
-                    extras = json.loads(row[6]) if row[6] else {}
-                except Exception:
-                    extras = {}
-                out["assistant"] = {
-                    "id": int(row[0]), "role": row[1], "mode": row[2],
-                    "content_text": row[3], "model": row[4],
-                    "file_kind": row[5], "extras": extras,
-                    "created_at": row[7].isoformat() if row[7] else "",
-                }
-        except Exception:
-            pass
+        msg = _db.web_msg_get(int(msg_id))
+        if msg:
+            out["assistant"] = {
+                "id": msg["id"], "role": msg["role"], "mode": msg["mode"],
+                "content_text": msg["content_text"], "model": msg["model"],
+                "file_kind": msg["file_kind"], "extras": msg["extras"],
+                "created_at": msg["created_at"],
+            }
     return web.json_response(out)
+
+
+# ─── Spec-compliant unified /chat/api/generate + SSE stream ────────────────
+
+def _resp_json_payload(resp: web.Response) -> tuple[int, dict]:
+    """Best-effort: read a web.Response body that we just built ourselves
+    and return (status, decoded-dict). We only ever pass json_response
+    objects through here, so json.loads is safe."""
+    body = resp.body or b""
+    if isinstance(body, (bytes, bytearray)):
+        raw = bytes(body)
+    else:
+        raw = b""
+    try:
+        data = json.loads(raw or b"{}") if raw else {}
+    except Exception:
+        data = {}
+    return resp.status, data
+
+
+async def _run_generate_async(gen_id: str, uid: int, user_first: str, cid: int,
+                              mode: str, payload: dict,
+                              files: list[tuple[bytes, str]],
+                              user_msg_id: int) -> None:
+    """Background driver shared by /chat/api/generate. Runs the same
+    per-mode runners used by handle_send, then funnels the result into
+    the in-memory `_gens` registry so SSE can stream progress."""
+    try:
+        _gen_update(gen_id, status="running", pct=10,
+                    label="Запуск генерации…")
+        if mode == "chat":
+            _gen_update(gen_id, label="Печатает…")
+            resp = await _run_chat(uid, user_first, cid, payload, files,
+                                   user_msg_id)
+        elif mode == "image":
+            _gen_update(gen_id, label="Генерация изображения…")
+            resp = await _run_image(uid, user_first, cid, payload, files,
+                                    user_msg_id)
+        elif mode == "video":
+            # _run_video itself spawns a background task and returns
+            # {gen_id, ...}; we attach to that task's gen_id by mirroring.
+            resp = await _run_video(uid, user_first, cid, payload, files,
+                                    user_msg_id)
+        elif mode == "music":
+            resp = await _run_music(uid, user_first, cid, payload, files,
+                                    user_msg_id)
+        else:
+            _gen_update(gen_id, status="error", error="Неизвестный режим")
+            return
+
+        status, data = _resp_json_payload(resp)
+        if status >= 400 or data.get("error"):
+            _gen_update(gen_id, status="error",
+                        error=data.get("error") or f"HTTP {status}")
+            return
+
+        if "assistant" in data:
+            asst = data["assistant"] or {}
+            _gen_update(gen_id, status="done", pct=100, label="Готово",
+                        msg_id=asst.get("id"))
+            return
+
+        # Long-running: video / music returned their own internal gen_id.
+        # Mirror its progress into ours until it finishes.
+        inner_gid = data.get("gen_id")
+        if not inner_gid:
+            _gen_update(gen_id, status="done", pct=100, label="Готово")
+            return
+        for _ in range(900):  # ~15 min max @1s
+            inner = _gens.get(inner_gid)
+            if inner is None:
+                _gen_update(gen_id, status="error", error="Внутренняя задача потеряна")
+                return
+            _gen_update(
+                gen_id,
+                status=inner["status"] if inner["status"] != "queued" else "running",
+                pct=int(inner.get("pct") or 0),
+                label=inner.get("label") or "Генерация…",
+                msg_id=inner.get("msg_id"),
+                error=inner.get("error", ""),
+            )
+            if inner["status"] in ("done", "error"):
+                return
+            await asyncio.sleep(1.0)
+        _gen_update(gen_id, status="error", error="Таймаут ожидания")
+    except Exception as exc:
+        logger.exception("generate background driver crashed")
+        _gen_update(gen_id, status="error",
+                    error=str(exc)[:200] or "Внутренняя ошибка")
+
+
+async def handle_generate(request: web.Request) -> web.Response:
+    """Spec-compliant unified generation entry.
+
+    Accepts JSON body:
+        {
+          "chat_id": int,                 # required
+          "mode": "chat"|"image"|"video"|"music",
+          "text": "...",
+          "model": "...",
+          "aspect_ratio": "...",
+          "duration": 8, "resolution": "720p", "audio": true,
+          "search": false,
+          "files": [{"data": <base64>, "mime": "image/jpeg"}, ...]
+        }
+
+    Returns `{"gen_id": "<hex>"}` immediately. Subscribe to
+    `/chat/api/generate/{gen_id}/stream` (SSE) for live progress
+    and the final assistant message id.
+    """
+    s = _require_session(request)
+    if not _check_csrf(request):
+        return _csrf_error()
+    uid = s["user_id"]
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Неверный JSON"}, status=400)
+
+    try:
+        cid = int(body.get("chat_id") or 0)
+    except Exception:
+        cid = 0
+    if cid <= 0:
+        return web.json_response({"error": "chat_id обязателен"}, status=400)
+    chat = _db.web_chat_get(cid, uid)
+    if chat is None:
+        return web.json_response({"error": "Чат не найден"}, status=404)
+    if _db.web_msg_count(cid) >= _MAX_MESSAGES_PER_CHAT:
+        return web.json_response(
+            {"error": f"Лимит {_MAX_MESSAGES_PER_CHAT} сообщений в чате достигнут."},
+            status=400,
+        )
+
+    mode = (body.get("mode") or "chat").strip().lower()
+    if mode not in ("chat", "image", "video", "music"):
+        return web.json_response({"error": "Неизвестный режим"}, status=400)
+    text = (body.get("text") or "").strip()
+    if len(text) > _MAX_PROMPT_CHARS:
+        return web.json_response(
+            {"error": f"Текст слишком длинный (макс {_MAX_PROMPT_CHARS})"},
+            status=400,
+        )
+
+    files: list[tuple[bytes, str]] = []
+    raw_files = body.get("files") or []
+    if not isinstance(raw_files, list):
+        raw_files = []
+    for entry in raw_files[:_MAX_UPLOAD_FILES]:
+        if not isinstance(entry, dict):
+            continue
+        b64 = entry.get("data") or ""
+        mime = (entry.get("mime") or "application/octet-stream")[:80]
+        try:
+            blob = base64.b64decode(b64, validate=False)
+        except Exception:
+            continue
+        if not blob:
+            continue
+        if len(blob) > _MAX_UPLOAD_SIZE:
+            return web.json_response(
+                {"error": "Файл слишком большой"}, status=413)
+        files.append((blob, mime))
+
+    if not text and not files:
+        return web.json_response({"error": "Введите сообщение"}, status=400)
+
+    user_first = get_user_settings(uid).get("first_name") or str(uid)
+
+    # Persist user message + auto-rename — same as handle_send
+    user_extras: dict[str, Any] = {}
+    user_file_id = ""
+    user_fuid = ""
+    user_kind = ""
+    if files:
+        first_bytes, first_mime = files[0]
+        if first_mime.startswith("image/"):
+            from bot.log_channel import log_generation
+            res = await log_generation(
+                image_bytes=first_bytes,
+                prompt=f"[upload] {text[:120]}",
+                user_id=uid, user_name=user_first,
+                platform="web", model="upload",
+            )
+            if res:
+                user_file_id, user_fuid = res
+                user_kind = "image"
+        user_extras["upload_count"] = len(files)
+
+    user_msg_id = _db.web_msg_add(
+        chat_id=cid, role="user", mode=mode, content_text=text,
+        model=(body.get("model") or "")[:80],
+        file_id=user_file_id, file_unique_id=user_fuid, file_kind=user_kind,
+        extras_json=json.dumps(user_extras, ensure_ascii=False),
+    )
+    if text and chat["title"] in ("Новый чат", "") and _db.web_msg_count(cid) <= 2:
+        _db.web_chat_update_title(cid, uid, text.replace("\n", " ")[:60])
+
+    gen_id = _gen_new(uid)
+    _gens_gc()
+
+    asyncio.create_task(_run_generate_async(
+        gen_id, uid, user_first, cid, mode, body, files, user_msg_id
+    ))
+
+    return web.json_response({
+        "ok": True,
+        "gen_id": gen_id,
+        "user_msg_id": user_msg_id,
+        "stream_url": f"/chat/api/generate/{gen_id}/stream",
+    })
+
+
+async def handle_generate_stream(request: web.Request) -> web.StreamResponse:
+    """Server-Sent-Events progress for `/chat/api/generate`.
+
+    Frame format (one event per snapshot):
+        data: {"status":"running","pct":42,"label":"…","msg_id":null}\n\n
+    Stream ends after the first snapshot with status "done" or "error",
+    or after a hard 15-minute cap."""
+    s = _require_session(request)
+    gid = request.match_info.get("gen_id", "")
+    g = _gens.get(gid)
+    if g is None:
+        return web.json_response({"error": "not found"}, status=404)
+    if g.get("user_id") != s["user_id"]:
+        return web.json_response({"error": "forbidden"}, status=403)
+
+    resp = web.StreamResponse(
+        status=200,
+        headers={
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+    await resp.prepare(request)
+
+    last_snapshot: str = ""
+    deadline = time.monotonic() + 900  # 15 min hard cap
+    try:
+        while time.monotonic() < deadline:
+            cur = _gens.get(gid)
+            if cur is None:
+                await resp.write(
+                    b'data: {"status":"error","error":"lost"}\n\n'
+                )
+                break
+            snap = {
+                "status": cur["status"], "pct": int(cur.get("pct") or 0),
+                "label": cur.get("label") or "",
+                "error": cur.get("error", ""),
+            }
+            msg_id = cur.get("msg_id")
+            if msg_id:
+                snap["msg_id"] = int(msg_id)
+                msg = _db.web_msg_get(int(msg_id))
+                if msg:
+                    snap["assistant"] = {
+                        "id": msg["id"], "role": msg["role"],
+                        "mode": msg["mode"], "content_text": msg["content_text"],
+                        "model": msg["model"], "file_kind": msg["file_kind"],
+                        "extras": msg["extras"],
+                        "created_at": msg["created_at"],
+                    }
+            payload = json.dumps(snap, ensure_ascii=False)
+            if payload != last_snapshot:
+                await resp.write(f"data: {payload}\n\n".encode("utf-8"))
+                last_snapshot = payload
+            if cur["status"] in ("done", "error"):
+                break
+            await asyncio.sleep(1.0)
+        else:
+            await resp.write(
+                b'data: {"status":"error","error":"timeout"}\n\n'
+            )
+    except (asyncio.CancelledError, ConnectionResetError):
+        pass
+    except Exception:
+        logger.exception("SSE stream crashed")
+    return resp
+
+
+# ─── Topup (credit packages) ────────────────────────────────────────────────
+
+def _topup_packages_for(platform: str) -> dict[str, Any]:
+    """Return {provider, items[]} for a given platform.
+    TG users → Pally checkout, VK users → FreeKassa.
+
+    Each item: {key, credits, amount_rub, label}."""
+    items: list[dict[str, Any]] = []
+    if platform == "vk":
+        from bot.services.freekassa_service import (
+            CREDIT_PACKAGES, FREEKASSA_SHOP_ID,
+        )
+        provider = "freekassa"
+        configured = bool(FREEKASSA_SHOP_ID)
+        for key, p in CREDIT_PACKAGES.items():
+            items.append({
+                "key": key, "credits": int(p["credits"]),
+                "amount_rub": float(p["amount"]),
+                "label": p["label"],
+            })
+    else:
+        from bot.services.payment_service import (
+            CREDIT_PACKAGES, PALLY_SHOP_ID,
+        )
+        provider = "pally"
+        configured = bool(PALLY_SHOP_ID)
+        for key, p in CREDIT_PACKAGES.items():
+            items.append({
+                "key": key, "credits": int(p["credits"]),
+                "amount_rub": float(p["amount"]),
+                "label": p["label"],
+            })
+    items.sort(key=lambda x: x["amount_rub"])
+    return {"provider": provider, "configured": configured, "items": items}
+
+
+async def handle_topup(request: web.Request) -> web.Response:
+    """List credit-top-up packages + create payment URL.
+
+    GET  → {provider, items[]} for the user's platform.
+    POST → {pack_key} → {pay_url} (FreeKassa / Pally redirect).
+
+    Top-up itself is handled by the existing payment infrastructure;
+    this endpoint just exposes it from the web chat UI."""
+    s = _require_session(request)
+    platform = s["platform"]
+    if request.method == "GET":
+        return web.json_response(_topup_packages_for(platform))
+
+    if not _check_csrf(request):
+        return _csrf_error()
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    pack_key = (body.get("pack_key") or "").strip()
+    if not pack_key:
+        return web.json_response({"error": "pack_key обязателен"}, status=400)
+    uid = s["user_id"]
+    try:
+        if platform == "vk":
+            from bot.services.freekassa_service import create_payment_url
+            res = create_payment_url(uid, pack_key)
+        else:
+            from bot.services.payment_service import create_payment
+            res = await create_payment(uid, pack_key)
+    except Exception as exc:
+        logger.exception("topup create_payment failed")
+        return web.json_response({"error": f"Ошибка платёжной системы: {exc}"},
+                                 status=502)
+    if not res.get("ok"):
+        return web.json_response(
+            {"error": res.get("error") or "Не удалось создать платёж"},
+            status=400,
+        )
+    return web.json_response({"pay_url": res.get("pay_url"),
+                              "order_id": res.get("order_id", "")})
+
+
+# ─── Cross-chat generation feed ─────────────────────────────────────────────
+
+async def handle_feed(request: web.Request) -> web.Response:
+    """All generations made by the current user, optionally filtered by
+    type. Reads from the bot-shared `bot_image_logs` table so the bot's
+    own results show up alongside web-chat ones."""
+    s = _require_session(request)
+    uid = s["user_id"]
+    type_filter = (request.rel_url.query.get("type") or "").strip().lower()
+    if type_filter not in ("", "image", "video", "music"):
+        type_filter = ""
+    try:
+        limit = int(request.rel_url.query.get("limit") or 60)
+    except Exception:
+        limit = 60
+    items = _db.web_user_image_logs(uid, limit=limit, type_filter=type_filter)
+    return web.json_response({"items": items, "type": type_filter})
 
 
 # ─── HTML UI ────────────────────────────────────────────────────────────────
@@ -1389,6 +1830,54 @@ a:hover{opacity:.8}
 .sb-logout{font-size:.78em;color:var(--muted2);padding:4px 0;text-align:left}
 .sb-logout:hover{color:var(--red)}
 .sb-empty{color:var(--muted);font-size:.84em;padding:14px 12px;text-align:center}
+.sb-feed{margin:0 18px 6px}
+.sb-topup{padding:8px 12px;border-radius:8px;background:var(--accent);color:#0e0c1c;
+  font-weight:600;font-size:.82em;transition:filter .15s}
+.sb-topup:hover{filter:brightness(1.08)}
+
+/* ── Modals (topup, feed) ── */
+.modal-back{position:fixed;inset:0;background:rgba(8,6,18,.7);display:flex;
+  align-items:center;justify-content:center;z-index:60;backdrop-filter:blur(4px)}
+.modal-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  width:min(440px,92vw);max-height:88vh;display:flex;flex-direction:column;
+  box-shadow:0 24px 64px rgba(0,0,0,.55)}
+.modal-card.modal-wide{width:min(820px,94vw)}
+.modal-head{padding:14px 18px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:14px}
+.modal-title{font-family:'Syne',sans-serif;font-weight:600;font-size:1.05em;flex:1}
+.modal-x{width:30px;height:30px;border-radius:6px;color:var(--muted2);font-size:1.3em;
+  line-height:1;transition:all .15s}
+.modal-x:hover{background:var(--surface2);color:var(--text)}
+.modal-body{padding:18px;overflow-y:auto}
+.topup-loader{color:var(--muted2);text-align:center;padding:28px 8px;font-size:.92em}
+.topup-list{display:flex;flex-direction:column;gap:10px}
+.topup-row{display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px;background:var(--surface2);border:1px solid var(--border);
+  border-radius:12px}
+.topup-row b{font-family:'Syne',sans-serif;font-size:1.1em;color:var(--accent-bright)}
+.topup-row .muted{color:var(--muted2);font-size:.82em;margin-top:3px}
+.topup-row button{padding:8px 14px;border-radius:8px;background:var(--accent);
+  color:#0e0c1c;font-weight:600;font-size:.84em}
+.topup-row button:hover{filter:brightness(1.08)}
+.topup-row button:disabled{opacity:.6;cursor:wait}
+.topup-warn{color:var(--muted2);font-size:.84em;text-align:center;
+  padding:14px 12px;background:rgba(155,138,251,.06);border-radius:10px;
+  border:1px solid var(--border)}
+.feed-tabs{display:flex;gap:4px}
+.feed-tab{padding:5px 10px;border-radius:7px;font-size:.78em;color:var(--muted2);
+  background:transparent;transition:all .15s}
+.feed-tab:hover{color:var(--text);background:var(--surface2)}
+.feed-tab.active{color:var(--text);background:var(--accent-dim)}
+.feed-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.feed-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;
+  overflow:hidden;display:flex;flex-direction:column}
+.feed-card .feed-meta{padding:8px 10px;font-size:.76em;color:var(--muted2);
+  display:flex;justify-content:space-between;gap:6px}
+.feed-card .feed-meta b{color:var(--text);font-weight:500}
+.feed-card .feed-prompt{padding:0 10px 10px;font-size:.82em;color:var(--text);
+  line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;
+  overflow:hidden}
+.feed-empty{color:var(--muted2);text-align:center;padding:36px 8px;font-size:.92em}
 
 /* ── Main column ── */
 .main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
@@ -1574,13 +2063,50 @@ a:hover{opacity:.8}
       <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
       Новый чат
     </button>
+    <button class="sb-new sb-feed" id="feedBtn" type="button">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h18M3 12h18M3 19h18"/></svg>
+      Лента генераций
+    </button>
     <div class="sb-list" id="chatsList"></div>
     <div class="sb-foot">
       <div class="sb-credits"><span>Баланс</span><b id="creditsLbl">—</b></div>
+      <button class="sb-topup" id="topupBtn" type="button">Пополнить</button>
       <div class="sb-user" id="userLbl"></div>
       <button class="sb-logout" id="logoutBtn">Выйти</button>
     </div>
   </aside>
+
+  <!-- Пополнение баланса -->
+  <div class="modal-back" id="topupModal" style="display:none">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div class="modal-title">Пополнение баланса</div>
+        <button class="modal-x" id="topupClose" type="button">×</button>
+      </div>
+      <div class="modal-body" id="topupBody">
+        <div class="topup-loader">Загружаем тарифы…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Общая лента генераций -->
+  <div class="modal-back" id="feedModal" style="display:none">
+    <div class="modal-card modal-wide">
+      <div class="modal-head">
+        <div class="modal-title">Лента генераций</div>
+        <div class="feed-tabs">
+          <button class="feed-tab active" data-feed="">Все</button>
+          <button class="feed-tab" data-feed="image">Картинки</button>
+          <button class="feed-tab" data-feed="video">Видео</button>
+          <button class="feed-tab" data-feed="music">Музыка</button>
+        </div>
+        <button class="modal-x" id="feedClose" type="button">×</button>
+      </div>
+      <div class="modal-body" id="feedBody">
+        <div class="topup-loader">Загружаем ленту…</div>
+      </div>
+    </div>
+  </div>
 
   <div class="main">
     <div class="main-head">
@@ -1679,6 +2205,29 @@ a:hover{opacity:.8}
     t = t.replace(/`([^`]+)`/g, "<code>$1</code>");
     t = t.replace(/\\*\\*([^*]+)\\*\\*/g, "<b>$1</b>");
     return t;
+  }
+
+  // ── CSRF helpers ─────────────────────────────────────────
+  // The server sets a non-httpOnly cookie `pg_chat_csrf` on login.
+  // Every state-changing fetch must echo it in the X-CSRF-Token header.
+  function getCsrfToken() {
+    const m = document.cookie.match(/(?:^|;\\s*)pg_chat_csrf=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : "";
+  }
+  function csrfHeaders(extra) {
+    const h = Object.assign({}, extra || {});
+    const t = getCsrfToken();
+    if (t) h["X-CSRF-Token"] = t;
+    return h;
+  }
+  // Wrapper used for all POST/PATCH/DELETE calls so we never forget the header.
+  async function apiFetch(url, opts) {
+    opts = opts || {};
+    const method = (opts.method || "GET").toUpperCase();
+    if (method !== "GET" && method !== "HEAD") {
+      opts.headers = csrfHeaders(opts.headers || {});
+    }
+    return fetch(url, opts);
   }
 
   // ── Login ────────────────────────────────────────────────
@@ -1824,7 +2373,7 @@ a:hover{opacity:.8}
     });
   }
   $("newChatBtn").addEventListener("click", async () => {
-    const r = await fetch("/chat/api/chats", {
+    const r = await apiFetch("/chat/api/chats", {
       method: "POST", headers: {"Content-Type":"application/json"},
       body: JSON.stringify({title: "Новый чат"}),
     });
@@ -1854,7 +2403,7 @@ a:hover{opacity:.8}
     if (t == null) return;
     const title = t.trim().slice(0,120);
     if (!title) return;
-    await fetch(`/chat/api/chats/${id}`, {
+    await apiFetch(`/chat/api/chats/${id}`, {
       method: "PATCH", headers: {"Content-Type":"application/json"},
       body: JSON.stringify({title}),
     });
@@ -1863,7 +2412,7 @@ a:hover{opacity:.8}
   }
   async function confirmDelete(id) {
     if (!confirm("Удалить чат и всю переписку?")) return;
-    await fetch(`/chat/api/chats/${id}`, {method: "DELETE"});
+    await apiFetch(`/chat/api/chats/${id}`, {method: "DELETE"});
     if (state.currentChatId === id) {
       state.currentChatId = null;
       state.messages = [];
@@ -1880,7 +2429,7 @@ a:hover{opacity:.8}
   $("archiveBtn").addEventListener("click", async () => {
     if (!state.currentChatId) return;
     if (!confirm("Архивировать чат? Он будет скрыт из списка.")) return;
-    await fetch(`/chat/api/chats/${state.currentChatId}`, {
+    await apiFetch(`/chat/api/chats/${state.currentChatId}`, {
       method: "PATCH", headers: {"Content-Type":"application/json"},
       body: JSON.stringify({archived: true}),
     });
@@ -1920,7 +2469,7 @@ a:hover{opacity:.8}
     $("messages").querySelectorAll(".starter-card").forEach(c => {
       c.addEventListener("click", async () => {
         if (state.currentChatId == null) {
-          const r = await fetch("/chat/api/chats", {
+          const r = await apiFetch("/chat/api/chats", {
             method:"POST", headers:{"Content-Type":"application/json"},
             body: JSON.stringify({title:"Новый чат"}),
           });
@@ -2014,6 +2563,130 @@ a:hover{opacity:.8}
     $("logoutBtn").addEventListener("click", logout);
     $("menuBtn").addEventListener("click", openSidebar);
     $("scrim").addEventListener("click", closeSidebar);
+    $("topupBtn").addEventListener("click", openTopup);
+    $("topupClose").addEventListener("click", () => $("topupModal").style.display = "none");
+    $("topupModal").addEventListener("click", (e) => {
+      if (e.target === $("topupModal")) $("topupModal").style.display = "none";
+    });
+    $("feedBtn").addEventListener("click", () => openFeed(""));
+    $("feedClose").addEventListener("click", () => $("feedModal").style.display = "none");
+    $("feedModal").addEventListener("click", (e) => {
+      if (e.target === $("feedModal")) $("feedModal").style.display = "none";
+    });
+    document.querySelectorAll(".feed-tab").forEach(t => {
+      t.addEventListener("click", () => {
+        document.querySelectorAll(".feed-tab").forEach(x => x.classList.remove("active"));
+        t.classList.add("active");
+        loadFeed(t.dataset.feed || "");
+      });
+    });
+  }
+
+  // ── Topup ─────────────────────────────────────────────────
+  async function openTopup() {
+    $("topupBody").innerHTML = '<div class="topup-loader">Загружаем тарифы…</div>';
+    $("topupModal").style.display = "flex";
+    try {
+      const r = await fetch("/chat/api/topup");
+      const j = await r.json();
+      renderTopup(j);
+    } catch (e) {
+      $("topupBody").innerHTML = '<div class="topup-warn">Не удалось загрузить тарифы.</div>';
+    }
+  }
+  function renderTopup(j) {
+    const items = j.items || [];
+    if (!j.configured) {
+      $("topupBody").innerHTML =
+        '<div class="topup-warn">Платёжная система пока не настроена администратором. ' +
+        'Напишите боту в Telegram или ВК для пополнения баланса.</div>';
+      return;
+    }
+    if (!items.length) {
+      $("topupBody").innerHTML = '<div class="topup-warn">Тарифы недоступны.</div>';
+      return;
+    }
+    const provider = j.provider === "freekassa" ? "FreeKassa" : "Pally";
+    $("topupBody").innerHTML =
+      '<div class="topup-list">' +
+      items.map(p => (
+        '<div class="topup-row">' +
+          '<div>' +
+            '<b>' + p.credits + ' кр.</b>' +
+            '<div class="muted">' + escapeHtml(p.label) + '</div>' +
+          '</div>' +
+          '<button data-pack="' + escapeHtml(p.key) + '">Купить за ' +
+            (p.amount_rub|0) + '₽</button>' +
+        '</div>'
+      )).join("") +
+      '</div>' +
+      '<div class="topup-warn" style="margin-top:14px">' +
+        'Оплата проводится через ' + provider + '. После успешной оплаты ' +
+        'кредиты зачислятся автоматически в течение минуты.' +
+      '</div>';
+    $("topupBody").querySelectorAll("button[data-pack]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        const orig = btn.textContent;
+        btn.textContent = "Создаём ссылку…";
+        try {
+          const r = await apiFetch("/chat/api/topup", {
+            method: "POST",
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({pack_key: btn.dataset.pack}),
+          });
+          const jj = await r.json();
+          if (!r.ok || jj.error || !jj.pay_url) {
+            alert(jj.error || "Не удалось создать платёж");
+            btn.disabled = false;
+            btn.textContent = orig;
+            return;
+          }
+          window.open(jj.pay_url, "_blank", "noopener");
+          btn.textContent = "Перейти к оплате…";
+          setTimeout(() => { btn.disabled = false; btn.textContent = orig; }, 4000);
+        } catch (e) {
+          alert("Сеть недоступна");
+          btn.disabled = false;
+          btn.textContent = orig;
+        }
+      });
+    });
+  }
+
+  // ── Cross-chat feed ──────────────────────────────────────
+  function openFeed(type) {
+    document.querySelectorAll(".feed-tab").forEach(x => {
+      x.classList.toggle("active", (x.dataset.feed || "") === (type || ""));
+    });
+    $("feedModal").style.display = "flex";
+    loadFeed(type || "");
+  }
+  async function loadFeed(type) {
+    $("feedBody").innerHTML = '<div class="topup-loader">Загружаем ленту…</div>';
+    try {
+      const url = "/chat/api/feed" + (type ? ("?type=" + encodeURIComponent(type)) : "");
+      const r = await fetch(url);
+      const j = await r.json();
+      const items = j.items || [];
+      if (!items.length) {
+        $("feedBody").innerHTML = '<div class="feed-empty">Здесь будут все ваши сгенерированные изображения, видео и музыка.</div>';
+        return;
+      }
+      $("feedBody").innerHTML = '<div class="feed-grid">' +
+        items.map(it => {
+          const k = it.kind === "video" ? "Видео" : (it.kind === "music" ? "Музыка" : "Картинка");
+          const dt = it.created_at ? new Date(it.created_at).toLocaleString("ru-RU") : "";
+          return '<div class="feed-card">' +
+            '<div class="feed-meta"><b>' + k + '</b><span>' + escapeHtml(it.model || "") + '</span></div>' +
+            '<div class="feed-prompt">' + escapeHtml(it.prompt || "(без описания)") + '</div>' +
+            '<div class="feed-meta" style="border-top:1px solid var(--border)"><span>' + dt + '</span></div>' +
+          '</div>';
+        }).join("") +
+      '</div>';
+    } catch (e) {
+      $("feedBody").innerHTML = '<div class="topup-warn">Не удалось загрузить ленту.</div>';
+    }
   }
   function openSidebar(){ $("sidebar").classList.add("open"); $("scrim").classList.add("show"); }
   function closeSidebar(){ $("sidebar").classList.remove("open"); $("scrim").classList.remove("show"); }
@@ -2144,7 +2817,7 @@ a:hover{opacity:.8}
   // ── Send ─────────────────────────────────────────────────
   async function ensureChat() {
     if (state.currentChatId) return state.currentChatId;
-    const r = await fetch("/chat/api/chats", {
+    const r = await apiFetch("/chat/api/chats", {
       method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({title:"Новый чат"}),
     });
@@ -2194,7 +2867,7 @@ a:hover{opacity:.8}
     state.pendingFiles.forEach(f => fd.append("files", f.blob, f.name));
 
     try {
-      const r = await fetch(`/chat/api/chats/${cid}/send`, {method:"POST", body: fd});
+      const r = await apiFetch(`/chat/api/chats/${cid}/send`, {method:"POST", body: fd});
       const j = await r.json();
       if (!r.ok || j.error) {
         assistantPlaceholder._pending = false;
@@ -2259,7 +2932,7 @@ a:hover{opacity:.8}
   }
 
   async function logout() {
-    await fetch("/chat/api/logout", {method:"POST"});
+    await apiFetch("/chat/api/logout", {method:"POST"});
     location.reload();
   }
 
@@ -2297,6 +2970,11 @@ def register_chat_routes(app: web.Application) -> None:
     app.router.add_delete("/chat/api/chats/{cid}", handle_chats_delete)
     app.router.add_get("/chat/api/chats/{cid}/messages", handle_messages_list)
     app.router.add_post("/chat/api/chats/{cid}/send", handle_send)
+    app.router.add_post("/chat/api/generate", handle_generate)
+    app.router.add_get("/chat/api/generate/{gen_id}/stream", handle_generate_stream)
     app.router.add_get("/chat/api/gen/{gen_id}/status", handle_gen_status)
     app.router.add_get("/chat/api/media/{mid}", handle_media)
+    app.router.add_get("/chat/api/topup", handle_topup)
+    app.router.add_post("/chat/api/topup", handle_topup)
+    app.router.add_get("/chat/api/feed", handle_feed)
     logger.info("Web chat routes registered at /chat")

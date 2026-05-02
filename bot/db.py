@@ -2380,3 +2380,136 @@ def web_msg_recent(chat_id: int, limit: int = 30) -> list[dict]:
         return out
     except Exception:
         return []
+
+
+def web_msg_get_with_owner(msg_id: int) -> dict | None:
+    """Fetch one message joined with its chat owner — used by media proxy
+    for owner-check without exposing private DB internals."""
+    if not _DATABASE_URL:
+        return None
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT m.id, m.chat_id, m.role, m.mode, m.content_text, m.model, "
+                "m.file_id, m.file_unique_id, m.file_kind, m.extras_json, "
+                "m.created_at, c.user_id "
+                "FROM bot_web_messages m JOIN bot_web_chats c ON c.id=m.chat_id "
+                "WHERE m.id=%s",
+                (msg_id,),
+            )
+            row = cur.fetchone()
+        if not row:
+            return None
+        try:
+            extras = json.loads(row[9]) if row[9] else {}
+        except Exception:
+            extras = {}
+        return {
+            "id": int(row[0]), "chat_id": int(row[1]), "role": row[2],
+            "mode": row[3], "content_text": row[4], "model": row[5],
+            "file_id": row[6] or "", "file_unique_id": row[7] or "",
+            "file_kind": row[8] or "", "extras": extras,
+            "created_at": row[10].isoformat() if row[10] else "",
+            "owner_user_id": int(row[11]),
+        }
+    except Exception:
+        return None
+
+
+def web_msg_get(msg_id: int) -> dict | None:
+    """Fetch one web message by id (no ownership join)."""
+    if not _DATABASE_URL:
+        return None
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, chat_id, role, mode, content_text, model, "
+                "file_id, file_unique_id, file_kind, extras_json, created_at "
+                "FROM bot_web_messages WHERE id=%s",
+                (msg_id,),
+            )
+            row = cur.fetchone()
+        if not row:
+            return None
+        try:
+            extras = json.loads(row[9]) if row[9] else {}
+        except Exception:
+            extras = {}
+        return {
+            "id": int(row[0]), "chat_id": int(row[1]), "role": row[2],
+            "mode": row[3], "content_text": row[4], "model": row[5],
+            "file_id": row[6] or "", "file_unique_id": row[7] or "",
+            "file_kind": row[8] or "", "extras": extras,
+            "created_at": row[10].isoformat() if row[10] else "",
+        }
+    except Exception:
+        return None
+
+
+def web_login_log_count_by_ip(ip: str, window_minutes: int) -> int:
+    """Count login-related events for a given client IP in last N minutes.
+    Used as second-layer brute-force defence when many user_ids are tried
+    from a single IP."""
+    if not _DATABASE_URL or not ip:
+        return 0
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) FROM bot_web_login_log "
+                "WHERE ip=%s AND created_at > NOW() - (%s || ' minutes')::INTERVAL "
+                "AND event IN ('code_sent','rate_limit','resolve_fail','send_fail')",
+                (ip[:64], int(window_minutes)),
+            )
+            row = cur.fetchone()
+        return int(row[0]) if row else 0
+    except Exception:
+        return 0
+
+
+def web_user_image_logs(user_id: int, limit: int = 50,
+                        type_filter: str = "") -> list[dict]:
+    """User-facing generation feed reading from bot_image_logs.
+
+    type_filter ∈ {"", "image", "video", "music"} — heuristic on `model`
+    (Veo* → video, Lyria* → music, everything else → image)."""
+    if not _DATABASE_URL:
+        return []
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, user_name, platform, prompt, model, "
+                "file_id, file_unique_id, created_at "
+                "FROM bot_image_logs WHERE user_id=%s "
+                "ORDER BY id DESC LIMIT %s",
+                (user_id, max(1, min(int(limit), 200))),
+            )
+            rows = cur.fetchall()
+        out: list[dict] = []
+        for r in rows:
+            model = (r[4] or "").lower()
+            if "veo" in model:
+                kind = "video"
+            elif "lyria" in model or "music" in model:
+                kind = "music"
+            else:
+                kind = "image"
+            if type_filter and type_filter != kind:
+                continue
+            out.append({
+                "id": int(r[0]),
+                "user_name": r[1] or "",
+                "platform": r[2] or "tg",
+                "prompt": r[3] or "",
+                "model": r[4] or "",
+                "file_id": r[5] or "",
+                "file_unique_id": r[6] or "",
+                "kind": kind,
+                "created_at": r[7].isoformat() if r[7] else "",
+            })
+        return out
+    except Exception:
+        return []
