@@ -162,7 +162,14 @@ def _build_config_for_model(
         "image_config": genai_types.ImageConfig(**image_cfg_kwargs),
     }
 
-    if "flash" in model.lower() and "lite" not in model.lower():
+    # Thinking is only useful for chat/reasoning models. Image-generation
+    # models (…-image-preview, …-image-generate, …) must NOT be asked to
+    # think — they end up emitting only thought parts and never produce an
+    # image, which downstream then misclassifies as "model returned text
+    # instead of an image".
+    model_l = model.lower()
+    is_image_model = "image" in model_l
+    if "flash" in model_l and "lite" not in model_l and not is_image_model:
         level = thinking_level.upper() if thinking_level != "none" else "NONE"
         config_kwargs["thinking_config"] = genai_types.ThinkingConfig(
             thinking_level=level,
@@ -1150,8 +1157,16 @@ class VertexAIService:
             for part in parts:
                 if getattr(part, "inline_data", None) is not None:
                     image_bytes = part.inline_data.data
-                elif getattr(part, "text", None):
-                    text_parts.append(part.text)
+                    continue
+                # Skip thought parts — when a model is allowed to think it
+                # streams its reasoning as `text` parts with thought=True.
+                # These are NOT a refusal and must not be collected as
+                # "model returned text instead of image".
+                if getattr(part, "thought", False):
+                    continue
+                txt = getattr(part, "text", None)
+                if txt:
+                    text_parts.append(txt)
 
         if image_bytes:
             return image_bytes
