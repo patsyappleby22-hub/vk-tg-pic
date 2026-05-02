@@ -1,386 +1,922 @@
-<!--prime:a0f8d779-->
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PicGenAI — Генерация изображений, видео и музыки ИИ</title>
+    <title>PicGenAI — Генерация изображений, видео и музыки</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', -apple-system, sans-serif; background: #06050c; color: #e4e4ef; min-height: 100vh; overflow-x: hidden; }
-        a { color: #a78bfa; text-decoration: none; transition: color 0.2s; }
-        a:hover { color: #c4b5fd; }
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
+        :root {
+            --bg: #060608;
+            --surface: #0c0c10;
+            --border: rgba(255,255,255,0.06);
+            --border-hover: rgba(255,255,255,0.12);
+            --text: #f0f0f5;
+            --muted: #5a5a72;
+            --accent: #9b8afb;
+            --accent-dim: rgba(155,138,251,0.08);
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a { color: inherit; text-decoration: none; }
+
+        /* ─── Noise overlay ─── */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.5;
+        }
+
+        /* ─── Header ─── */
+        header {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 100;
+            padding: 20px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid transparent;
+            transition: border-color 0.3s, background 0.3s;
+        }
+        header.scrolled {
+            border-color: var(--border);
+            background: rgba(6,6,8,0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .logo {
+            font-family: 'Syne', sans-serif;
+            font-size: 1.1em;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            color: var(--text);
+        }
+        .logo span { color: var(--accent); }
+        nav { display: flex; gap: 32px; align-items: center; }
+        nav a {
+            font-size: 0.875em;
+            color: var(--muted);
+            transition: color 0.2s;
+            font-weight: 400;
+        }
+        nav a:hover { color: var(--text); }
+        .header-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-hover);
+            background: rgba(255,255,255,0.04);
+            color: var(--text) !important;
+            font-size: 0.875em;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .header-cta:hover {
+            border-color: rgba(155,138,251,0.3);
+            background: var(--accent-dim);
+            color: var(--text) !important;
+        }
+        @media (max-width: 680px) {
+            header { padding: 16px 20px; }
+            nav { display: none; }
+        }
+
+        /* ─── Hero ─── */
         .hero {
             position: relative;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             text-align: center;
-            padding: 100px 20px 80px;
+            padding: 120px 24px 80px;
             overflow: hidden;
         }
-        .hero::before {
-            content: '';
+
+        .hero-glow {
             position: absolute;
-            top: -50%;
+            top: 10%;
             left: 50%;
             transform: translateX(-50%);
-            width: 800px;
-            height: 800px;
-            background: radial-gradient(circle, rgba(124,58,237,0.15) 0%, rgba(99,102,241,0.05) 40%, transparent 70%);
+            width: 700px;
+            height: 700px;
+            background: radial-gradient(circle at center, rgba(100,80,200,0.12) 0%, transparent 65%);
             pointer-events: none;
         }
-        .hero::after {
-            content: '';
+        .hero-glow-2 {
             position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(167,139,250,0.3), transparent);
+            bottom: -10%;
+            right: -10%;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle at center, rgba(80,60,180,0.06) 0%, transparent 70%);
+            pointer-events: none;
         }
-        .hero-badge {
-            display: inline-block;
-            padding: 6px 16px;
-            border-radius: 20px;
-            background: rgba(167,139,250,0.1);
-            border: 1px solid rgba(167,139,250,0.2);
-            color: #a78bfa;
-            font-size: 0.85em;
-            font-weight: 500;
-            margin-bottom: 28px;
-            letter-spacing: 0.5px;
+
+        .hero-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 100px;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            font-size: 0.78em;
+            font-weight: 400;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            margin-bottom: 40px;
+            position: relative;
         }
+        .hero-eyebrow::before {
+            content: '';
+            width: 5px; height: 5px;
+            border-radius: 50%;
+            background: var(--accent);
+            flex-shrink: 0;
+            box-shadow: 0 0 6px var(--accent);
+            animation: pulse 2.5s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
         .hero h1 {
-            font-size: 4em;
-            font-weight: 900;
-            margin-bottom: 20px;
-            background: linear-gradient(135deg, #c4b5fd 0%, #818cf8 30%, #60a5fa 60%, #a78bfa 100%);
+            font-family: 'Syne', sans-serif;
+            font-size: clamp(3.2em, 9vw, 7em);
+            font-weight: 800;
+            line-height: 0.95;
+            letter-spacing: -0.03em;
+            color: var(--text);
+            margin-bottom: 32px;
+            position: relative;
+        }
+        .hero h1 em {
+            font-style: normal;
+            background: linear-gradient(135deg, #c4b5fd 0%, #818cf8 50%, #a5b4fc 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            letter-spacing: -1px;
+        }
+
+        .hero-desc {
+            color: var(--muted);
+            font-size: 1.05em;
+            line-height: 1.75;
+            max-width: 480px;
+            margin: 0 auto 52px;
+            font-weight: 300;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
             position: relative;
         }
-        .hero .subtitle {
-            color: #8888a8;
-            font-size: 1.25em;
-            line-height: 1.8;
-            max-width: 560px;
-            margin: 0 auto 40px;
-            font-weight: 400;
-        }
-        .hero-buttons { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
-        .btn {
+
+        .btn-primary {
             display: inline-flex;
             align-items: center;
             gap: 10px;
-            padding: 16px 32px;
-            border-radius: 14px;
-            text-decoration: none !important;
-            font-weight: 600;
+            padding: 14px 28px;
+            border-radius: 10px;
+            background: var(--accent);
             color: #fff;
-            font-size: 1.05em;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
+            font-size: 0.95em;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.25s ease;
+            letter-spacing: 0.01em;
         }
-        .btn:hover { transform: translateY(-3px); box-shadow: 0 12px 40px rgba(124,58,237,0.3); }
-        .btn.tg { background: linear-gradient(135deg, #7c3aed, #6366f1); }
-        .btn.vk { background: linear-gradient(135deg, #4C75A3, #5d8ab8); }
-        .btn svg { width: 20px; height: 20px; fill: currentColor; }
-
-        .stats {
-            display: flex;
-            justify-content: center;
-            gap: 48px;
-            padding: 48px 20px;
-            flex-wrap: wrap;
+        .btn-primary:hover {
+            background: #b4a5ff;
+            transform: translateY(-2px);
+            box-shadow: 0 16px 40px rgba(155,138,251,0.25);
         }
-        .stat { text-align: center; }
-        .stat-num {
-            font-size: 2.4em;
-            font-weight: 800;
-            background: linear-gradient(135deg, #a78bfa, #60a5fa);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+        .btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 28px;
+            border-radius: 10px;
+            border: 1px solid var(--border-hover);
+            background: rgba(255,255,255,0.03);
+            color: var(--text);
+            font-size: 0.95em;
+            font-weight: 500;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.25s ease;
         }
-        .stat-label { color: #6b6b8a; font-size: 0.9em; margin-top: 4px; }
-
-        .section {
-            max-width: 960px;
-            margin: 0 auto;
-            padding: 60px 20px;
+        .btn-secondary:hover {
+            border-color: rgba(155,138,251,0.25);
+            background: var(--accent-dim);
+            transform: translateY(-2px);
         }
-        .section-title {
-            font-size: 2em;
-            font-weight: 800;
-            margin-bottom: 12px;
-            color: #e4e4ef;
-            text-align: center;
-        }
-        .section-sub {
-            color: #6b6b8a;
-            text-align: center;
-            margin-bottom: 48px;
-            font-size: 1.05em;
+        .btn-icon {
+            width: 18px; height: 18px;
+            fill: currentColor;
+            flex-shrink: 0;
         }
 
-        .pricing {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 24px;
-        }
-        @media (max-width: 700px) { .pricing { grid-template-columns: 1fr; max-width: 360px; margin: 0 auto; } }
-        .price-card {
-            background: rgba(255,255,255,0.02);
-            border: 1px solid rgba(167,139,250,0.12);
-            border-radius: 20px;
-            padding: 36px 28px;
-            text-align: center;
-            transition: all 0.3s ease;
-            position: relative;
-        }
-        .price-card:hover { border-color: rgba(167,139,250,0.35); transform: translateY(-4px); background: rgba(167,139,250,0.04); }
-        .price-card.popular { border-color: rgba(167,139,250,0.4); background: rgba(167,139,250,0.06); }
-        .price-card.popular::before {
-            content: 'Популярный';
+        /* ─── Scroll hint ─── */
+        .scroll-hint {
             position: absolute;
-            top: -12px;
+            bottom: 36px;
             left: 50%;
             transform: translateX(-50%);
-            padding: 4px 16px;
-            border-radius: 12px;
-            background: linear-gradient(135deg, #7c3aed, #6366f1);
-            color: #fff;
-            font-size: 0.75em;
-            font-weight: 600;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            color: var(--muted);
+            font-size: 0.72em;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
         }
-        .price-card .amount { font-size: 1.15em; color: #c4c4d8; margin-bottom: 8px; font-weight: 500; }
-        .price-card .price { font-size: 2.8em; font-weight: 800; color: #e4e4ef; margin-bottom: 4px; line-height: 1; }
-        .price-card .price span { font-size: 0.4em; color: #8888a8; font-weight: 500; }
-        .price-card .per { color: #6b6b8a; font-size: 0.85em; margin-bottom: 20px; }
-        .price-card .tag { display: inline-block; padding: 6px 14px; border-radius: 8px; background: rgba(167,139,250,0.1); color: #a78bfa; font-size: 0.8em; font-weight: 500; }
+        .scroll-line {
+            width: 1px;
+            height: 40px;
+            background: linear-gradient(to bottom, var(--muted), transparent);
+            animation: scrollDown 2s ease-in-out infinite;
+        }
+        @keyframes scrollDown {
+            0% { transform: scaleY(0); transform-origin: top; }
+            50% { transform: scaleY(1); transform-origin: top; }
+            51% { transform: scaleY(1); transform-origin: bottom; }
+            100% { transform: scaleY(0); transform-origin: bottom; }
+        }
 
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 24px;
+        /* ─── Divider ─── */
+        .section-divider {
+            width: 100%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--border), transparent);
         }
-        @media (max-width: 700px) { .features-grid { grid-template-columns: 1fr; } }
-        .feature-card {
-            background: rgba(255,255,255,0.02);
-            border: 1px solid rgba(255,255,255,0.06);
-            border-radius: 20px;
-            padding: 32px 24px;
-            transition: all 0.3s ease;
-        }
-        .feature-card:hover { border-color: rgba(167,139,250,0.2); background: rgba(167,139,250,0.03); }
-        .feature-icon { font-size: 2em; margin-bottom: 16px; }
-        .feature-card h3 { font-size: 1.1em; font-weight: 700; margin-bottom: 8px; color: #e4e4ef; }
-        .feature-card p { color: #8888a8; font-size: 0.9em; line-height: 1.6; }
 
-        .how-it-works {
+        /* ─── Metrics ─── */
+        .metrics {
             display: flex;
             justify-content: center;
-            gap: 40px;
-            flex-wrap: wrap;
+            align-items: center;
+            gap: 0;
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 60px 24px;
         }
-        .step {
+        .metric {
+            flex: 1;
             text-align: center;
-            max-width: 240px;
+            padding: 20px;
             position: relative;
         }
-        .step-num {
-            width: 56px;
-            height: 56px;
+        .metric + .metric::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 20%; bottom: 20%;
+            width: 1px;
+            background: var(--border);
+        }
+        .metric-value {
+            font-family: 'Syne', sans-serif;
+            font-size: 2.6em;
+            font-weight: 700;
+            color: var(--text);
+            line-height: 1;
+            margin-bottom: 8px;
+        }
+        .metric-label {
+            font-size: 0.78em;
+            color: var(--muted);
+            font-weight: 400;
+            letter-spacing: 0.04em;
+        }
+
+        /* ─── Capabilities ─── */
+        .section {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 80px 24px;
+        }
+        .section-header {
+            margin-bottom: 52px;
+        }
+        .section-label {
+            font-size: 0.72em;
+            font-weight: 500;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 16px;
+        }
+        .section-title {
+            font-family: 'Syne', sans-serif;
+            font-size: clamp(1.8em, 4vw, 2.6em);
+            font-weight: 700;
+            line-height: 1.15;
+            letter-spacing: -0.02em;
+            color: var(--text);
+            max-width: 520px;
+        }
+        .section-title.centered {
+            text-align: center;
+            max-width: 100%;
+        }
+
+        .caps-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1px;
+            background: var(--border);
+            border: 1px solid var(--border);
             border-radius: 16px;
-            background: linear-gradient(135deg, rgba(124,58,237,0.2), rgba(99,102,241,0.2));
-            border: 1px solid rgba(167,139,250,0.3);
+            overflow: hidden;
+        }
+        @media (max-width: 700px) { .caps-grid { grid-template-columns: 1fr; } }
+        .cap-item {
+            background: var(--bg);
+            padding: 36px 28px;
+            transition: background 0.25s;
+        }
+        .cap-item:hover { background: var(--surface); }
+        .cap-icon {
+            width: 40px; height: 40px;
+            margin-bottom: 20px;
+            color: var(--accent);
+            opacity: 0.85;
+        }
+        .cap-title {
+            font-family: 'Syne', sans-serif;
+            font-size: 1.0em;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 10px;
+            letter-spacing: -0.01em;
+        }
+        .cap-desc {
+            font-size: 0.865em;
+            color: var(--muted);
+            line-height: 1.65;
+            font-weight: 300;
+        }
+
+        /* ─── Process ─── */
+        .process-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 32px;
+        }
+        @media (max-width: 700px) { .process-grid { grid-template-columns: 1fr; gap: 24px; } }
+        .process-step {
+            position: relative;
+            padding-top: 16px;
+        }
+        .process-num {
+            font-family: 'Syne', sans-serif;
+            font-size: 0.72em;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: 0.1em;
+            margin-bottom: 20px;
+            opacity: 0.7;
+        }
+        .process-step h4 {
+            font-family: 'Syne', sans-serif;
+            font-size: 1.05em;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 10px;
+            letter-spacing: -0.01em;
+        }
+        .process-step p {
+            font-size: 0.865em;
+            color: var(--muted);
+            line-height: 1.65;
+            font-weight: 300;
+        }
+        .process-line {
+            position: absolute;
+            top: 36px;
+            right: -16px;
+            width: 32px;
+            height: 1px;
+            background: var(--border);
+        }
+        @media (max-width: 700px) { .process-line { display: none; } }
+
+        /* ─── Pricing ─── */
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+        @media (max-width: 700px) { .pricing-grid { grid-template-columns: 1fr; max-width: 340px; margin: 0 auto; } }
+
+        .price-card {
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px 28px;
+            background: var(--surface);
+            position: relative;
+            transition: border-color 0.25s;
+        }
+        .price-card:hover { border-color: var(--border-hover); }
+        .price-card.featured {
+            border-color: rgba(155,138,251,0.3);
+            background: rgba(155,138,251,0.04);
+        }
+        .price-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 6px;
+            background: rgba(155,138,251,0.12);
+            color: var(--accent);
+            font-size: 0.72em;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+        }
+        .price-credits {
+            font-size: 0.8em;
+            color: var(--muted);
+            font-weight: 400;
+            margin-bottom: 8px;
+        }
+        .price-amount {
+            font-family: 'Syne', sans-serif;
+            font-size: 2.8em;
+            font-weight: 700;
+            color: var(--text);
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+        .price-currency {
+            font-size: 0.45em;
+            color: var(--muted);
+            font-weight: 400;
+            vertical-align: top;
+            margin-top: 8px;
+            display: inline-block;
+        }
+        .price-per {
+            font-size: 0.78em;
+            color: var(--muted);
+            margin-bottom: 24px;
+        }
+        .price-divider {
+            height: 1px;
+            background: var(--border);
+            margin-bottom: 20px;
+        }
+        .price-feature {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.83em;
+            color: var(--muted);
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        .price-check {
+            width: 14px; height: 14px;
+            color: var(--accent);
+            flex-shrink: 0;
+        }
+
+        /* ─── Contacts ─── */
+        .contacts-wrap {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            align-items: start;
+        }
+        @media (max-width: 700px) { .contacts-wrap { grid-template-columns: 1fr; } }
+        .contacts-info p {
+            font-size: 0.95em;
+            color: var(--muted);
+            line-height: 1.8;
+            font-weight: 300;
+        }
+        .contact-list {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .contact-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px 20px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: var(--surface);
+            transition: border-color 0.2s;
+        }
+        .contact-row:hover { border-color: var(--border-hover); }
+        .contact-row a { color: var(--text); font-size: 0.9em; }
+        .contact-row a:hover { color: var(--accent); }
+        .contact-icon-wrap {
+            width: 32px; height: 32px;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+            color: var(--muted);
+        }
+        .contact-icon-wrap svg { width: 16px; height: 16px; fill: currentColor; }
+
+        /* ─── Footer ─── */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 40px 24px;
+            max-width: 1000px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .footer-copy {
+            font-size: 0.8em;
+            color: var(--muted);
+        }
+        .footer-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 24px;
+        }
+        .footer-links a {
+            font-size: 0.8em;
+            color: var(--muted);
+            transition: color 0.2s;
+        }
+        .footer-links a:hover { color: var(--text); }
+
+        /* ─── Powered by ─── */
+        .powered {
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto 16px;
-            font-size: 1.4em;
-            font-weight: 800;
-            color: #a78bfa;
+            gap: 10px;
+            padding: 32px 24px;
+            border-top: 1px solid var(--border);
         }
-        .step h4 { font-size: 1em; font-weight: 700; margin-bottom: 6px; }
-        .step p { color: #8888a8; font-size: 0.85em; line-height: 1.5; }
-
-        .contacts-section {
-            background: rgba(255,255,255,0.02);
-            border: 1px solid rgba(255,255,255,0.06);
-            border-radius: 20px;
-            padding: 40px;
-            max-width: 600px;
-            margin: 0 auto;
+        .powered-label {
+            font-size: 0.72em;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
         }
-        .contacts-section p { color: #c4c4d8; line-height: 2; font-size: 1em; }
-        .contacts-section .contact-item { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
-        .contacts-section .contact-icon { font-size: 1.2em; width: 28px; text-align: center; }
-
-        .footer {
-            border-top: 1px solid rgba(255,255,255,0.06);
-            padding: 40px 20px;
-            text-align: center;
-            max-width: 960px;
-            margin: 40px auto 0;
+        .powered-chips {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
         }
-        .footer-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 28px; margin-bottom: 20px; }
-        .footer-links a { color: #6b6b8a; font-size: 0.9em; transition: color 0.2s; }
-        .footer-links a:hover { color: #a78bfa; }
-        .footer .copy { color: #3a3a4a; font-size: 0.85em; }
+        .chip {
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            font-size: 0.72em;
+            color: var(--muted);
+            letter-spacing: 0.03em;
+        }
     </style>
 </head>
 <body>
 
+    <!-- Header -->
+    <header id="site-header">
+        <div class="logo">Pic<span>Gen</span>AI</div>
+        <nav>
+            <a href="#features">Возможности</a>
+            <a href="#pricing">Тарифы</a>
+            <a href="#contacts">Контакты</a>
+        </nav>
+        <a href="https://t.me/PicGenAI_26_bot" class="header-cta">
+            <svg class="btn-icon" viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+            Открыть бота
+        </a>
+    </header>
+
+    <!-- Hero -->
     <section class="hero">
-        <div class="hero-badge">Powered by Google Gemini · Veo · Lyria AI</div>
-        <h1>PicGenAI</h1>
-        <p class="subtitle">Создавайте изображения, видео и музыку с помощью ИИ за секунды. Прямо в Telegram и ВКонтакте.</p>
-        <div class="hero-buttons">
-            <a href="https://t.me/PicGenAI_26_bot" class="btn tg">
-                <svg viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-                Telegram Bot
+        <div class="hero-glow"></div>
+        <div class="hero-glow-2"></div>
+        <div class="hero-eyebrow">Powered by Gemini · Veo 3.1 · Lyria 3</div>
+        <h1>Создавайте<br><em>визуальный</em><br>контент с ИИ</h1>
+        <p class="hero-desc">Изображения, видео и музыка — прямо в Telegram и ВКонтакте. Без приложений, без регистрации.</p>
+        <div class="hero-actions">
+            <a href="https://t.me/PicGenAI_26_bot" class="btn-primary">
+                <svg class="btn-icon" viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                Начать в Telegram
             </a>
-            <a href="https://vk.ru/picgenai" class="btn vk">
-                <svg viewBox="0 0 24 24"><path d="M15.684 0H8.316C1.592 0 0 1.592 0 8.316v7.368C0 22.408 1.592 24 8.316 24h7.368C22.408 24 24 22.408 24 15.684V8.316C24 1.592 22.391 0 15.684 0zm3.692 17.123h-1.744c-.66 0-.864-.525-2.05-1.727-1.033-1-1.49-1.135-1.744-1.135-.356 0-.458.102-.458.593v1.575c0 .424-.135.678-1.253.678-1.846 0-3.896-1.12-5.339-3.202-2.17-3.042-2.763-5.32-2.763-5.778 0-.254.102-.491.593-.491h1.744c.44 0 .61.203.78.678.864 2.491 2.303 4.675 2.896 4.675.22 0 .322-.102.322-.66V9.721c-.068-1.186-.695-1.287-.695-1.71 0-.203.17-.407.44-.407h2.744c.373 0 .508.203.508.643v3.473c0 .372.17.508.271.508.22 0 .407-.136.813-.542 1.253-1.406 2.151-3.574 2.151-3.574.119-.254.322-.491.763-.491h1.744c.525 0 .644.27.525.643-.22 1.017-2.354 4.031-2.354 4.031-.186.305-.254.44 0 .78.186.254.796.779 1.203 1.253.745.847 1.32 1.558 1.473 2.05.17.49-.085.744-.576.744z"/></svg>
+            <a href="https://vk.ru/picgenai" class="btn-secondary">
+                <svg class="btn-icon" viewBox="0 0 24 24"><path d="M15.684 0H8.316C1.592 0 0 1.592 0 8.316v7.368C0 22.408 1.592 24 8.316 24h7.368C22.408 24 24 22.408 24 15.684V8.316C24 1.592 22.391 0 15.684 0zm3.692 17.123h-1.744c-.66 0-.864-.525-2.05-1.727-1.033-1-1.49-1.135-1.744-1.135-.356 0-.458.102-.458.593v1.575c0 .424-.135.678-1.253.678-1.846 0-3.896-1.12-5.339-3.202-2.17-3.042-2.763-5.32-2.763-5.778 0-.254.102-.491.593-.491h1.744c.44 0 .61.203.78.678.864 2.491 2.303 4.675 2.896 4.675.22 0 .322-.102.322-.66V9.721c-.068-1.186-.695-1.287-.695-1.71 0-.203.17-.407.44-.407h2.744c.373 0 .508.203.508.643v3.473c0 .372.17.508.271.508.22 0 .407-.136.813-.542 1.253-1.406 2.151-3.574 2.151-3.574.119-.254.322-.491.763-.491h1.744c.525 0 .644.27.525.643-.22 1.017-2.354 4.031-2.354 4.031-.186.305-.254.44 0 .78.186.254.796.779 1.203 1.253.745.847 1.32 1.558 1.473 2.05.17.49-.085.744-.576.744z"/></svg>
                 ВКонтакте
             </a>
         </div>
+        <div class="scroll-hint">
+            <div class="scroll-line"></div>
+        </div>
     </section>
 
-    <div class="stats">
-        <div class="stat">
-            <div class="stat-num">3в1</div>
-            <div class="stat-label">фото, видео и музыка</div>
+    <div class="section-divider"></div>
+
+    <!-- Metrics -->
+    <div class="metrics">
+        <div class="metric">
+            <div class="metric-value">3&thinsp;в&thinsp;1</div>
+            <div class="metric-label">Фото · видео · музыка</div>
         </div>
-        <div class="stat">
-            <div class="stat-num">4K</div>
-            <div class="stat-label">максимальное качество</div>
+        <div class="metric">
+            <div class="metric-value">4K</div>
+            <div class="metric-label">Максимальное разрешение</div>
         </div>
-        <div class="stat">
-            <div class="stat-num">10+</div>
-            <div class="stat-label">форматов и моделей</div>
+        <div class="metric">
+            <div class="metric-value">10+</div>
+            <div class="metric-label">Моделей и форматов</div>
+        </div>
+        <div class="metric">
+            <div class="metric-value">5</div>
+            <div class="metric-label">Бесплатных кредитов</div>
         </div>
     </div>
 
-    <section class="section">
-        <div class="section-title">Возможности</div>
-        <div class="section-sub">Изображения, видео и музыка — всё в одном боте</div>
-        <div class="features-grid">
-            <div class="feature-card">
-                <div class="feature-icon">🎨</div>
-                <h3>Генерация изображений</h3>
-                <p>Опишите, что хотите увидеть — на русском или английском. ИИ создаст уникальное изображение с точностью до деталей.</p>
+    <div class="section-divider"></div>
+
+    <!-- Features -->
+    <section class="section" id="features">
+        <div class="section-header">
+            <div class="section-label">Возможности</div>
+            <div class="section-title">Всё необходимое для творчества</div>
+        </div>
+        <div class="caps-grid">
+            <div class="cap-item">
+                <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <path d="m21 15-5-5L5 21"/>
+                </svg>
+                <div class="cap-title">Генерация изображений</div>
+                <div class="cap-desc">Опишите сцену на русском или английском. ИИ создаст уникальное изображение с точностью до деталей.</div>
             </div>
-            <div class="feature-card">
-                <div class="feature-icon">🎬</div>
-                <h3>Генерация видео</h3>
-                <p>Создавайте видеоролики до 4K из текста или фото. Модели Veo 3.1 от Google с поддержкой до 8 секунд.</p>
+            <div class="cap-item">
+                <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="23 7 16 12 23 17 23 7"/>
+                    <rect x="1" y="5" width="15" height="14" rx="2"/>
+                </svg>
+                <div class="cap-title">Генерация видео</div>
+                <div class="cap-desc">Видеоролики до 4K из текста или фото. Модели Veo 3.1 от Google с поддержкой до 8 секунд.</div>
             </div>
-            <div class="feature-card">
-                <div class="feature-icon">🎵</div>
-                <h3>Генерация музыки</h3>
-                <p>Создавайте музыкальные треки по описанию или фото. Lyria 3 — полные песни до 3 минут.</p>
+            <div class="cap-item">
+                <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 18V5l12-2v13"/>
+                    <circle cx="6" cy="18" r="3"/>
+                    <circle cx="18" cy="16" r="3"/>
+                </svg>
+                <div class="cap-title">Генерация музыки</div>
+                <div class="cap-desc">Музыкальные треки и полные песни по описанию. Lyria 3 Pro — до 3 минут аудио.</div>
             </div>
-            <div class="feature-card">
-                <div class="feature-icon">📐</div>
-                <h3>Любые пропорции</h3>
-                <p>Квадрат, широкий, вертикальный, кинематограф — 10 форматов для фото и видео на выбор.</p>
+            <div class="cap-item">
+                <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                </svg>
+                <div class="cap-title">Любые пропорции</div>
+                <div class="cap-desc">Квадрат, широкий, вертикальный, кинематограф — 10 форматов для фото и видео на выбор.</div>
             </div>
-            <div class="feature-card">
-                <div class="feature-icon">✨</div>
-                <h3>4K качество</h3>
-                <p>Генерируйте изображения и видео в максимальном разрешении для печати и проектов.</p>
+            <div class="cap-item">
+                <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="m21 21-4.35-4.35"/>
+                    <path d="M11 8v3l2 2"/>
+                </svg>
+                <div class="cap-title">4K качество</div>
+                <div class="cap-desc">Изображения и видео в максимальном разрешении — для печати, портфолио и коммерческих проектов.</div>
             </div>
-            <div class="feature-card">
-                <div class="feature-icon">⚡</div>
-                <h3>Мгновенно</h3>
-                <p>Получайте результат за секунды. Прямо в чате Telegram или ВКонтакте без лишних шагов.</p>
+            <div class="cap-item">
+                <svg class="cap-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m22 2-7 20-4-9-9-4 20-7z"/>
+                </svg>
+                <div class="cap-title">Мгновенный результат</div>
+                <div class="cap-desc">Прямо в чате Telegram или ВКонтакте. Без установки приложений, без лишних шагов.</div>
             </div>
         </div>
     </section>
 
+    <div class="section-divider"></div>
+
+    <!-- How it works -->
     <section class="section">
-        <div class="section-title">Как это работает</div>
-        <div class="section-sub">Три простых шага до вашего контента</div>
-        <div class="how-it-works">
-            <div class="step">
-                <div class="step-num">1</div>
+        <div class="section-header" style="text-align:center;">
+            <div class="section-label" style="text-align:center;">Процесс</div>
+            <div class="section-title centered">Три шага до результата</div>
+        </div>
+        <div class="process-grid">
+            <div class="process-step">
+                <div class="process-num">01</div>
                 <h4>Откройте бота</h4>
-                <p>Запустите бота в Telegram или ВКонтакте и получите бесплатные кредиты для старта</p>
+                <p>Запустите бота в Telegram или ВКонтакте. Вы получите 5 бесплатных кредитов для первых генераций.</p>
+                <div class="process-line"></div>
             </div>
-            <div class="step">
-                <div class="step-num">2</div>
-                <h4>Выберите тип контента</h4>
-                <p>Выберите модель в настройках: изображение, видео (Veo 3.1) или музыка (Lyria 3)</p>
+            <div class="process-step">
+                <div class="process-num">02</div>
+                <h4>Выберите формат</h4>
+                <p>Укажите тип контента — изображение, видео Veo 3.1 или музыку Lyria 3. Настройте разрешение и пропорции.</p>
+                <div class="process-line"></div>
             </div>
-            <div class="step">
-                <div class="step-num">3</div>
+            <div class="process-step">
+                <div class="process-num">03</div>
                 <h4>Получите результат</h4>
-                <p>ИИ сгенерирует фото, видеоролик или музыкальный трек и отправит прямо в чат</p>
+                <p>ИИ сгенерирует фото, ролик или трек и отправит прямо в чат в высоком качестве.</p>
             </div>
         </div>
     </section>
 
-    <section class="section">
-        <div class="section-title">Тарифы</div>
-        <div class="section-sub">Фото от 1 кр. · Видео от 2 кр. · Музыка от 2 кр. · 4K фото = 2 кр.</div>
-        <div class="pricing">
+    <div class="section-divider"></div>
+
+    <!-- Pricing -->
+    <section class="section" id="pricing">
+        <div class="section-header">
+            <div class="section-label">Тарифы</div>
+            <div class="section-title">Простая и прозрачная оплата</div>
+        </div>
+        <div class="pricing-grid">
             <div class="price-card">
-                <div class="amount">30 кредитов</div>
-                <div class="price">99 <span>₽</span></div>
-                <div class="per">3.3 ₽ за генерацию</div>
-                <div class="tag">Старт</div>
+                <div class="price-credits">30 кредитов</div>
+                <div class="price-amount">99<span class="price-currency">₽</span></div>
+                <div class="price-per">~3.3 ₽ за генерацию</div>
+                <div class="price-divider"></div>
+                <div class="price-feature">
+                    <svg class="price-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                        <path d="M3 8l3.5 3.5L13 5"/>
+                    </svg>
+                    30 изображений
+                </div>
+                <div class="price-feature">
+                    <svg class="price-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                        <path d="M3 8l3.5 3.5L13 5"/>
+                    </svg>
+                    15 видео (базовые)
+                </div>
+                <div class="price-feature">
+                    <svg class="price-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                        <path d="M3 8l3.5 3.5L13 5"/>
+                    </svg>
+                    7 музыкальных треков
+                </div>
             </div>
-            <div class="price-card popular">
-                <div class="amount">100 кредитов</div>
-                <div class="price">299 <span>₽</span></div>
-                <div class="per">2.99 ₽ за генерацию</div>
-                <div class="tag">Выгодно</div>
+            <div class="price-card featured">
+                <div class="price-badge">Популярный</div>
+                <div class="price-credits">100 кредитов</div>
+                <div class="price-amount">299<span class="price-currency">₽</span></div>
+                <div class="price-per">~2.99 ₽ за генерацию</div>
+                <div class="price-divider"></div>
+                <div class="price-feature">
+                    <svg class="price-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                        <path d="M3 8l3.5 3.5L13 5"/>
+                    </svg>
+                    100 изображений
+                </div>
+                <div class="price-feature">
+                    <svg class="price-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                        <path d="M3 8l3.5 3.5L13 5"/>
+                    </svg>
+                    50 видео (базовые)
+                </div>
+                <div class="price-feature">
+                    <svg class="price-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                        <path d="M3 8l3.5 3.5L13 5"/>
+                    </svg>
+                    25 музыкальных треков
+                </div>
             </div>
             <div class="price-card">
-                <div class="amount">200 кредитов</div>
-                <div class="price">549 <span>₽</span></div>
-                <div class="per">2.75 ₽ за генерацию</div>
-                <div class="tag">Максимум</div>
+                <div class="price-credits">200 кредитов</div>
+                <div class="price-amount">549<span class="price-currency">₽</span></div>
+                <div class="price-per">~2.75 ₽ за генерацию</div>
+                <div class="price-divider"></div>
+                <div class="price-feature">
+                    <svg class="price-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                        <path d="M3 8l3.5 3.5L13 5"/>
+                    </svg>
+                    200 изображений
+                </div>
+                <div class="price-feature">
+                    <svg class="price-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                        <path d="M3 8l3.5 3.5L13 5"/>
+                    </svg>
+                    100 видео (базовые)
+                </div>
+                <div class="price-feature">
+                    <svg class="price-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                        <path d="M3 8l3.5 3.5L13 5"/>
+                    </svg>
+                    50 музыкальных треков
+                </div>
+            </div>
+        </div>
+        <p style="font-size:0.78em; color:var(--muted); margin-top:20px; text-align:center; font-weight:300;">
+            Фото — 1 кр. · 4K фото — 2 кр. · Видео — от 2 кр. · Музыка — от 2 кр.
+        </p>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- Contacts -->
+    <section class="section" id="contacts">
+        <div class="section-header">
+            <div class="section-label">Контакты</div>
+            <div class="section-title">Свяжитесь с нами</div>
+        </div>
+        <div class="contacts-wrap">
+            <div class="contacts-info">
+                <p>Если у вас есть вопросы по работе сервиса, оплате или сотрудничеству — напишите нам. Поддержка работает в Telegram.</p>
+            </div>
+            <div class="contact-list">
+                <div class="contact-row">
+                    <div class="contact-icon-wrap">
+                        <svg viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
+                    </div>
+                    <a href="mailto:mistermackalister@gmail.com">mistermackalister@gmail.com</a>
+                </div>
+                <div class="contact-row">
+                    <div class="contact-icon-wrap">
+                        <svg viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                    </div>
+                    <a href="https://t.me/ShadowsockTM">@ShadowsockTM — Поддержка в Telegram</a>
+                </div>
+                <div class="contact-row">
+                    <div class="contact-icon-wrap">
+                        <svg viewBox="0 0 24 24"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/></svg>
+                    </div>
+                    <a href="tel:+79503183091">+7 (950) 318-30-91</a>
+                </div>
+                <div class="contact-row">
+                    <div class="contact-icon-wrap">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
+                    </div>
+                    <span style="font-size:0.85em; color:var(--muted); font-weight:300;">Долгопрудный, Московская обл.</span>
+                </div>
             </div>
         </div>
     </section>
 
-    <section class="section">
-        <div class="section-title">Контакты</div>
-        <div class="section-sub">Свяжитесь с нами любым удобным способом</div>
-        <div class="contacts-section">
-            <div class="contact-item">
-                <span class="contact-icon">📧</span>
-                <p><a href="mailto:mistermackalister@gmail.com">mistermackalister@gmail.com</a></p>
-            </div>
-            <div class="contact-item">
-                <span class="contact-icon">📱</span>
-                <p><a href="tel:+79503183091">+7 (950) 318-30-91</a></p>
-            </div>
-            <div class="contact-item">
-                <span class="contact-icon">📍</span>
-                <p>141700, Московская область, г. Долгопрудный, Лихачёвский проезд, д. 6, кв. 43</p>
-            </div>
-            <div class="contact-item">
-                <span class="contact-icon">💬</span>
-                <p>Поддержка: <a href="https://t.me/ShadowsockTM">@ShadowsockTM</a> (Telegram)</p>
-            </div>
-        </div>
-    </section>
+    <div class="section-divider"></div>
 
-    <footer class="footer">
+    <!-- Powered by -->
+    <div class="powered">
+        <span class="powered-label">Powered by</span>
+        <div class="powered-chips">
+            <span class="chip">Google Gemini</span>
+            <span class="chip">Veo 3.1</span>
+            <span class="chip">Lyria 3</span>
+            <span class="chip">Vertex AI</span>
+        </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-copy">&copy; 2025–2026 PicGenAI. Все права защищены.</div>
         <div class="footer-links">
-            <a href="/offer">Договор оферты</a>
-            <a href="/privacy">Политика конфиденциальности</a>
-            <a href="/consent">Согласие на обработку данных</a>
-            <a href="/refund">Условия возврата</a>
+            <a href="/offer">Оферта</a>
+            <a href="/privacy">Конфиденциальность</a>
+            <a href="/consent">Согласие</a>
+            <a href="/refund">Возврат</a>
         </div>
-        <div class="copy">&copy; 2025&ndash;2026 PicGenAI. Все права защищены.</div>
     </footer>
+
+    <script>
+        const header = document.getElementById('site-header');
+        window.addEventListener('scroll', () => {
+            header.classList.toggle('scrolled', window.scrollY > 20);
+        }, { passive: true });
+    </script>
 
 </body>
 </html>
