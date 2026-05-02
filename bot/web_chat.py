@@ -117,16 +117,25 @@ _MEDIA_CACHE_DIR = Path(os.getenv("WEB_MEDIA_CACHE_DIR", "/tmp/web_media_cache")
 _MEDIA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 _MEDIA_CACHE_BUDGET_BYTES = int(os.getenv("WEB_MEDIA_CACHE_MB", "300")) * 1024 * 1024
 
-_PROMPT_TG = (
-    "Здравствуйте! Это код для входа в веб-панель PicGenAI:\n\n"
-    "<b>{code}</b>\n\n"
-    "Никому не сообщайте этот код. Действителен 5 минут."
+# Two-message delivery: an explanatory message, then a dedicated message
+# containing ONLY the code so it is trivial to copy.
+#  • TG: the code-only message wraps the digits in <code>…</code>; in all
+#    modern Telegram clients tapping inline code copies it instantly.
+#  • VK: VK has no inline formatting, but a stand-alone short message with
+#    just the 6 digits is easy to long-press → copy.
+_PROMPT_TG_INTRO = (
+    "Здравствуйте! Это код для входа в веб-панель PicGenAI.\n"
+    "Нажмите на код ниже, чтобы скопировать. Действителен 5 минут.\n"
+    "Никому не сообщайте этот код."
 )
-_PROMPT_VK = (
-    "Это код для входа в веб-панель PicGenAI:\n\n"
-    "{code}\n\n"
-    "Никому не сообщайте этот код. Действителен 5 минут."
+_PROMPT_TG_CODE = "<code>{code}</code>"
+
+_PROMPT_VK_INTRO = (
+    "Это код для входа в веб-панель PicGenAI.\n"
+    "Зажмите сообщение с кодом ниже и нажмите «Скопировать».\n"
+    "Действителен 5 минут. Никому не сообщайте этот код."
 )
+_PROMPT_VK_CODE = "{code}"
 
 
 # ─── Vertex service (set from start_all.py) ─────────────────────────────────
@@ -368,9 +377,17 @@ async def _send_code_tg(user_id: int, code: str) -> tuple[bool, str]:
     if _tg_bot is None:
         return False, "Бот Telegram временно недоступен"
     try:
+        # 1) Explanatory message (no code) — gives context, won't be copied.
         await _tg_bot.send_message(
             chat_id=user_id,
-            text=_PROMPT_TG.format(code=code),
+            text=_PROMPT_TG_INTRO,
+        )
+        # 2) Code-only message wrapped in <code>…</code> — a single tap on
+        #    the inline-code block copies the digits in every modern TG
+        #    client (mobile + desktop).
+        await _tg_bot.send_message(
+            chat_id=user_id,
+            text=_PROMPT_TG_CODE.format(code=code),
             parse_mode="HTML",
         )
         return True, ""
@@ -382,34 +399,55 @@ async def _send_code_tg(user_id: int, code: str) -> tuple[bool, str]:
         return False, "Не удалось отправить код. Попробуйте позже."
 
 
+async def _vk_send_message(token: str, user_id: int, message: str) -> tuple[bool, dict]:
+    """Single VK messages.send call. Returns (ok, raw_response_or_error)."""
+    async with aiohttp.ClientSession() as s:
+        async with s.post(
+            "https://api.vk.com/method/messages.send",
+            data={
+                "access_token": token,
+                "v": "5.199",
+                "user_id": str(user_id),
+                "message": message,
+                "random_id": str(int(time.time() * 1_000_000) % (2**31)),
+                "disable_mentions": "1",
+            },
+            timeout=aiohttp.ClientTimeout(total=15),
+        ) as r:
+            body = await r.json(content_type=None)
+    if "response" in body:
+        return True, body
+    return False, body
+
+
 async def _send_code_vk(user_id: int, code: str) -> tuple[bool, str]:
     token = os.getenv("VK_BOT_TOKEN", "")
     if not token:
         return False, "VK-бот временно недоступен"
     try:
-        async with aiohttp.ClientSession() as s:
-            async with s.post(
-                "https://api.vk.com/method/messages.send",
-                data={
-                    "access_token": token,
-                    "v": "5.199",
-                    "user_id": str(user_id),
-                    "message": _PROMPT_VK.format(code=code),
-                    "random_id": str(int(time.time() * 1000) % (2**31)),
-                    "disable_mentions": "1",
-                },
-                timeout=aiohttp.ClientTimeout(total=15),
-            ) as r:
-                body = await r.json(content_type=None)
-        if "response" in body:
-            return True, ""
-        err = body.get("error", {})
-        code_n = err.get("error_code")
-        msg = err.get("error_msg", "")
-        logger.info("VK send code to %s failed: %s %s", user_id, code_n, msg)
-        if code_n in (901, 902, 7):
-            return False, "Не удалось отправить код. Напишите боту в ВК и разрешите сообщения от сообщества."
-        return False, "Не удалось отправить код. Попробуйте позже."
+        # 1) Intro with instructions.
+        ok_intro, body_intro = await _vk_send_message(token, user_id, _PROMPT_VK_INTRO)
+        # If the very first message fails (most often "user denied messages"),
+        # surface a helpful error immediately.
+        if not ok_intro:
+            err = body_intro.get("error", {})
+            code_n = err.get("error_code")
+            msg = err.get("error_msg", "")
+            logger.info("VK send intro to %s failed: %s %s", user_id, code_n, msg)
+            if code_n in (901, 902, 7):
+                return False, "Не удалось отправить код. Напишите боту в ВК и разрешите сообщения от сообщества."
+            return False, "Не удалось отправить код. Попробуйте позже."
+        # 2) Stand-alone short message containing only the 6 digits — easy
+        #    to long-press → "Скопировать" in any VK client.
+        ok_code, body_code = await _vk_send_message(token, user_id, _PROMPT_VK_CODE.format(code=code))
+        if not ok_code:
+            err = body_code.get("error", {})
+            logger.info(
+                "VK send code-digits to %s failed: %s %s",
+                user_id, err.get("error_code"), err.get("error_msg", ""),
+            )
+            return False, "Не удалось отправить код. Попробуйте позже."
+        return True, ""
     except Exception as exc:
         logger.info("VK send code to %s exception: %s", user_id, exc)
         return False, "Не удалось отправить код. Попробуйте позже."
