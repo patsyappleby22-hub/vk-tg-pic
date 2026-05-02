@@ -2160,10 +2160,11 @@ a:hover{opacity:.8}
 /* ── Main column ── */
 .main{flex:1;display:flex;flex-direction:column;min-width:0;background:transparent;
   position:relative;z-index:1}
+/* Same containing-block caveat as .input-wrap — keep this filter-free so
+   sidebar/modal drawers (position:fixed) escape to the viewport correctly. */
 .main-head{padding:14px 24px;border-bottom:1px solid var(--border);
   display:flex;align-items:center;gap:14px;
-  background:rgba(5,5,7,.55);
-  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+  background:linear-gradient(to bottom,rgba(5,5,7,.85),rgba(5,5,7,.55))}
 .main-title{font-family:'Syne',sans-serif;font-size:1.05em;font-weight:600;
   flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:-.005em}
 .main-title-mode{display:inline-block;margin-left:10px;padding:2px 9px;
@@ -2251,9 +2252,12 @@ a:hover{opacity:.8}
 .progress-bar{height:3px;background:var(--surface2);border-radius:2px;overflow:hidden;margin-top:6px}
 .progress-bar > div{height:100%;background:var(--accent);transition:width .3s}
 
+/* No backdrop-filter here on purpose: it would create a CSS containing
+   block for position:fixed descendants and trap the mobile settings
+   drawer (.input-toolbar) inside the input strip. We use a layered
+   gradient instead so the area still feels like glass over the orbs. */
 .input-wrap{padding:12px 24px 18px;border-top:1px solid var(--border);
-  background:rgba(5,5,7,.55);
-  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+  background:linear-gradient(to top,rgba(5,5,7,.92) 60%,rgba(5,5,7,.55))}
 .input-card{max-width:920px;margin:0 auto;background:rgba(10,10,14,.85);
   border:1px solid var(--border-md);border-radius:16px;
   padding:10px 12px 8px;transition:border-color .15s,box-shadow .15s;
