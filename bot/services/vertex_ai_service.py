@@ -1120,6 +1120,9 @@ class VertexAIService:
 
         image_bytes: bytes | None = None
         text_parts: list[str] = []
+        # Track finish reasons across chunks so we can surface a useful
+        # message when the stream ends with no parts (e.g. IMAGE_SAFETY).
+        last_finish_reason: str = ""
 
         for chunk in client.models.generate_content_stream(
             model=model,
@@ -1128,7 +1131,23 @@ class VertexAIService:
         ):
             if not chunk.candidates:
                 continue
-            for part in chunk.candidates[0].content.parts:
+            candidate = chunk.candidates[0]
+
+            # Capture finish_reason / blocked status if present — newer
+            # Gemini models often send a final chunk with only metadata
+            # (no content) when generation is rejected.
+            fr = getattr(candidate, "finish_reason", None)
+            if fr is not None:
+                last_finish_reason = str(getattr(fr, "name", fr) or "")
+
+            content = getattr(candidate, "content", None)
+            if content is None:
+                continue
+            # `parts` can legitimately be None on metadata-only chunks; the
+            # old code iterated unconditionally and crashed with
+            # "'NoneType' object is not iterable". Coerce to an empty list.
+            parts = getattr(content, "parts", None) or []
+            for part in parts:
                 if getattr(part, "inline_data", None) is not None:
                     image_bytes = part.inline_data.data
                 elif getattr(part, "text", None):
@@ -1147,7 +1166,20 @@ class VertexAIService:
                 raise SafetyFilterError(refusal_text)
             raise GenerationError(f"Модель вернула текст вместо изображения: {refusal_text[:300]}")
 
-        raise GenerationError("The model did not return an image part.")
+        # No image, no text — most often a safety/policy block delivered as
+        # a metadata-only chunk. Map known finish reasons to clear errors.
+        fr_upper = last_finish_reason.upper()
+        if fr_upper in {"SAFETY", "IMAGE_SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST"}:
+            raise SafetyFilterError(
+                f"Запрос отклонён фильтром безопасности модели ({last_finish_reason})."
+            )
+        if fr_upper == "RECITATION":
+            raise GenerationError("Модель отклонила запрос (RECITATION).")
+        if fr_upper == "MAX_TOKENS":
+            raise GenerationError("Превышен лимит токенов модели — попробуйте короче.")
+
+        detail = f" (finish_reason={last_finish_reason})" if last_finish_reason else ""
+        raise GenerationError(f"The model did not return an image part.{detail}")
 
     async def generate_video(
         self,
