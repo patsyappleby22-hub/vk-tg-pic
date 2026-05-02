@@ -340,6 +340,16 @@ def _layout(title: str, content: str, active: str = "") -> str:
     border-color:var(--border-md)}}
   .btn-muted:hover{{background:var(--accent-dim);border-color:var(--accent-glow)}}
   .btn-sm{{padding:6px 13px;font-size:.78em}}
+  .icon-btn{{padding:7px;line-height:0;margin-right:4px;display:inline-flex;
+    align-items:center;justify-content:center;min-width:32px;height:32px}}
+  .icon-btn svg{{width:15px;height:15px;stroke:currentColor;stroke-width:1.7;
+    fill:none;stroke-linecap:round;stroke-linejoin:round}}
+  .stat-dot{{display:inline-block;width:7px;height:7px;border-radius:50%;
+    margin-right:7px;vertical-align:middle;box-shadow:0 0 0 3px rgba(255,255,255,.02)}}
+  .stat-dot.green{{background:var(--green);box-shadow:0 0 0 3px rgba(110,231,183,.12)}}
+  .stat-dot.purple{{background:var(--accent-bright);box-shadow:0 0 0 3px var(--accent-dim)}}
+  .stat-dot.yellow{{background:var(--yellow);box-shadow:0 0 0 3px rgba(252,211,77,.12)}}
+  .stat-dot.red{{background:var(--red);box-shadow:0 0 0 3px rgba(251,113,133,.12)}}
 
   /* ── Detail grid ── */
   .section-heading{{font-family:'Syne',sans-serif;font-size:1.05em;
@@ -1685,15 +1695,15 @@ async def handle_api_keys(request: web.Request) -> web.Response:
 
     msg_html = ""
     if msg == "added":
-        msg_html = '<div class="alert alert-success">✅ Ключ добавлен. Перезапустите сервис чтобы он вступил в силу.</div>'
+        msg_html = '<div class="alert alert-success">Ключ добавлен. Перезапустите сервис, чтобы он вступил в силу.</div>'
     elif msg == "exists":
-        msg_html = '<div class="alert alert-error">⚠️ Такой ключ уже есть.</div>'
+        msg_html = '<div class="alert alert-error">Такой ключ уже есть.</div>'
     elif msg == "deleted":
-        msg_html = '<div class="alert alert-success">🗑 Ключ удалён. Перезапустите сервис для применения.</div>'
+        msg_html = '<div class="alert alert-success">Ключ удалён. Перезапустите сервис для применения.</div>'
     elif msg == "updated":
-        msg_html = '<div class="alert alert-success">✅ Ключ обновлён. Изменения применены.</div>'
+        msg_html = '<div class="alert alert-success">Ключ обновлён. Изменения применены.</div>'
     elif msg == "empty":
-        msg_html = '<div class="alert alert-error">⚠️ Введите непустой ключ.</div>'
+        msg_html = '<div class="alert alert-error">Введите непустой ключ.</div>'
 
     key_rows = ""
     for i, entry in enumerate(stored_keys):
@@ -1703,21 +1713,18 @@ async def handle_api_keys(request: web.Request) -> web.Response:
         else:
             masked = _key_store.mask_key(entry["key"])
             proj = entry.get("project_id") or ""
-        proj_badge = f'<span class="badge badge-green" style="font-size:.75em">📂 {proj}</span>' if proj else '<span class="badge badge-yellow" style="font-size:.75em;opacity:.6">нет проекта</span>'
+        proj_badge = f'<span class="badge badge-green">{proj}</span>' if proj else '<span class="badge" style="color:var(--muted2);border-color:var(--border);background:transparent">без проекта</span>'
         key_rows += f"""<tr id="key-row-{i}">
-  <td style="font-weight:600;color:var(--muted);width:36px">{i+1}</td>
-  <td><code style="font-size:.88em;color:var(--accent)">{masked}</code><br>{proj_badge}</td>
+  <td style="font-weight:500;color:var(--muted2);width:36px">{i+1}</td>
+  <td><code style="font-size:.88em;color:var(--accent-bright)">{masked}</code><br><span style="display:inline-block;margin-top:6px">{proj_badge}</span></td>
   <td id="st-{i}"><span class="badge badge-yellow" style="opacity:.5">…</span></td>
-  <td id="act-{i}" style="font-size:.82em;color:var(--muted)">—</td>
-  <td id="load-{i}" style="font-size:.82em;color:var(--muted)">—</td>
-  <td id="stat-{i}" style="font-size:.82em;color:var(--muted)">—</td>
+  <td id="act-{i}" style="font-size:.82em;color:var(--muted2)">—</td>
+  <td id="load-{i}" style="font-size:.82em;color:var(--muted2)">—</td>
+  <td id="stat-{i}" style="font-size:.82em;color:var(--muted2)">—</td>
   <td style="white-space:nowrap">
-    <button class="btn btn-sm" style="background:rgba(139,92,246,.12);color:var(--accent);border:1px solid rgba(139,92,246,.2);margin-right:4px"
-      onclick="showEdit({i},'{masked}','{proj}')">✏️</button>
-    <button class="btn btn-sm" style="background:rgba(139,92,246,.12);color:var(--accent);border:1px solid rgba(139,92,246,.2);margin-right:4px"
-      onclick="showHistory({i})">📋</button>
-    <button class="btn btn-sm" style="background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.2)"
-      onclick="deleteKey({i})">🗑</button>
+    <button class="btn btn-muted btn-sm icon-btn" title="Редактировать" onclick="showEdit({i},'{masked}','{proj}')"><svg viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4zM14 6l4 4"/></svg></button>
+    <button class="btn btn-muted btn-sm icon-btn" title="История" onclick="showHistory({i})"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2"/></svg></button>
+    <button class="btn btn-danger btn-sm icon-btn" title="Удалить" onclick="deleteKey({i})"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></svg></button>
   </td>
 </tr>
 """
@@ -1728,21 +1735,19 @@ async def handle_api_keys(request: web.Request) -> web.Response:
         name = sa.get("name", "")
         proj = sa.get("project_id") or ""
         email = sa.get("client_email") or ""
-        proj_badge = f'<span class="badge badge-green" style="font-size:.75em">📂 {proj}</span>' if proj else '<span class="badge badge-yellow" style="font-size:.75em;opacity:.6">нет проекта</span>'
-        sa_badge = '<span class="badge badge-blue" style="font-size:.7em;margin-right:4px">🔐 SA</span>'
-        email_html = f'<br><span style="color:var(--muted);font-size:.72em">{email}</span>' if email else ''
+        proj_badge = f'<span class="badge badge-green">{proj}</span>' if proj else '<span class="badge" style="color:var(--muted2);border-color:var(--border);background:transparent">без проекта</span>'
+        sa_badge = '<span class="badge badge-blue" style="margin-right:6px">SA</span>'
+        email_html = f'<br><span style="color:var(--muted2);font-size:.72em">{email}</span>' if email else ''
         key_rows += f"""<tr id="key-row-{i}">
-  <td style="font-weight:600;color:var(--muted);width:36px">{i+1}</td>
-  <td>{sa_badge}<code style="font-size:.85em;color:var(--accent)">{name}</code><br>{proj_badge}{email_html}</td>
+  <td style="font-weight:500;color:var(--muted2);width:36px">{i+1}</td>
+  <td>{sa_badge}<code style="font-size:.85em;color:var(--accent-bright)">{name}</code><br><span style="display:inline-block;margin-top:6px">{proj_badge}</span>{email_html}</td>
   <td id="st-{i}"><span class="badge badge-yellow" style="opacity:.5">…</span></td>
-  <td id="act-{i}" style="font-size:.82em;color:var(--muted)">—</td>
-  <td id="load-{i}" style="font-size:.82em;color:var(--muted)">—</td>
-  <td id="stat-{i}" style="font-size:.82em;color:var(--muted)">—</td>
+  <td id="act-{i}" style="font-size:.82em;color:var(--muted2)">—</td>
+  <td id="load-{i}" style="font-size:.82em;color:var(--muted2)">—</td>
+  <td id="stat-{i}" style="font-size:.82em;color:var(--muted2)">—</td>
   <td style="white-space:nowrap">
-    <button class="btn btn-sm" style="background:rgba(139,92,246,.12);color:var(--accent);border:1px solid rgba(139,92,246,.2);margin-right:4px"
-      onclick="showHistory({i})">📋</button>
-    <button class="btn btn-sm" style="background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.2)"
-      onclick="deleteSAFile('{name}')">🗑</button>
+    <button class="btn btn-muted btn-sm icon-btn" title="История" onclick="showHistory({i})"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2"/></svg></button>
+    <button class="btn btn-danger btn-sm icon-btn" title="Удалить" onclick="deleteSAFile('{name}')"><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></svg></button>
   </td>
 </tr>
 """
@@ -1760,10 +1765,10 @@ async def handle_api_keys(request: web.Request) -> web.Response:
 <!-- Summary cards — updated by JS -->
 <div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr));margin-bottom:24px">
   <div class="card"><div class="card-label">Всего ключей</div><div class="card-value purple">{total}</div></div>
-  <div class="card"><div class="card-label">🟢 Активны</div><div class="card-value green" id="cnt-ok">—</div></div>
-  <div class="card"><div class="card-label">⚡ В работе</div><div class="card-value" style="color:var(--accent-bright)" id="cnt-active">—</div></div>
-  <div class="card"><div class="card-label">⏳ Кулдаун</div><div class="card-value yellow" id="cnt-cool">—</div></div>
-  <div class="card"><div class="card-label">🔴 Ошибка</div><div class="card-value red" id="cnt-err">—</div></div>
+  <div class="card"><div class="card-label"><span class="stat-dot green"></span>Активны</div><div class="card-value green" id="cnt-ok">—</div></div>
+  <div class="card"><div class="card-label"><span class="stat-dot purple"></span>В работе</div><div class="card-value" style="color:var(--accent-bright)" id="cnt-active">—</div></div>
+  <div class="card"><div class="card-label"><span class="stat-dot yellow"></span>Кулдаун</div><div class="card-value yellow" id="cnt-cool">—</div></div>
+  <div class="card"><div class="card-label"><span class="stat-dot red"></span>Ошибка</div><div class="card-value red" id="cnt-err">—</div></div>
 </div>
 
 <div class="table-wrap" style="margin-bottom:24px">
@@ -1782,7 +1787,7 @@ async def handle_api_keys(request: web.Request) -> web.Response:
 </div>
 
 <div class="card" style="max-width:600px">
-  <h3 style="margin-bottom:14px;font-size:1em;color:var(--text)">➕ Добавить Google API ключ</h3>
+  <h3 style="margin-bottom:14px;font-size:1em;color:var(--text)">Добавить Google API ключ</h3>
   <div style="display:flex;flex-direction:column;gap:10px">
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <input type="text" id="new-key-input" placeholder="AIza..." autocomplete="off"
@@ -1796,20 +1801,20 @@ async def handle_api_keys(request: web.Request) -> web.Response:
       <button class="btn btn-primary" onclick="addKey()" style="white-space:nowrap">Добавить ключ</button>
     </div>
   </div>
-  <p style="color:var(--muted);font-size:.78em;margin-top:10px">
+  <p style="color:var(--muted2);font-size:.78em;margin-top:10px;line-height:1.6">
     Ключ хранится в БД и применяется <b>немедленно</b> без перезапуска сервиса.<br>
-    📂 <b>ID проекта</b> — обязателен для генерации видео (Veo). Для изображений и чата — не нужен.
+    <b>ID проекта</b> — обязателен для генерации видео (Veo). Для изображений и чата — не нужен.
   </p>
-  <p style="color:var(--muted);font-size:.78em;margin-top:6px;line-height:1.6">
-    ⚡ <b>В работе</b> — прямо сейчас обрабатывает запрос(ы)<br>
-    🟢 <b>Активен</b> — готов принимать запросы<br>
-    ⏳ <b>Кулдаун</b> — получил 429, ждёт 60с<br>
-    🔴 <b>Ошибка авт.</b> — биллинг отключён или ключ отозван
+  <p style="color:var(--muted2);font-size:.78em;margin-top:10px;line-height:1.8">
+    <span class="stat-dot purple"></span><b>В работе</b> — прямо сейчас обрабатывает запрос<br>
+    <span class="stat-dot green"></span><b>Активен</b> — готов принимать запросы<br>
+    <span class="stat-dot yellow"></span><b>Кулдаун</b> — получил 429, ждёт 60с<br>
+    <span class="stat-dot red"></span><b>Ошибка авторизации</b> — биллинг отключён или ключ отозван
   </p>
 </div>
 
 <div class="card" style="max-width:600px;margin-top:20px">
-  <h3 style="margin-bottom:14px;font-size:1em;color:var(--text)">📂 Service Account JSON (для Veo / Lyria)</h3>
+  <h3 style="margin-bottom:14px;font-size:1em;color:var(--text)">Service Account JSON (для Veo / Lyria)</h3>
   <p style="color:var(--muted);font-size:.82em;margin-bottom:12px;line-height:1.5">
     Загрузите JSON-файл сервисного аккаунта Google Cloud — он автоматически добавится в ротацию и сможет
     обслуживать <b>видео (Veo)</b> и <b>музыку (Lyria)</b> через Vertex AI, что позволяет
@@ -1876,18 +1881,20 @@ function fmtAgo(sec) {{
 
 function modelShort(m) {{
   if (!m) return '';
-  if (m.includes('flash-image')) return 'Flash🖼';
-  if (m.includes('pro-image'))   return 'Pro🖼';
-  if (m.includes('pro-preview')) return 'Pro💬';
-  if (m.includes('flash'))       return 'Flash💬';
+  if (m.includes('flash-image')) return 'Flash·img';
+  if (m.includes('pro-image'))   return 'Pro·img';
+  if (m.includes('pro-preview')) return 'Pro·chat';
+  if (m.includes('flash'))       return 'Flash·chat';
+  if (m.includes('veo'))         return 'Veo';
+  if (m.includes('lyria'))       return 'Lyria';
   return m.split('-').slice(-2).join('-');
 }}
 
 function statusBadge(s, cd) {{
-  if (s === 'active')     return '<span class="badge badge-blue" style="animation:pulse 1s infinite">⚡ В работе</span>';
-  if (s === 'auth_error') return '<span class="badge badge-red">🔴 Ошибка авт.</span>';
-  if (s === 'cooldown')   return `<span class="badge badge-yellow">⏳ Кулдаун ${{cd}}с</span>`;
-  return '<span class="badge badge-green">🟢 Активен</span>';
+  if (s === 'active')     return '<span class="badge badge-blue" style="animation:pulse 1s infinite"><span class="stat-dot purple"></span>В работе</span>';
+  if (s === 'auth_error') return '<span class="badge badge-red"><span class="stat-dot red"></span>Ошибка авт.</span>';
+  if (s === 'cooldown')   return `<span class="badge badge-yellow"><span class="stat-dot yellow"></span>Кулдаун ${{cd}}с</span>`;
+  return '<span class="badge badge-green"><span class="stat-dot green"></span>Активен</span>';
 }}
 
 async function poll() {{
@@ -1920,7 +1927,7 @@ async function poll() {{
       // Active requests cell
       if (s.active_requests > 0) {{
         const model = modelShort(s.last_model);
-        act.innerHTML = `<span style="color:var(--accent-bright);font-weight:600">⚡ ${{s.active_requests}} шт</span>`
+        act.innerHTML = `<span style="color:var(--accent-bright);font-weight:600"><span class="stat-dot purple"></span>${{s.active_requests}} шт</span>`
                       + (model ? ` <span style="color:var(--muted)">[${{model}}]</span>` : '');
       }} else {{
         const ago = fmtAgo(s.last_used_ago);
@@ -2043,13 +2050,13 @@ async function showHistory(idx) {{
       const dt = new Date(h.ts);
       const time = dt.toLocaleString('ru-RU', {{hour:'2-digit',minute:'2-digit',second:'2-digit',day:'2-digit',month:'2-digit'}});
       const stMap = {{
-        'ok': '<span style="color:var(--green)">✅ Успех</span>',
-        'safety': '<span style="color:var(--yellow)">🚫 Безопасность</span>',
-        'timeout': '<span style="color:var(--red)">⏱ Таймаут</span>',
-        'rate_limit': '<span style="color:var(--yellow)">⚡ 429</span>',
-        'auth_error': '<span style="color:var(--red)">🔴 Авт. ошибка</span>',
-        'error': '<span style="color:var(--red)">❌ Ошибка</span>',
-        'text_retry': '<span style="color:var(--yellow)">🔄 Повтор</span>',
+        'ok':         '<span class="badge badge-green"><span class="stat-dot green"></span>Успех</span>',
+        'safety':     '<span class="badge badge-yellow"><span class="stat-dot yellow"></span>Безопасность</span>',
+        'timeout':    '<span class="badge badge-red"><span class="stat-dot red"></span>Таймаут</span>',
+        'rate_limit': '<span class="badge badge-yellow"><span class="stat-dot yellow"></span>429</span>',
+        'auth_error': '<span class="badge badge-red"><span class="stat-dot red"></span>Авт. ошибка</span>',
+        'error':      '<span class="badge badge-red"><span class="stat-dot red"></span>Ошибка</span>',
+        'text_retry': '<span class="badge badge-yellow"><span class="stat-dot yellow"></span>Повтор</span>',
       }};
       const stHtml = stMap[h.status] || `<span style="color:var(--muted)">${{esc(h.status)}}</span>`;
       const user = h.username ? `<span style="color:var(--accent)">@${{esc(h.username)}}</span>` : (h.user_id ? `id:${{h.user_id}}` : '—');

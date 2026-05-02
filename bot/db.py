@@ -177,6 +177,10 @@ def init_tables() -> None:
                 ON bot_key_history (slot_index, created_at DESC)
             """)
             cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_key_history_label
+                ON bot_key_history (slot_label, created_at DESC)
+            """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS autopub_settings (
                     id              INT PRIMARY KEY DEFAULT 1,
                     enabled         BOOLEAN NOT NULL DEFAULT FALSE,
@@ -753,23 +757,41 @@ def save_key_history_entry(
                     (slot_index, slot_label, ts, user_id, username, prompt, model, status, error, duration_ms)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (slot_index, slot_label, ts, user_id, username, prompt[:300], model, status, error[:500], duration_ms))
-            # Keep only last 200 rows per slot
-            cur.execute("""
-                DELETE FROM bot_key_history
-                WHERE slot_index = %s
-                  AND id NOT IN (
-                      SELECT id FROM bot_key_history
-                      WHERE slot_index = %s
-                      ORDER BY created_at DESC
-                      LIMIT 200
-                  )
-            """, (slot_index, slot_index))
+            # Keep last 200 rows per stable slot_label (so reordering keys
+            # doesn't evict another key's history). Fall back to slot_index
+            # pruning only when label is empty (legacy rows).
+            if slot_label:
+                cur.execute("""
+                    DELETE FROM bot_key_history
+                    WHERE slot_label = %s
+                      AND id NOT IN (
+                          SELECT id FROM bot_key_history
+                          WHERE slot_label = %s
+                          ORDER BY created_at DESC
+                          LIMIT 200
+                      )
+                """, (slot_label, slot_label))
+            else:
+                cur.execute("""
+                    DELETE FROM bot_key_history
+                    WHERE slot_index = %s
+                      AND (slot_label IS NULL OR slot_label = '')
+                      AND id NOT IN (
+                          SELECT id FROM bot_key_history
+                          WHERE slot_index = %s
+                            AND (slot_label IS NULL OR slot_label = '')
+                          ORDER BY created_at DESC
+                          LIMIT 200
+                      )
+                """, (slot_index, slot_index))
     except Exception:
         logger.debug("db: failed to save key history for slot %d", slot_index)
 
 
 def load_key_history(slot_index: int, limit: int = 200) -> list[dict]:
-    """Return history entries for a slot, newest first."""
+    """Return history entries for a slot, newest first.
+    Strict legacy-only lookup: only rows with NO slot_label are returned, so
+    labeled rows belonging to other (replaced) keys aren't misattributed."""
     if not _DATABASE_URL:
         return []
     try:
@@ -779,6 +801,7 @@ def load_key_history(slot_index: int, limit: int = 200) -> list[dict]:
                 SELECT ts, user_id, username, prompt, model, status, error, duration_ms
                 FROM bot_key_history
                 WHERE slot_index = %s
+                  AND (slot_label IS NULL OR slot_label = '')
                 ORDER BY created_at DESC
                 LIMIT %s
             """, (slot_index, limit))
@@ -792,6 +815,33 @@ def load_key_history(slot_index: int, limit: int = 200) -> list[dict]:
             ]
     except Exception:
         logger.debug("db: failed to load key history for slot %d", slot_index)
+        return []
+
+
+def load_key_history_by_label(slot_label: str, limit: int = 200) -> list[dict]:
+    """Return history entries by stable slot_label (survives reordering of slots)."""
+    if not _DATABASE_URL or not slot_label:
+        return []
+    try:
+        conn = _get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT ts, user_id, username, prompt, model, status, error, duration_ms
+                FROM bot_key_history
+                WHERE slot_label = %s
+                ORDER BY created_at DESC
+                LIMIT %s
+            """, (slot_label, limit))
+            return [
+                {
+                    "ts": r[0], "user_id": r[1], "username": r[2],
+                    "prompt": r[3], "model": r[4], "status": r[5],
+                    "error": r[6], "duration_ms": r[7],
+                }
+                for r in cur.fetchall()
+            ]
+    except Exception:
+        logger.debug("db: failed to load key history by label '%s'", slot_label)
         return []
 
 

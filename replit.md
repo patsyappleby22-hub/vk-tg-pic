@@ -14,7 +14,8 @@ An asynchronous multi-platform bot (Telegram + VK) for AI image, video, and musi
 - **Web pages**: `web/templates/` — landing (index.html), success.html, fail.html (+ fallback in code)
 - **Webhooks**: `bot/web_server.py` — FreeKassa + Pally webhook handlers with signature verification, idempotency
 - **Config**: `bot/config.py` — pydantic-settings from environment variables
-- **Database**: `bot/db.py` — PostgreSQL persistence (users, API keys, payments)
+- **Database**: `bot/db.py` — PostgreSQL persistence (users, API keys, SA files, payments, key history)
+- **Credential storage**: API keys (`bot_api_keys`) and Service-Account JSON files (`bot_sa_files`) persist in PostgreSQL. SA files are also mirrored to `data/service_accounts/` so `vertex_ai_service` can load them by path. Per-key request history (`bot_key_history`) is keyed by a stable `slot_label` (`api:<sha1[:10]>` for API keys, filename stem for SA), so it survives reordering / adding / removing of other slots.
 
 ## Required Secrets
 - `TELEGRAM_BOT_TOKEN` — Bot token from @BotFather

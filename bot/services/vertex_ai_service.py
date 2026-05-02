@@ -322,7 +322,9 @@ class _ApiKeySlot(_BaseSlot):
 
     @property
     def label(self) -> str:
-        return f"api_key_{self.index + 1}"
+        import hashlib
+        suffix = hashlib.sha1(self._api_key.encode("utf-8")).hexdigest()[:10]
+        return f"api:{suffix}"
 
     @property
     def has_project(self) -> bool:
@@ -569,10 +571,16 @@ class VertexAIService:
             slot = self._slots[slot_index]
             if slot.history:
                 return list(slot.history)
-            # Fall back to DB if in-memory history is empty (e.g. after restart)
+            # Fall back to DB if in-memory history is empty (e.g. after restart).
+            # Look up by stable slot_label only (api:<hash> for API keys,
+            # filename stem for SA). The strict unlabeled-by-index loader is
+            # the only legacy fallback — it never returns labeled rows from
+            # other keys, preventing cross-attribution after reordering.
             try:
                 import bot.db as _db
-                db_history = _db.load_key_history(slot_index)
+                db_history = _db.load_key_history_by_label(slot.label)
+                if not db_history:
+                    db_history = _db.load_key_history(slot_index)
                 if db_history:
                     for entry in reversed(db_history):
                         slot.history.appendleft(entry)
