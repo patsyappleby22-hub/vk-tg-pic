@@ -14,7 +14,6 @@ from bot.keyboards import (
     BTN_MENU,
     BTN_STOP,
     BTN_SETTINGS,
-    BTN_WEB_CHAT,
     get_persistent_keyboard,
     get_settings_summary_keyboard,
     get_balance_keyboard,
@@ -35,6 +34,24 @@ from bot.handlers.creative import _sessions as chat_sessions
 router = Router(name="start")
 
 BTN_BALANCE = "💰 Баланс"
+
+
+_WEB_CHAT_BASE = "https://www.vk-tg-picgenai.ru"
+
+
+def _web_chat_inline_kb(uid: int) -> InlineKeyboardMarkup:
+    """Inline button shown inside the menu — opens prefilled web chat.
+
+    No code is generated here: the web page itself requests a fresh code
+    once the user lands on it, so the code arrives the moment the panel
+    with the input field appears.
+    """
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(
+            text="🌐 Открыть веб-чат",
+            url=f"{_WEB_CHAT_BASE}/chat?platform=tg&uid={uid}",
+        )
+    ]])
 
 
 def _build_menu_text(first_name: str, generations: int, credits: int, blocked: bool) -> str:
@@ -80,6 +97,7 @@ async def cmd_start(message: Message) -> None:
     await message.answer(
         _build_menu_text(first_name, generations, credits, blocked),
         parse_mode="HTML",
+        reply_markup=_web_chat_inline_kb(uid),
     )
 
 
@@ -97,6 +115,7 @@ async def cmd_menu(message: Message) -> None:
     await message.answer(
         _build_menu_text(first_name, generations, credits, blocked),
         parse_mode="HTML",
+        reply_markup=_web_chat_inline_kb(uid),
     )
 
 
@@ -178,31 +197,17 @@ async def cmd_info(message: Message) -> None:
     )
 
 
-_WEB_CHAT_BASE = "https://www.vk-tg-picgenai.ru"
-
-
 @router.message(Command("webchat"))
-@router.message(lambda m: m.text == BTN_WEB_CHAT)
-async def cmd_web_chat(message: Message) -> None:
-    """Issue a fresh login code and DM the user a prefilled web-chat link."""
-    from bot.web_chat import issue_login_code
-
+async def cmd_webchat(message: Message) -> None:
+    """Alternate entry point — same inline button as in the menu."""
     uid = message.from_user.id
-    code, err = await issue_login_code(uid, "tg")
-    if not code:
-        await message.answer(err or "Не удалось создать код. Попробуйте позже.")
-        return
-
-    link = f"{_WEB_CHAT_BASE}/chat?platform=tg&uid={uid}"
     await message.answer(
         "🌐 <b>Веб-версия чата PicGenAI</b>\n\n"
-        f"1. Откройте по ссылке: {link}\n"
-        "2. Введите шестизначный код ниже\n\n"
-        "Код действует 5 минут. Кредиты и история — общие с этим ботом.",
+        "Откройте по кнопке ниже — код придёт автоматически, "
+        "когда откроется панель ввода.",
         parse_mode="HTML",
-        disable_web_page_preview=True,
+        reply_markup=_web_chat_inline_kb(uid),
     )
-    await message.answer(f"<code>{code}</code>", parse_mode="HTML")
 
 
 @router.message(Command("cancel"))

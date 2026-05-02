@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from vkbottle import Keyboard, KeyboardButtonColor, Text, Callback
+from vkbottle import Keyboard, KeyboardButtonColor, Text, Callback, OpenLink
 
 from bot.user_settings import (
     get_user_settings, AVAILABLE_MODELS, SEND_MODES, RESOLUTIONS, THINKING_LEVELS,
@@ -13,6 +13,9 @@ from bot.keyboards import ASPECT_RATIOS
 
 
 def get_persistent_keyboard() -> str:
+    # Web-chat button intentionally removed from the persistent keyboard —
+    # it now lives as an inline button inside the menu message itself
+    # (see get_web_chat_inline_keyboard).
     kb = Keyboard(one_time=False, inline=False)
     kb.add(Text("📋 Меню"), color=KeyboardButtonColor.PRIMARY)
     kb.add(Text("💬 Чат"), color=KeyboardButtonColor.POSITIVE)
@@ -20,8 +23,21 @@ def get_persistent_keyboard() -> str:
     kb.add(Text("⚙️ Настройки"), color=KeyboardButtonColor.SECONDARY)
     kb.add(Text("💰 Баланс"), color=KeyboardButtonColor.POSITIVE)
     kb.row()
-    kb.add(Text("🌐 Веб-чат"), color=KeyboardButtonColor.PRIMARY)
     kb.add(Text("⛔ Стоп"), color=KeyboardButtonColor.NEGATIVE)
+    return kb.get_json()
+
+
+def get_web_chat_inline_keyboard(uid: int) -> str:
+    """Single inline OpenLink button shown under the menu message.
+
+    The link carries platform+uid so the web page can request a fresh
+    login code automatically — the user only types the code, no ID step.
+    """
+    kb = Keyboard(inline=True)
+    kb.add(OpenLink(
+        "🌐 Открыть веб-чат",
+        link=f"https://www.vk-tg-picgenai.ru/chat?platform=vk&uid={uid}",
+    ))
     return kb.get_json()
 
 

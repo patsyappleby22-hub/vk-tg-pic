@@ -421,50 +421,11 @@ def _hash_code(user_id: int, platform: str, code: str) -> str:
     ).hexdigest()
 
 
-# ─── Public helper for bot menus ─────────────────────────────────────────────
-# When a user taps the "Веб-чат" button inside the TG or VK bot, we want the
-# bot to generate the login code itself (so the user does not have to type
-# their own ID) and DM both the code and the prefilled link. This helper is
-# imported by `bot/handlers/start.py` and `vk_bot/handlers.py`.
-
-async def issue_login_code(
-    user_id: int, platform: str, ip: str = "", ua: str = ""
-) -> tuple[str | None, str | None]:
-    """Generate a fresh 6-digit code, persist its hash, and return the
-    plaintext code so the bot can send it directly to the user.
-
-    Returns ``(code, None)`` on success, or ``(None, error_message)`` if the
-    user is rate-limited, blocked, or the DB is unavailable. The same
-    rate-limit windows as `/chat/api/login/request` apply.
-    """
-    if platform not in ("tg", "vk"):
-        return None, "Неизвестная платформа"
-    if is_blocked(user_id):
-        _db.web_login_log(user_id, platform, "blocked", ip, ua, "")
-        return None, "Доступ заблокирован администратором"
-
-    recent = _db.web_code_recent_count(user_id, platform, _CODE_RATE_LIMIT_WINDOW)
-    if recent >= _CODE_RATE_LIMIT_PER_USER:
-        _db.web_login_log(user_id, platform, "rate_limit", ip, ua, f"recent={recent}")
-        return None, (
-            f"Слишком часто. Подождите {_CODE_RATE_LIMIT_WINDOW} минут "
-            "перед следующей попыткой."
-        )
-
-    code = f"{secrets.randbelow(1_000_000):06d}"
-    expires_at = (datetime.now(timezone.utc) + timedelta(seconds=_CODE_TTL)).isoformat()
-    code_id = _db.web_code_create(
-        _hash_code(user_id, platform, code), user_id, platform, expires_at, ip
-    )
-    if code_id is None:
-        _db.web_login_log(user_id, platform, "db_unavailable", ip, ua, "")
-        return None, "Сервис временно недоступен, попробуйте через минуту."
-
-    _db.web_login_log(user_id, platform, "code_sent_bot", ip, ua, "via_bot_menu")
-    return code, None
-
-
 # ─── Aiohttp handlers: auth ─────────────────────────────────────────────────
+# Note: bot menus do NOT pre-issue codes anymore. The "🌐 Открыть веб-чат"
+# inline button just opens /chat?platform=&uid=, and the SPA itself POSTs
+# to /chat/api/login/request on page load — so the code arrives in the
+# user's bot DM exactly when the code-input panel becomes visible.
 
 async def handle_login_request(request: web.Request) -> web.Response:
     try:
@@ -2314,17 +2275,34 @@ a:hover{opacity:.8}
 
   let pendingUserId = null;
 
-  // If we arrived via the bot's "Веб-чат" button (?platform=&uid=), the bot
-  // already DM'd a fresh code, so jump directly to the code-input step.
+  // If we arrived via the bot's "Открыть веб-чат" inline button
+  // (?platform=&uid=), automatically request a fresh login code so the
+  // user lands directly on the code-input panel and the code arrives in
+  // their bot DM the moment this page opens.
   if (pendingUserIdEarly) {
-    pendingUserId = pendingUserIdEarly;
     document.querySelectorAll("#loginTabs .tab").forEach(b =>
       b.classList.toggle("active", b.dataset.platform === loginPlatform));
     $("loginTabs").style.display = "none";
     $("step1").style.display = "none";
     $("step2").style.display = "block";
-    showOk("Введите код, который вам прислал бот в личных сообщениях.");
-    setTimeout(() => $("codeInput").focus(), 50);
+    $("verifyBtn").disabled = true;
+    showOk("Запрашиваем код у бота…");
+    fetch("/chat/api/login/request", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({platform: loginPlatform, identifier: String(pendingUserIdEarly)}),
+    }).then(r => r.json().then(j => ({ok: r.ok, j})))
+      .then(({ok, j}) => {
+        if (!ok) {
+          showError(j.error || "Не удалось отправить код. Откройте бота, нажмите /start и попробуйте снова.");
+          return;
+        }
+        pendingUserId = j.user_id;
+        $("verifyBtn").disabled = false;
+        showOk("Код отправлен в бот. Введите его в поле ниже.");
+        setTimeout(() => $("codeInput").focus(), 50);
+      })
+      .catch(() => showError("Сеть недоступна"));
   }
 
   $("reqBtn").addEventListener("click", async () => {

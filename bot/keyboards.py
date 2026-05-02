@@ -38,11 +38,13 @@ ASPECT_RATIOS: dict[str, str] = {
 
 
 def get_persistent_keyboard() -> ReplyKeyboardMarkup:
+    # Web-chat button intentionally removed from persistent keyboard —
+    # it now lives as an inline button inside the menu message itself.
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=BTN_MENU), KeyboardButton(text=BTN_CHAT)],
             [KeyboardButton(text=BTN_SETTINGS), KeyboardButton(text=BTN_BALANCE)],
-            [KeyboardButton(text=BTN_WEB_CHAT), KeyboardButton(text=BTN_STOP)],
+            [KeyboardButton(text=BTN_STOP)],
         ],
         resize_keyboard=True,
         is_persistent=True,
