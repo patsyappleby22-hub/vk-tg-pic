@@ -397,7 +397,13 @@ async def _error_middleware(request: web.Request, handler) -> web.Response:
 
 
 def create_web_app() -> web.Application:
-    app = web.Application(middlewares=[_no_cache_middleware, _error_middleware])
+    # client_max_size must accommodate Veo video-extension uploads (≤100 MiB
+    # per file, see _MAX_UPLOAD_VIDEO_SIZE in bot/web_chat.py). aiohttp's
+    # default of ~1 MiB would 413 long before the per-handler cap fires.
+    app = web.Application(
+        middlewares=[_no_cache_middleware, _error_middleware],
+        client_max_size=128 * 1024 * 1024,
+    )
     app.router.add_get("/", handle_index)
     app.router.add_get("/shop-verification-WG76VJD7xl.txt", handle_verification)
     app.router.add_get("/payment/success", handle_success)
