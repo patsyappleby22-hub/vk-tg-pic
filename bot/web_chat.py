@@ -828,6 +828,11 @@ async def handle_media(request: web.Request) -> web.Response:
         "Cache-Control": "private, max-age=86400",
         "Content-Length": str(len(data)),
     }
+    # Optional ?download=1 → force browser to save instead of inline view.
+    if request.query.get("download") in ("1", "true", "yes"):
+        ext = {"image": "jpg", "video": "mp4", "audio": "mp3"}.get(kind, "bin")
+        fname = f"picgenai-{kind}-{mid}.{ext}"
+        headers["Content-Disposition"] = f'attachment; filename="{fname}"'
     return web.Response(body=data, content_type=ctype, headers=headers)
 
 
@@ -1974,6 +1979,14 @@ a:hover{opacity:.8}
   border:1px solid var(--border);background:var(--surface);cursor:pointer}
 .msg-video{display:block;max-width:100%;max-height:480px;border-radius:10px;background:#000}
 .msg-audio{width:100%;max-width:480px}
+.msg-actions{display:flex;gap:8px;margin-top:2px}
+.msg-download{display:inline-flex;align-items:center;gap:6px;
+  padding:7px 14px;border-radius:8px;border:1px solid var(--border);
+  background:var(--surface);color:var(--text);text-decoration:none;
+  font-size:.82em;font-weight:500;cursor:pointer;
+  transition:background .15s,border-color .15s,color .15s}
+.msg-download:hover{background:var(--surface2);border-color:var(--accent);color:var(--accent)}
+.msg-download svg{width:14px;height:14px;flex-shrink:0}
 .msg-pending{padding:12px 16px;background:var(--surface);border:1px solid var(--border);
   border-radius:10px;color:var(--muted2);font-size:.88em;display:flex;align-items:center;gap:10px}
 .spinner{width:14px;height:14px;border:2px solid var(--border-md);
@@ -2590,12 +2603,21 @@ a:hover{opacity:.8}
       : "AI";
     const modeLbl = {chat:"чат", image:"изображение", video:"видео", music:"музыка"}[msg.mode] || msg.mode;
     let media = "";
+    // Download button — shown for every assistant-generated media result.
+    // Uses ?download=1 so the server sets Content-Disposition: attachment.
+    const dlIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+    const dlLabel = msg.file_kind === "video" ? "Скачать видео"
+                  : msg.file_kind === "audio" ? "Скачать аудио"
+                  : "Скачать изображение";
+    const dlBtn = (msg.file_kind === "image" || msg.file_kind === "video" || msg.file_kind === "audio")
+      ? `<div class="msg-actions"><a class="msg-download" href="/chat/api/media/${msg.id}?download=1" download>${dlIcon}<span>${dlLabel}</span></a></div>`
+      : "";
     if (msg.file_kind === "image") {
-      media = `<div class="msg-attach"><img class="msg-image" src="/chat/api/media/${msg.id}" alt="" onclick="window.open(this.src,'_blank')"></div>`;
+      media = `<div class="msg-attach"><img class="msg-image" src="/chat/api/media/${msg.id}" alt="" onclick="window.open(this.src,'_blank')">${dlBtn}</div>`;
     } else if (msg.file_kind === "video") {
-      media = `<div class="msg-attach"><video class="msg-video" controls src="/chat/api/media/${msg.id}"></video></div>`;
+      media = `<div class="msg-attach"><video class="msg-video" controls src="/chat/api/media/${msg.id}"></video>${dlBtn}</div>`;
     } else if (msg.file_kind === "audio") {
-      media = `<div class="msg-attach"><audio class="msg-audio" controls src="/chat/api/media/${msg.id}"></audio></div>`;
+      media = `<div class="msg-attach"><audio class="msg-audio" controls src="/chat/api/media/${msg.id}"></audio>${dlBtn}</div>`;
     }
     const pending = msg._pending
       ? `<div class="msg-attach"><div class="msg-pending"><div class="spinner"></div><div><div>${escapeHtml(msg._pendingLabel||"Генерация…")}</div><div class="progress-bar"><div style="width:${msg._pendingPct||0}%"></div></div></div></div></div>`
