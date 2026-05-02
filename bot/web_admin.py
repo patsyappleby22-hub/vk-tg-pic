@@ -190,18 +190,18 @@ def _layout(title: str, content: str, active: str = "") -> str:
     ico_logout    = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>'
 
     nav_items = [
-        ("dashboard", "/admin/dashboard", ico_dashboard, "Дашборд"),
-        ("users",     "/admin/users",     ico_users,     "Пользователи"),
-        ("payments",  "/admin/payments",  ico_payments,  "Платежи"),
-        ("apikeys",   "/admin/api-keys",  ico_apikeys,   "API ключи"),
-        ("autopub",   "/admin/autopub",   ico_autopub,   "Автопост"),
+        ("dashboard", "/admin/dashboard", ico_dashboard, "Дашборд",      "Дашборд"),
+        ("users",     "/admin/users",     ico_users,     "Пользователи", "Юзеры"),
+        ("payments",  "/admin/payments",  ico_payments,  "Платежи",      "Платежи"),
+        ("apikeys",   "/admin/api-keys",  ico_apikeys,   "API ключи",    "Ключи"),
+        ("autopub",   "/admin/autopub",   ico_autopub,   "Автопост",     "Автопост"),
     ]
     sidebar_nav = ""
     bottom_nav = ""
-    for key, href, icon, label in nav_items:
+    for key, href, icon, label, mob_label in nav_items:
         active_cls = " active" if active == key else ""
         sidebar_nav += f'<a href="{href}" class="nav-link{active_cls}">{icon}<span class="nav-label">{label}</span></a>\n'
-        bottom_nav += f'<a href="{href}" class="bot-link{active_cls}">{icon}<span class="bot-label">{label}</span></a>\n'
+        bottom_nav += f'<a href="{href}" class="bot-link{active_cls}">{icon}<span class="bot-label">{mob_label}</span></a>\n'
 
     return f"""<!DOCTYPE html>
 <html lang="ru">
@@ -455,11 +455,13 @@ def _layout(title: str, content: str, active: str = "") -> str:
       padding:6px 0 env(safe-area-inset-bottom,6px)
     }}
     .bot-link{{
-      flex:1;display:flex;flex-direction:column;align-items:center;
-      gap:4px;padding:7px 4px;color:var(--muted2);font-size:.66em;
-      font-weight:500;letter-spacing:.02em;
-      border-top:2px solid transparent;transition:.15s
+      flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;
+      gap:4px;padding:7px 2px;color:var(--muted2);font-size:.64em;
+      font-weight:500;letter-spacing:.01em;
+      border-top:2px solid transparent;transition:.15s;overflow:hidden
     }}
+    .bot-label{{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      max-width:100%;text-align:center}}
     .bot-link svg{{width:19px;height:19px;stroke:currentColor;fill:none;
       stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;opacity:.8}}
     .bot-link.active{{color:var(--accent-bright);border-top-color:var(--accent)}}
