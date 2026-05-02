@@ -1936,8 +1936,10 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
   -webkit-font-smoothing:antialiased;font-weight:400}
 
 /* ── Ambient ── orbiting brand blobs + film grain, exactly like the landing.
-   Sit behind everything; sidebar/main use rgba surfaces so they peek through. */
-.bg-orbs{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+   z-index:-1 inside #app's stacking context so they sit *behind* main/sidebar
+   in-flow content without trapping the mobile drawer (.input-toolbar) the
+   way a higher z-index on .main would. */
+.bg-orbs{position:fixed;inset:0;pointer-events:none;z-index:-1;overflow:hidden}
 .bg-orbs .orb{position:absolute;border-radius:50%;filter:blur(80px)}
 .bg-orbs .orb-1{width:600px;height:600px;top:-160px;left:50%;
   transform:translateX(-50%);
@@ -1952,11 +1954,10 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
 @keyframes orbFloat1{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-30px)}}
 @keyframes orbFloat2{0%,100%{transform:translateY(0)}50%{transform:translateY(-20px)}}
 @keyframes orbFloat3{0%,100%{transform:translateY(0)}50%{transform:translateY(20px)}}
-/* Noise sits at the same depth as the orbs (z-index:0) so it grains the
-   bare background; sidebar/main (z-index:1) and modals (z-index:60) stay
-   above it. Glass surfaces are translucent, so the grain still bleeds
-   through them — keeping the Aurora "filmic" feel without trapping modals. */
-.bg-noise{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.6;
+/* Noise sits at the same depth as the orbs (z-index:-1) so it grains the
+   ambient backdrop; sidebar/main and modals stay above it. Glass surfaces
+   are translucent, so the grain still bleeds through them. */
+.bg-noise{position:fixed;inset:0;pointer-events:none;z-index:-1;opacity:.6;
   mix-blend-mode:overlay;
   background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E")}
 button,input,textarea,select{font-family:inherit;color:inherit;background:none;border:none;outline:none}
@@ -2017,7 +2018,7 @@ a:hover{opacity:.8}
 .sidebar{width:268px;background:var(--surface-glass);
   border-right:1px solid var(--border);
   backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
-  display:flex;flex-direction:column;flex-shrink:0;position:relative;z-index:1}
+  display:flex;flex-direction:column;flex-shrink:0}
 .sb-head{padding:18px 18px 14px;display:flex;align-items:center;gap:10px;
   border-bottom:1px solid var(--border);position:relative}
 .sb-logo-mark{position:relative;display:inline-flex;align-items:center;justify-content:center;
@@ -2158,8 +2159,14 @@ a:hover{opacity:.8}
 .feed-empty{color:var(--muted2);text-align:center;padding:36px 8px;font-size:.92em}
 
 /* ── Main column ── */
-.main{flex:1;display:flex;flex-direction:column;min-width:0;background:transparent;
-  position:relative;z-index:1}
+/* No z-index/stacking context here on purpose: the mobile settings drawer
+   (.input-toolbar, position:fixed, z-index:30) is a DOM descendant of .main.
+   If .main creates a stacking context (e.g. via z-index:1), the drawer's
+   z-index becomes local to .main and the .scrim (#app-level z-index:29)
+   ends up painted *above* the drawer — clicks then go to the scrim and
+   close it. Keeping .main static lets the drawer compete directly with
+   the scrim in #app's stacking context. */
+.main{flex:1;display:flex;flex-direction:column;min-width:0;background:transparent}
 /* Same containing-block caveat as .input-wrap — keep this filter-free so
    sidebar/modal drawers (position:fixed) escape to the viewport correctly. */
 .main-head{padding:14px 24px;border-bottom:1px solid var(--border);
