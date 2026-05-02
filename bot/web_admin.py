@@ -182,19 +182,26 @@ def _require_auth(fn):
 # ─── Shared layout ───────────────────────────────────────────────────────────
 
 def _layout(title: str, content: str, active: str = "") -> str:
+    ico_dashboard = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18M7 14v4M11 10v8M15 6v12M19 12v6"/></svg>'
+    ico_users     = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.4"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 11a3 3 0 1 0 0-6M22 20a5.5 5.5 0 0 0-4.4-5.4"/></svg>'
+    ico_payments  = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="2"/><path d="M2.5 10h19M6 15h3"/></svg>'
+    ico_apikeys   = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="3.4"/><path d="m10.4 12.6 9.6-9.6M16 7l3 3M14 9l3 3"/></svg>'
+    ico_autopub   = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11v2a2 2 0 0 0 2 2h2l5 4V5L7 9H5a2 2 0 0 0-2 2zM16 8a5 5 0 0 1 0 8M19 5a8 8 0 0 1 0 14"/></svg>'
+    ico_logout    = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>'
+
     nav_items = [
-        ("dashboard", "/admin/dashboard",  "📊", "Дашборд"),
-        ("users",     "/admin/users",      "👥", "Пользователи"),
-        ("payments",  "/admin/payments",   "💳", "Платежи"),
-        ("apikeys",   "/admin/api-keys",   "🔑", "API ключи"),
-        ("autopub",   "/admin/autopub",    "📣", "Автопост"),
+        ("dashboard", "/admin/dashboard", ico_dashboard, "Дашборд"),
+        ("users",     "/admin/users",     ico_users,     "Пользователи"),
+        ("payments",  "/admin/payments",  ico_payments,  "Платежи"),
+        ("apikeys",   "/admin/api-keys",  ico_apikeys,   "API ключи"),
+        ("autopub",   "/admin/autopub",   ico_autopub,   "Автопост"),
     ]
     sidebar_nav = ""
     bottom_nav = ""
     for key, href, icon, label in nav_items:
         active_cls = " active" if active == key else ""
-        sidebar_nav += f'<a href="{href}" class="nav-link{active_cls}"><span class="nav-icon">{icon}</span><span class="nav-label">{label}</span></a>\n'
-        bottom_nav += f'<a href="{href}" class="bot-link{active_cls}"><span>{icon}</span><span class="bot-label">{label}</span></a>\n'
+        sidebar_nav += f'<a href="{href}" class="nav-link{active_cls}">{icon}<span class="nav-label">{label}</span></a>\n'
+        bottom_nav += f'<a href="{href}" class="bot-link{active_cls}">{icon}<span class="bot-label">{label}</span></a>\n'
 
     return f"""<!DOCTYPE html>
 <html lang="ru">
@@ -240,13 +247,17 @@ def _layout(title: str, content: str, active: str = "") -> str:
   .nav-link:hover{{color:var(--text);background:var(--accent-dim);opacity:1}}
   .nav-link.active{{color:var(--text);border-left-color:var(--accent);
     background:var(--accent-dim)}}
-  .nav-icon{{font-size:1em;flex-shrink:0;opacity:.85}}
+  .nav-link svg{{width:17px;height:17px;flex-shrink:0;stroke:currentColor;
+    fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;opacity:.78}}
+  .nav-link:hover svg,.nav-link.active svg{{opacity:1}}
   .sidebar-bottom{{margin-top:auto;padding:18px 22px 0;
     border-top:1px solid var(--border)}}
-  .logout-btn{{display:block;padding:9px 14px;background:rgba(251,113,133,.06);
+  .logout-btn{{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    width:100%;padding:9px 14px;background:rgba(251,113,133,.06);
     border:1px solid rgba(251,113,133,.18);border-radius:8px;color:var(--red);
-    text-align:center;font-size:.82em;font-weight:500;letter-spacing:.02em;
-    transition:all .2s}}
+    font-size:.82em;font-weight:500;letter-spacing:.02em;transition:all .2s}}
+  .logout-btn svg{{width:15px;height:15px;stroke:currentColor;fill:none;
+    stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}}
   .logout-btn:hover{{background:rgba(251,113,133,.12);
     border-color:rgba(251,113,133,.3);opacity:1}}
 
@@ -435,18 +446,20 @@ def _layout(title: str, content: str, active: str = "") -> str:
     }}
     .bot-link{{
       flex:1;display:flex;flex-direction:column;align-items:center;
-      gap:3px;padding:6px 4px;color:var(--muted2);font-size:.66em;
+      gap:4px;padding:7px 4px;color:var(--muted2);font-size:.66em;
       font-weight:500;letter-spacing:.02em;
       border-top:2px solid transparent;transition:.15s
     }}
-    .bot-link>span:first-child{{font-size:1.3em;line-height:1;opacity:.85}}
+    .bot-link svg{{width:19px;height:19px;stroke:currentColor;fill:none;
+      stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;opacity:.8}}
     .bot-link.active{{color:var(--accent-bright);border-top-color:var(--accent)}}
-    .bot-link.active>span:first-child{{opacity:1}}
+    .bot-link.active svg{{opacity:1}}
     .bot-logout{{
       flex:1;display:flex;flex-direction:column;align-items:center;
-      gap:3px;padding:6px 4px;color:var(--red);font-size:.66em;font-weight:500
+      gap:4px;padding:7px 4px;color:var(--red);font-size:.66em;font-weight:500
     }}
-    .bot-logout>span:first-child{{font-size:1.3em;line-height:1}}
+    .bot-logout svg{{width:19px;height:19px;stroke:currentColor;fill:none;
+      stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}}
     .main{{padding:20px 16px;padding-bottom:84px}}
     .page-title{{font-size:1.45em;margin-bottom:20px}}
     .cards{{grid-template-columns:repeat(2,1fr);gap:10px}}
@@ -482,7 +495,7 @@ def _layout(title: str, content: str, active: str = "") -> str:
     <div class="sidebar-logo">PicGen<span>AI</span></div>
     {sidebar_nav}
     <div class="sidebar-bottom">
-      <a href="/admin/logout" class="logout-btn">Выйти</a>
+      <a href="/admin/logout" class="logout-btn">{ico_logout}<span>Выйти</span></a>
     </div>
   </nav>
   <main class="main">
@@ -493,7 +506,7 @@ def _layout(title: str, content: str, active: str = "") -> str:
 <nav class="bottom-nav">
   {bottom_nav}
   <a href="/admin/logout" class="bot-logout">
-    <span>🚪</span><span>Выйти</span>
+    {ico_logout}<span class="bot-label">Выйти</span>
   </a>
 </nav>
 </body>
