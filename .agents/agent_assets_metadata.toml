@@ -1,0 +1,14 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "qRRhs9NplFyga16SYp645"
+uri = "file://artifacts/mockup-sandbox/public/images/aurora-gen.png"
+type = "image"
+title = "Cinematic cinematic shot"
+
+[[generated]]
+id = "6WBG6D9v3F3ETGp1ovt8I"
+uri = "file://artifacts/mockup-sandbox/public/images/coffee-poster.png"
+type = "image"
+title = "Coffee shop poster with latte art"
