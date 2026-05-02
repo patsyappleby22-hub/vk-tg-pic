@@ -1918,6 +1918,15 @@ def _shell_html() -> str:
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Math + Markdown stack: KaTeX renders LaTeX delimiters,
+     marked parses GFM markdown (tables/lists/headers/links/etc.),
+     DOMPurify sanitizes the resulting HTML before insertion.
+     Loaded with `defer` so they're ready before bootApp() runs. -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.1.7/dist/purify.min.js" crossorigin="anonymous"></script>
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -2220,8 +2229,10 @@ a:hover{opacity:.8}
 .msg-mode.image{color:var(--accent-bright)}
 .msg-mode.video{color:#ffb8d6}
 .msg-mode.music{color:#fcd34d}
+/* Markdown / KaTeX content. No `white-space:pre-wrap` — marked emits real
+   <p>/<br> nodes from raw text, so pre-wrap would double the gaps. */
 .msg-content{color:var(--text);font-size:.95em;line-height:1.65;
-  white-space:pre-wrap;word-wrap:break-word;font-weight:300}
+  word-wrap:break-word;overflow-wrap:break-word;font-weight:300}
 .msg.user .msg-content{padding:11px 16px;border-radius:14px 14px 14px 4px;
   background:linear-gradient(160deg,rgba(155,138,251,.16),rgba(155,138,251,.06));
   border:1px solid rgba(155,138,251,.22);
@@ -2229,14 +2240,47 @@ a:hover{opacity:.8}
 .msg.assistant .msg-content{padding:11px 16px;border-radius:14px 14px 4px 14px;
   background:var(--surface-glass2);border:1px solid var(--border);
   color:#dcdce4}
+.msg-content > :first-child{margin-top:0}
+.msg-content > :last-child{margin-bottom:0}
 .msg-content p{margin:0 0 8px}
-.msg-content p:last-child{margin:0}
+.msg-content h1,.msg-content h2,.msg-content h3,
+.msg-content h4,.msg-content h5,.msg-content h6{
+  font-family:'Syne',sans-serif;font-weight:600;letter-spacing:-.005em;
+  margin:14px 0 8px;line-height:1.3}
+.msg-content h1{font-size:1.35em}
+.msg-content h2{font-size:1.2em}
+.msg-content h3{font-size:1.08em}
+.msg-content h4,.msg-content h5,.msg-content h6{font-size:1em}
+.msg-content ul,.msg-content ol{margin:6px 0 10px;padding-left:22px}
+.msg-content li{margin:3px 0}
+.msg-content li > p{margin:0}
+.msg-content a{color:var(--accent-bright);text-decoration:underline;
+  text-decoration-color:rgba(184,172,255,.4);text-underline-offset:2px}
+.msg-content a:hover{text-decoration-color:var(--accent-bright)}
+.msg-content blockquote{margin:8px 0;padding:6px 12px;
+  border-left:3px solid rgba(155,138,251,.5);
+  color:var(--muted2);background:rgba(155,138,251,.04);border-radius:4px}
+.msg-content blockquote p{margin:0}
+.msg-content hr{border:none;border-top:1px solid var(--border);margin:12px 0}
+.msg-content strong,.msg-content b{font-weight:600;color:var(--text)}
+.msg-content em,.msg-content i{font-style:italic}
 .msg-content code{font-family:'JetBrains Mono',monospace;font-size:.88em;
   background:var(--surface2);padding:1px 6px;border-radius:4px}
 .msg-content pre{font-family:'JetBrains Mono',monospace;font-size:.84em;
   background:var(--surface2);border:1px solid var(--border);border-radius:8px;
   padding:12px 14px;overflow-x:auto;margin:8px 0}
-.msg-content pre code{background:none;padding:0}
+.msg-content pre code{background:none;padding:0;font-size:1em}
+.msg-content table{border-collapse:collapse;margin:10px 0;display:block;
+  overflow-x:auto;max-width:100%;font-size:.9em}
+.msg-content th,.msg-content td{
+  border:1px solid var(--border);padding:6px 10px;text-align:left;
+  vertical-align:top}
+.msg-content th{background:var(--surface2);font-weight:600}
+.msg-content tr:nth-child(even) td{background:rgba(255,255,255,.015)}
+/* KaTeX display blocks shouldn't overflow the bubble; allow horizontal scroll. */
+.msg-content .katex-display{overflow-x:auto;overflow-y:hidden;
+  margin:8px 0;padding:2px 0}
+.msg-content .katex{font-size:1.02em}
 
 .msg-attach{margin-top:10px;display:flex;flex-direction:column;gap:8px;max-width:520px}
 .msg-image{display:block;max-width:100%;max-height:480px;border-radius:10px;
@@ -2669,13 +2713,55 @@ a:hover{opacity:.8}
   function escapeHtml(s) {
     return (s||"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c]));
   }
+  // Renders assistant/user message text as Markdown + LaTeX.
+  //   1. marked.js parses GFM (tables, lists, headers, links, code, ...).
+  //   2. KaTeX (auto-render) handles math AFTER the HTML is in the DOM,
+  //      so we only need to keep its delimiters intact through marked.
+  //      Marked strips backslashes before punctuation, which mangles
+  //      backslash-paren and backslash-bracket math delimiters, so we
+  //      stash those into placeholders before parsing and restore them
+  //      after, before sanitizing.
+  //   3. DOMPurify sanitizes the result so any user-supplied HTML is safe.
+  // If any CDN script failed to load, we fall back to plain escaped text
+  // with newlines preserved — the chat must never crash on rendering.
   function renderText(s) {
     if (!s) return "";
-    let t = escapeHtml(s);
-    t = t.replace(/```([\\s\\S]*?)```/g, (_, code) => "<pre><code>" + code + "</code></pre>");
-    t = t.replace(/`([^`]+)`/g, "<code>$1</code>");
-    t = t.replace(/\\*\\*([^*]+)\\*\\*/g, "<b>$1</b>");
-    return t;
+    if (!window.marked || !window.DOMPurify) {
+      return escapeHtml(s).replace(/\\n/g, "<br>");
+    }
+    const stash = [];
+    const protect = (m) => {
+      stash.push(m);
+      return "\\u200BPGMATH" + (stash.length - 1) + "END\\u200B";
+    };
+    let t = s
+      .replace(/\\\\\\[[\\s\\S]+?\\\\\\]/g, protect)
+      .replace(/\\\\\\([\\s\\S]+?\\\\\\)/g, protect);
+    let html;
+    try {
+      html = window.marked.parse(t, {breaks: true, gfm: true});
+    } catch (e) {
+      return escapeHtml(s).replace(/\\n/g, "<br>");
+    }
+    html = html.replace(/\\u200BPGMATH(\\d+)END\\u200B/g, (_, i) => stash[+i]);
+    return window.DOMPurify.sanitize(html, {ADD_ATTR: ["target", "rel"]});
+  }
+  // Run KaTeX over rendered messages. Single `$...$` is intentionally NOT a
+  // delimiter — currency strings like "$10 vs $20" would otherwise get
+  // mis-parsed. Use `$$...$$`, backslash-paren, or backslash-bracket for math.
+  function renderMathIn(el) {
+    if (!el || !window.renderMathInElement) return;
+    try {
+      window.renderMathInElement(el, {
+        delimiters: [
+          {left: "$$", right: "$$", display: true},
+          {left: "\\\\[", right: "\\\\]", display: true},
+          {left: "\\\\(", right: "\\\\)", display: false}
+        ],
+        throwOnError: false,
+        ignoredTags: ["script", "noscript", "style", "textarea", "pre", "code"]
+      });
+    } catch (e) { /* never let math crash the chat */ }
   }
 
   // ── CSRF helpers ─────────────────────────────────────────
@@ -3073,7 +3159,15 @@ a:hover{opacity:.8}
       m.innerHTML = `<div class="empty-state"><p>Чат пуст — напишите сообщение или выберите режим генерации.</p></div>`;
       return;
     }
+    // Set HTML first, then let KaTeX walk the DOM and replace math delimiters
+    // with rendered formulas. Done after innerHTML so KaTeX sees live nodes.
     m.innerHTML = state.messages.map(renderMessage).join("");
+    renderMathIn(m);
+    // Open external links in a new tab — DOMPurify lets us add target/rel.
+    m.querySelectorAll('a[href^="http"]').forEach(a => {
+      a.setAttribute("target", "_blank");
+      a.setAttribute("rel", "noopener noreferrer");
+    });
     m.scrollTop = m.scrollHeight;
   }
   function renderMessage(msg) {
