@@ -589,7 +589,9 @@ def save_user_settings(user_id: int) -> None:
     _save_user(user_id)
 
 
-def set_tg_identity(user_id: int, first_name: str = "", username: str = "",
+def set_tg_identity(user_id: int,
+                    first_name: str | None = None,
+                    username: str | None = None,
                     platform: str = "tg") -> None:
     """Persist a user's TG/VK identity (first_name + @username) on every
     interaction so the web-chat login flow can resolve `@username` →
@@ -597,24 +599,53 @@ def set_tg_identity(user_id: int, first_name: str = "", username: str = "",
     arbitrary user @usernames into IDs, so we maintain this mapping
     ourselves.
 
-    No-op when nothing changed — avoids needless DB writes.
+    Semantics:
+      - `None` for `first_name`/`username` → don't touch the stored
+        value.
+      - Empty string `""` → explicitly clear the stored value. This is
+        important: if a user removes or changes their @handle, the next
+        TG event passes `username=""` (or the new one) and we must drop
+        the stale mapping so OTP codes don't get misrouted to the
+        previous owner of the @handle.
+
+    No-op when nothing actually changed — avoids needless DB writes.
     """
     s = get_user_settings(user_id)
     changed = False
-    if first_name and s.get("first_name") != first_name:
-        s["first_name"] = first_name
-        changed = True
-    # Telegram usernames are stored lowercased so lookups can be done in
-    # a case-insensitive way without scanning twice.
-    uname_norm = (username or "").lstrip("@").lower().strip()
-    if uname_norm and s.get("username") != uname_norm:
-        s["username"] = uname_norm
-        changed = True
+    if first_name is not None:
+        new_fname = first_name.strip()
+        if (s.get("first_name") or "") != new_fname:
+            s["first_name"] = new_fname
+            changed = True
+    if username is not None:
+        # Telegram usernames are stored lowercased so lookups can be
+        # done in a case-insensitive way without scanning twice.
+        new_uname = username.lstrip("@").strip().lower()
+        if (s.get("username") or "") != new_uname:
+            s["username"] = new_uname
+            changed = True
     if platform and not s.get("platform"):
         s["platform"] = platform
         changed = True
     if changed:
         _save_user(user_id)
+
+
+def list_user_ids_missing_username(platform: str = "tg") -> list[int]:
+    """Return user_ids whose stored @username is empty. Used by the
+    one-shot backfill that runs at startup so users who were registered
+    before the username column existed can still be looked up by handle."""
+    out: list[int] = []
+    for uid, s in user_settings.items():
+        if (s.get("username") or "").strip():
+            continue
+        # Only TG users for now — VK doesn't expose a public @handle the
+        # same way, and the backfill below only knows the TG bot.
+        plat = s.get("platform") or "tg"
+        if platform and plat != platform:
+            continue
+        out.append(uid)
+    return out
 
 
 def find_user_id_by_username(username: str, platform: str = "tg") -> int | None:

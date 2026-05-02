@@ -53,7 +53,11 @@ from bot.middlewares.album_middleware import AlbumMiddleware
 from bot.middlewares.identity_middleware import IdentityMiddleware
 from bot.middlewares.logging_middleware import LoggingMiddleware
 from bot.services.vertex_ai_service import VertexAIService
-from bot.user_settings import load_settings
+from bot.user_settings import (
+    list_user_ids_missing_username,
+    load_settings,
+    set_tg_identity,
+)
 
 
 class _MskFormatter(logging.Formatter):
@@ -123,6 +127,14 @@ async def main() -> None:
     dp.include_router(callbacks_handler.router)
     dp.include_router(image_handler.router)
 
+    # ── Username backfill ────────────────────────────────────────────────────
+    # Existing users registered before the `username` column existed have an
+    # empty handle in storage, which breaks login-by-@username from the web
+    # chat. Run a throttled background sweep that asks Telegram for each
+    # missing user's current @handle and saves it. New users are captured
+    # automatically by IdentityMiddleware on their next message/callback.
+    asyncio.create_task(_backfill_usernames(bot))
+
     # ── Start polling ─────────────────────────────────────────────────────────
     logger.info("Bot is running. Press Ctrl+C to stop.")
     try:
@@ -130,6 +142,43 @@ async def main() -> None:
     finally:
         await bot.session.close()
         logger.info("Bot stopped.")
+
+
+async def _backfill_usernames(bot: "Bot") -> None:
+    """Backfill empty `username` fields for known TG users by calling
+    `getChat(uid)` on each. Throttled to ~1 RPS so we never trip
+    Telegram's per-bot rate limit (~30 RPS) even with thousands of
+    users. Errors are logged and ignored — a missing username is not
+    fatal, the user can still log in by numeric ID.
+    """
+    logger = logging.getLogger(__name__)
+    try:
+        # Tiny initial delay so the bot is fully ready before we start
+        # hitting the API.
+        await asyncio.sleep(2)
+        ids = list_user_ids_missing_username(platform="tg")
+        if not ids:
+            return
+        logger.info("username backfill: scanning %d user(s)", len(ids))
+        filled = 0
+        for uid in ids:
+            try:
+                chat = await bot.get_chat(uid)
+                uname = (getattr(chat, "username", "") or "").strip()
+                fname = (getattr(chat, "first_name", "") or "").strip()
+                if uname or fname:
+                    set_tg_identity(uid, first_name=fname, username=uname,
+                                    platform="tg")
+                    if uname:
+                        filled += 1
+            except Exception as exc:
+                logger.debug("username backfill: get_chat(%s) failed: %s",
+                             uid, exc)
+            # ~1 RPS — well under TG's per-bot limits.
+            await asyncio.sleep(1.0)
+        logger.info("username backfill: done, filled %d/%d", filled, len(ids))
+    except Exception:
+        logger.exception("username backfill: aborted")
 
 
 if __name__ == "__main__":

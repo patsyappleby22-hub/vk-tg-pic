@@ -370,10 +370,22 @@ async def _resolve_tg_user(identifier: str) -> tuple[int | None, str]:
                           "и нажмите /start, затем попробуйте снова.")
     # Last-resort: ask Telegram. This rarely succeeds for plain user
     # @usernames (works mainly for channels/supergroups), but kept as a
-    # safety net.
+    # safety net. We MUST refuse non-private results — otherwise a
+    # caller could resolve to a channel/group ID and later requests
+    # could send OTP codes into a public chat or trip the bot's rate
+    # limits on a chat we shouldn't be DMing.
     try:
         chat = await _tg_bot.get_chat("@" + ident)
-        return int(chat.id), ""
+        chat_id = int(chat.id)
+        chat_type = getattr(chat, "type", None)
+        chat_type_val = getattr(chat_type, "value", chat_type)  # enum or str
+        if chat_type_val != "private" or chat_id <= 0:
+            logger.info("TG resolve @%s rejected: type=%s id=%s",
+                        ident, chat_type_val, chat_id)
+            return None, ("Этот username не найден. Откройте бот в Telegram "
+                          "и нажмите /start — после этого вход по @username "
+                          "заработает.")
+        return chat_id, ""
     except Exception as exc:
         logger.info("TG resolve by username @%s failed: %s", ident, exc)
         return None, ("Этот username не найден. Откройте бот в Telegram "

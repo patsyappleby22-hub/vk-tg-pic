@@ -63,6 +63,7 @@ async def run_telegram(vertex_service):
     from bot.handlers import image as image_handler
     from bot.handlers import start as start_handler
     from bot.middlewares.album_middleware import AlbumMiddleware
+    from bot.middlewares.identity_middleware import IdentityMiddleware
     from bot.middlewares.logging_middleware import LoggingMiddleware
 
     bot = Bot(
@@ -75,6 +76,11 @@ async def run_telegram(vertex_service):
 
     dp = Dispatcher()
     dp.update.outer_middleware(LoggingMiddleware())
+    # Capture sender first_name + @username on every message/callback so the
+    # web-chat login flow can resolve `@username → user_id` locally (the
+    # Bot API has no public way to do that lookup for plain users).
+    dp.message.outer_middleware(IdentityMiddleware())
+    dp.callback_query.outer_middleware(IdentityMiddleware())
     dp.message.middleware(AlbumMiddleware())
     dp["vertex_service"] = vertex_service
     dp.include_router(start_handler.router)
@@ -83,12 +89,53 @@ async def run_telegram(vertex_service):
     dp.include_router(callbacks_handler.router)
     dp.include_router(image_handler.router)
 
+    # One-shot background backfill: existing users registered before the
+    # `username` column existed have an empty handle in storage, which
+    # breaks login-by-@username from the web chat. Throttled to ~1 RPS.
+    asyncio.create_task(_backfill_usernames(bot))
+
     logger.info("Telegram bot starting...")
     try:
         await dp.start_polling(bot, allowed_updates=["message", "callback_query"])
     finally:
         await bot.session.close()
         logger.info("Telegram bot stopped.")
+
+
+async def _backfill_usernames(bot) -> None:
+    """Backfill empty `username` fields for known TG users by calling
+    `getChat(uid)` on each. Throttled to ~1 RPS to stay well under
+    Telegram's per-bot rate limit. Errors are logged and ignored —
+    a missing username is not fatal, the user can still log in by
+    numeric ID."""
+    from bot.user_settings import (
+        list_user_ids_missing_username, set_tg_identity,
+    )
+    try:
+        await asyncio.sleep(2)  # let the bot finish booting
+        ids = list_user_ids_missing_username(platform="tg")
+        if not ids:
+            return
+        logger.info("username backfill: scanning %d user(s)", len(ids))
+        filled = 0
+        for uid in ids:
+            try:
+                chat = await bot.get_chat(uid)
+                uname = (getattr(chat, "username", "") or "").strip()
+                fname = (getattr(chat, "first_name", "") or "").strip()
+                if uname or fname:
+                    set_tg_identity(uid, first_name=fname, username=uname,
+                                    platform="tg")
+                    if uname:
+                        filled += 1
+            except Exception as exc:
+                logger.debug("username backfill: get_chat(%s) failed: %s",
+                             uid, exc)
+            await asyncio.sleep(1.0)
+        logger.info("username backfill: done, filled %d/%d",
+                    filled, len(ids))
+    except Exception:
+        logger.exception("username backfill: aborted")
 
 
 async def run_vk(vertex_service):
