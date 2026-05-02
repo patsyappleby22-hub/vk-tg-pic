@@ -3514,14 +3514,18 @@ a:hover{opacity:.8}
   function updateCost() {
     const lbl = $("costLbl");
     const cat = state.catalog;
-    if (state.mode === "chat") { lbl.textContent = ""; return; }
-    if (state.mode === "image") { lbl.innerHTML = "Стоимость: <b>1 кредит</b>"; return; }
-    if (state.mode === "music") {
-      const c = cat.music.models[state.model]?.credits || 2;
+    // Compute the cost label based on the active mode. We funnel every
+    // branch through a single tail so updateMobileStatus() always runs —
+    // the previous early `return`s on chat/image/music left the mobile
+    // hint frozen on the last video cost, which is what the user saw.
+    if (state.mode === "chat") {
+      lbl.textContent = "";
+    } else if (state.mode === "image") {
+      lbl.innerHTML = "Стоимость: <b>1 кредит</b>";
+    } else if (state.mode === "music") {
+      const c = cat?.music?.models?.[state.model]?.credits || 2;
       lbl.innerHTML = `Стоимость: <b>${c} кредитов</b>`;
-      return;
-    }
-    if (state.mode === "video") {
+    } else if (state.mode === "video") {
       // approximate locally; server is the source of truth
       const dur = +state.duration || 8;
       const audio = state.audio;
@@ -3531,10 +3535,15 @@ a:hover{opacity:.8}
         "veo-3.1-lite-generate-001":{"720p":[0.03,0.05],"1080p":[0.05,0.08]},
       };
       const p = PRICES[state.model]?.[state.resolution];
-      if (!p) { lbl.textContent = ""; return; }
-      const usd = (audio ? p[1] : p[0]) * dur;
-      const credits = Math.max(1, Math.ceil((usd / 3.0) / (1.40/30)));
-      lbl.innerHTML = `Стоимость: <b>~${credits} кредитов</b>`;
+      if (!p) {
+        lbl.textContent = "";
+      } else {
+        const usd = (audio ? p[1] : p[0]) * dur;
+        const credits = Math.max(1, Math.ceil((usd / 3.0) / (1.40/30)));
+        lbl.innerHTML = `Стоимость: <b>~${credits} кредитов</b>`;
+      }
+    } else {
+      lbl.textContent = "";
     }
     updateMobileStatus();
   }
