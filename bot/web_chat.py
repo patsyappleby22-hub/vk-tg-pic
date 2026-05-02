@@ -1761,34 +1761,28 @@ async def handle_generate_stream(request: web.Request) -> web.StreamResponse:
 
 def _topup_packages_for(platform: str) -> dict[str, Any]:
     """Return {provider, items[]} for a given platform.
-    TG users → Pally checkout, VK users → FreeKassa.
+
+    Web chat mirrors what the bots do: both TG and VK go through Lava
+    (`bot/handlers/callbacks.py` imports the same service), so the web
+    tariff list is exactly the bot's tariff list — 4 packages from
+    `lava_service.CREDIT_PACKAGES`, including the small `pack_3` (10₽)
+    one that FreeKassa/Pally tables omit. The `source` field on the
+    payment URL ("tg"/"vk") routes the success notification to the
+    correct bot, same as in callbacks.py.
 
     Each item: {key, credits, amount_rub, label}."""
-    items: list[dict[str, Any]] = []
-    if platform == "vk":
-        from bot.services.freekassa_service import (
-            CREDIT_PACKAGES, FREEKASSA_SHOP_ID,
-        )
-        provider = "freekassa"
-        configured = bool(FREEKASSA_SHOP_ID)
-        for key, p in CREDIT_PACKAGES.items():
-            items.append({
-                "key": key, "credits": int(p["credits"]),
-                "amount_rub": float(p["amount"]),
-                "label": p["label"],
-            })
-    else:
-        from bot.services.payment_service import (
-            CREDIT_PACKAGES, PALLY_SHOP_ID,
-        )
-        provider = "pally"
-        configured = bool(PALLY_SHOP_ID)
-        for key, p in CREDIT_PACKAGES.items():
-            items.append({
-                "key": key, "credits": int(p["credits"]),
-                "amount_rub": float(p["amount"]),
-                "label": p["label"],
-            })
+    from bot.services.lava_service import CREDIT_PACKAGES, LAVA_SHOP_ID
+    provider = "lava"
+    configured = bool(LAVA_SHOP_ID)
+    items: list[dict[str, Any]] = [
+        {
+            "key": key,
+            "credits": int(p["credits"]),
+            "amount_rub": float(p["amount"]),
+            "label": p["label"],
+        }
+        for key, p in CREDIT_PACKAGES.items()
+    ]
     items.sort(key=lambda x: x["amount_rub"])
     return {"provider": provider, "configured": configured, "items": items}
 
@@ -1817,12 +1811,12 @@ async def handle_topup(request: web.Request) -> web.Response:
         return web.json_response({"error": "pack_key обязателен"}, status=400)
     uid = s["user_id"]
     try:
-        if platform == "vk":
-            from bot.services.freekassa_service import create_payment_url
-            res = create_payment_url(uid, pack_key)
-        else:
-            from bot.services.payment_service import create_payment
-            res = await create_payment(uid, pack_key)
+        # Web chat uses the same payment provider as the bots (Lava),
+        # passing source="tg"|"vk" so the post-payment notification is
+        # delivered to the same bot the user originally logged in from.
+        from bot.services.lava_service import create_payment_url
+        source = "vk" if platform == "vk" else "tg"
+        res = await create_payment_url(uid, pack_key, source=source)
     except Exception as exc:
         logger.exception("topup create_payment failed")
         return web.json_response({"error": f"Ошибка платёжной системы: {exc}"},
@@ -1873,13 +1867,16 @@ async def handle_payments_history(request: web.Request) -> web.Response:
     uid = s["user_id"]
     rows = _db.get_user_payments(uid)
     # Resolve human pack labels via whichever provider knows them, so the
-    # UI never has to hard-code "pack_30 → 30 кредитов".
+    # UI never has to hard-code "pack_30 → 30 кредитов". We check Lava
+    # first (the active provider for both TG and VK), then fall back to
+    # Pally / FreeKassa for legacy rows created before the switchover.
+    from bot.services.lava_service import CREDIT_PACKAGES as _LAVA
     from bot.services.payment_service import CREDIT_PACKAGES as _PALLY
     from bot.services.freekassa_service import CREDIT_PACKAGES as _FK
     items: list[dict[str, Any]] = []
     for r in rows:
         key = r.get("pack_key") or ""
-        pack = _PALLY.get(key) or _FK.get(key) or {}
+        pack = _LAVA.get(key) or _PALLY.get(key) or _FK.get(key) or {}
         items.append({
             "order_id": r.get("order_id"),
             "payment_id": r.get("payment_id") or "",
@@ -3452,7 +3449,9 @@ a:hover{opacity:.8}
       $("topupBody").innerHTML = '<div class="topup-warn">Тарифы недоступны.</div>';
       return;
     }
-    const provider = j.provider === "freekassa" ? "FreeKassa" : "Pally";
+    const provider = j.provider === "freekassa" ? "FreeKassa"
+                   : j.provider === "lava"      ? "Lava"
+                   :                              "Pally";
     $("topupBody").innerHTML =
       '<div class="topup-list">' +
       items.map(p => (
