@@ -43,3 +43,6 @@ run = ["python", "start_all.py"]
 
 [userenv.development]
 PORT = "5000"
+
+[userenv.shared]
+LOG_CHANNEL_ID = "-1003911574431"
